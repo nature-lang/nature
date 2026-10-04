@@ -4,9 +4,9 @@
 #include "vec.h"
 
 // sig to ch list
-ATOMIC int64_t signal_recv = 0;
+atomic_ullong signal_recv = 0;
 
-int64_t signal_mask = 0;
+atomic_ullong signal_mask = 0;
 
 pthread_mutex_t signal_locker = PTHREAD_MUTEX_INITIALIZER;
 
@@ -26,30 +26,30 @@ void signal_notify(n_chan_t *ch, n_vec_t signals) {
     if (signals.length == 0) {
         for (int i = 0; i < sizeof(all_signals) / sizeof(all_signals[0]); i++) {
             int64_t sig = all_signals[i];
-            if (sig < 0 || sig > RT_SIGNAL_COUNT - 1) {
+            if (sig <= 0 || sig >= RT_SIGNAL_COUNT || sig >= 64) {
                 continue;
             }
 
-            mask |= 1 << sig;
+            mask |= 1ULL << sig;
             sig_ref[sig]++;
 
             // set mask
-            signal_mask |= 1 << sig;
+            atomic_fetch_or_explicit(&signal_mask, 1ULL << sig, memory_order_relaxed);
         }
     } else {
         // 原有逻辑：处理指定的信号
         for (int i = 0; i < signals.length; i++) {
             size_t sig;
             rti_vec_access(&signals, i, &sig);
-            if (sig < 0 || sig > RT_SIGNAL_COUNT - 1) {
+            if (sig == 0 || sig >= RT_SIGNAL_COUNT || sig >= 64) {
                 continue;
             }
 
-            mask |= 1 << sig;
+            mask |= 1ULL << sig;
             sig_ref[sig]++;
 
             // set mask
-            signal_mask |= 1 << sig;
+            atomic_fetch_or_explicit(&signal_mask, 1ULL << sig, memory_order_relaxed);
         }
     }
 
@@ -77,10 +77,10 @@ void signal_stop(n_chan_t *ch) {
     for (int64_t i = 0; i < sizeof(all_signals) / sizeof(all_signals[0]); i++) {
         int64_t sig = all_signals[i];
         // 检查该信号是否被接收
-        if (atomic_load(&mask) & (1 << sig)) {
+        if (atomic_load(&mask) & (1ULL << sig)) {
             sig_ref[sig]--;
             if (sig_ref[sig] == 0) {
-                signal_mask &= ~(1 << sig);
+                atomic_fetch_and_explicit(&signal_mask, ~(1ULL << sig), memory_order_relaxed);
             }
         }
     }
