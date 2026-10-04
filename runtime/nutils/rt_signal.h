@@ -7,6 +7,7 @@
 #include "utils/type.h"
 #include <signal.h>
 #include <stdatomic.h>
+#include <stdlib.h>
 #include "runtime/uv_compat.h"
 
 #ifdef __WINDOWS
@@ -15,8 +16,10 @@
 #define RT_SIGNAL_COUNT NSIG
 #endif
 
-extern ATOMIC int64_t signal_recv;
-extern int64_t signal_mask;
+// The native handler must never enter a hidden atomic implementation lock.
+_Static_assert(ATOMIC_LLONG_LOCK_FREE == 2, "signal handlers require lock-free 64-bit atomics");
+extern atomic_ullong signal_recv;
+extern atomic_ullong signal_mask;
 extern pthread_mutex_t signal_locker;
 extern struct sc_map_64 signal_handlers;
 
@@ -47,37 +50,25 @@ void signal_notify(n_chan_t *ch, n_vec_t signals);
 void signal_scan_roots(rt_linked_fixalloc_t *worklist);
 
 static inline bool signal_intercepted(int sig) {
-    return (signal_mask & (1 << sig)) != 0;
+    return sig > 0 && sig < 64 &&
+           (atomic_load_explicit(&signal_mask, memory_order_relaxed) & (1ULL << sig)) != 0;
 }
 
 static inline void signal_handle(int sig) {
-    pthread_mutex_lock(&signal_locker);
-    DEBUGF("[runtime.signal_handle] signal %d received", sig);
-    // 判断信号是否 mask
     if (signal_intercepted(sig)) {
-        int64_t recv = atomic_load(&signal_recv);
-
-        recv |= 1 << sig;
-
-        // 设置 recv 的值
-        atomic_store(&signal_recv, recv);
-
-        DEBUGF("[runtime.signal_handle] signal %d received, current signal_recv %ld", sig, signal_recv);
-        pthread_mutex_unlock(&signal_locker);
+        // A signal can interrupt a thread that already owns signal_locker.
+        // Only record the event here; dispatch and logging stay in signal_loop.
+        atomic_fetch_or_explicit(&signal_recv, 1ULL << sig, memory_order_relaxed);
         return;
     }
-
-    pthread_mutex_unlock(&signal_locker);
 
 #ifdef __WINDOWS
     if (sig == SIGINT || sig == SIGTERM) {
 #else
     if (sig == SIGHUP || sig == SIGINT || sig == SIGTERM) {
 #endif
-        // 触发信号默认行为
-        // signal(sig, SIG_DFL);
-        // raise(sig);
-        exit(128 + sig);
+        // exit() can deadlock on stdio or atexit locks held by interrupted code.
+        _Exit(128 + sig);
     }
 }
 
@@ -108,7 +99,7 @@ static inline void signal_process(int64_t sig) {
     int64_t mask;
     sc_map_foreach(&signal_handlers, key, mask) {
         n_chan_t *ch = (n_chan_t *) key;
-        if (mask & (1 << sig)) {
+        if ((uint64_t) mask & (1ULL << sig)) {
             bool result = rt_chan_send(ch, &sig, true);
             DEBUGF("[runtime.signal_process] signal %ld mask, will send to channel %p, send result = %d", sig, ch,
                    result);
@@ -119,20 +110,21 @@ static inline void signal_process(int64_t sig) {
 // yield wait signal 到来，然后等待 signal_handle 唤醒即可
 static inline void signal_loop() {
     while (true) {
-        if (atomic_load(&signal_recv) == 0) {
+        if (atomic_load_explicit(&signal_recv, memory_order_relaxed) == 0) {
             goto YIELD;
         }
 
         pthread_mutex_lock(&signal_locker);
 
+        // Signals arriving after this exchange remain pending for the next pass.
+        uint64_t received = atomic_exchange_explicit(&signal_recv, 0, memory_order_relaxed);
+
         // 遍历 all_signals 并判断是否存在就绪的信号，如何存在则进行信号处理(no block try send)
         for (int64_t i = 0; i < sizeof(all_signals) / sizeof(all_signals[0]); i++) {
             int64_t sig = all_signals[i];
             // 检查该信号是否被接收
-            if (atomic_load(&signal_recv) & (1 << sig)) {
-                // 清除该信号的接收标志
-                atomic_fetch_and(&signal_recv, ~(1 << sig));
-                DEBUGF("[runtime.signal_loop] signal %ld clean, current signal_recv %ld", sig, signal_recv);
+            if (received & (1ULL << sig)) {
+                DEBUGF("[runtime.signal_loop] signal %ld clean", sig);
 
                 signal_process(sig);
             }
