@@ -334,6 +334,7 @@ pub struct Typesys<'a> {
     worklist: Vec<Arc<Mutex<AstFnDef>>>,
     generics_args_stack: Vec<HashMap<String, Type>>,
     be_caught: usize,
+    error_handlers: Vec<Vec<Type>>,
     ret_target_types: Vec<Type>,
     in_for_count: usize,
     errors: Vec<AnalyzerError>,
@@ -348,6 +349,7 @@ impl<'a> Typesys<'a> {
             generics_args_stack: Vec::new(),
             current_fn_mutex: Arc::new(Mutex::new(AstFnDef::default())),
             be_caught: 0,
+            error_handlers: Vec::new(),
             ret_target_types: Vec::new(),
             in_for_count: 0,
             errors: Vec::new(),
@@ -429,6 +431,9 @@ impl<'a> Typesys<'a> {
             result.args = args;
         }
 
+        if result.ident == "errort" && matches!(result.kind, TypeKind::Interface(..)) {
+            result.is_error = true;
+        }
         result.status = ReductionStatus::Done;
         result.kind = Type::cross_kind_trans(&result.kind);
         result.storage_kind = Type::storage_kind(&result.kind);
@@ -513,6 +518,7 @@ impl<'a> Typesys<'a> {
 
                 // 非泛型 alias 已经 reduction 完成，直接复用
                 if typedef.type_expr.status == ReductionStatus::Done {
+                    t.is_error = typedef.type_expr.is_error;
                     t.kind = typedef.type_expr.kind.clone();
                     t.status = typedef.type_expr.status;
                     return Ok(t);
@@ -615,6 +621,7 @@ impl<'a> Typesys<'a> {
             };
 
             t.args = impl_args;
+            t.is_error = right_type.is_error;
             t.kind = right_type.kind;
             t.status = right_type.status;
 
@@ -635,7 +642,12 @@ impl<'a> Typesys<'a> {
             typedef.type_expr.ident = t.ident.clone();
         }
 
-        let type_expr = typedef.type_expr.clone();
+        let mut type_expr = typedef.type_expr.clone();
+        if type_expr.ident == "errable" {
+            if let TypeKind::TaggedUnion(ident, _) = &mut type_expr.kind {
+                *ident = "errable".to_string();
+            }
+        }
         drop(typedef);
 
         let type_expr = match self.reduction_type_visited(type_expr, visited) {
@@ -651,6 +663,7 @@ impl<'a> Typesys<'a> {
         let mut typedef = typedef_mutex.lock().unwrap();
         typedef.type_expr = type_expr;
 
+        t.is_error = typedef.type_expr.is_error;
         t.kind = typedef.type_expr.kind.clone();
         t.status = typedef.type_expr.status;
 
@@ -750,6 +763,7 @@ impl<'a> Typesys<'a> {
             }
             TypeKind::Fn(type_fn) => {
                 type_fn.return_type = self.reduction_type_visited(type_fn.return_type.clone(), visited)?;
+                self.result_signature(type_fn);
 
                 for formal_type in type_fn.param_types.iter_mut() {
                     *formal_type = self.reduction_type_visited(formal_type.clone(), visited)?;
@@ -1045,6 +1059,10 @@ impl<'a> Typesys<'a> {
         }
 
         *target_type = self.reduction_type(target_type.clone())?;
+        if target_type.is_error && !src_type.is_error && !matches!(src_type.kind, TypeKind::Union(..)) {
+            *src = self.as_to_interface(src, target_type.clone())?;
+            return Ok(target_type.clone());
+        }
 
         // anyptr 可以 as 为任意类型
         if matches!(src.type_.kind, TypeKind::Anyptr) && !Type::is_float(&target_type.kind) {
@@ -1054,6 +1072,12 @@ impl<'a> Typesys<'a> {
         // 除了 float 任意类型都可以 as anyptr
         if !Type::is_float(&src.type_.kind) && matches!(target_type.kind, TypeKind::Anyptr) {
             return Ok(target_type.clone());
+        }
+
+        if matches!(src_type.kind, TypeKind::Union(..) | TypeKind::Interface(..))
+            || (matches!(src_type.kind, TypeKind::Ptr(..)) && matches!(target_type.kind, TypeKind::Ref(..)))
+        {
+            self.record_caught_panic(as_expr.start, as_expr.end)?;
         }
 
         // union/nay 可以 as 为任意类型
@@ -1084,7 +1108,9 @@ impl<'a> Typesys<'a> {
         if let TypeKind::Interface(_) = &src_type.kind {
             // interface_type = src_type
             let temp_target_type = match &target_type.kind {
-                TypeKind::Ref(value_type) | TypeKind::Ptr(value_type) => *value_type.clone(),
+                TypeKind::Ref(value_type) | TypeKind::Ptr(value_type) if !(src_type.is_error && target_type.ident_kind == TypeIdentKind::Def) => {
+                    *value_type.clone()
+                }
                 _ => target_type.clone(),
             };
 
@@ -1461,7 +1487,9 @@ impl<'a> Typesys<'a> {
                             });
         }
 
-        let right_target_type = if let TypeKind::Union(..) = left_type.kind.clone() {
+        let right_target_type = if left_type.is_error || (matches!(left_type.kind, TypeKind::Enum(..)) && matches!(op, ExprOp::Ee | ExprOp::Ne)) {
+            Type::default()
+        } else if let TypeKind::Union(..) = left_type.kind.clone() {
             Type::new(TypeKind::Unknown)
         } else {
             left_type.clone()
@@ -1470,6 +1498,24 @@ impl<'a> Typesys<'a> {
         // 推导右操作数的类型
         let right_type = self.infer_right_expr(right, right_target_type)?;
 
+        if left_type.is_error || right_type.is_error {
+            if !matches!(op, ExprOp::Ee | ExprOp::Ne) || (!matches!(left_type.kind, TypeKind::Enum(..)) && !matches!(right_type.kind, TypeKind::Enum(..))) {
+                return Err(AnalyzerError {
+                    start: left.start,
+                    end: right.end,
+                    message: "error equality requires an enum value".to_string(),
+                    is_warning: false,
+                });
+            }
+            let marker = if left_type.is_error { left_type.clone() } else { right_type.clone() };
+            if !left_type.is_error {
+                *left = self.as_to_interface(left, marker.clone())?;
+            }
+            if !right_type.is_error {
+                *right = self.as_to_interface(right, marker)?;
+            }
+            return Ok(Type::new(TypeKind::Bool));
+        }
         // 检查左右操作数类型是否一致
         if !self.type_compare(&left_type, &right_type) {
             return Err(AnalyzerError {
@@ -2077,6 +2123,9 @@ impl<'a> Typesys<'a> {
         };
 
         // 处理 Map 类型访问
+        if matches!(left_type.kind, TypeKind::Map(..) | TypeKind::Vec(..) | TypeKind::String | TypeKind::Arr(..)) {
+            self.record_caught_panic(expr.start, expr.end)?;
+        }
         if let TypeKind::Map(key_type, value_type) = &left_type.kind {
             // 推导 key 表达式的类型
             self.infer_right_expr(key, *key_type.clone())?;
@@ -2722,6 +2771,14 @@ impl<'a> Typesys<'a> {
     }
 
     fn as_to_interface(&mut self, expr: &mut Box<Expr>, interface_type: Type) -> Result<Box<Expr>, AnalyzerError> {
+        if interface_type.is_error && Type::sizeof(&expr.type_.kind) > 24 {
+            return Err(AnalyzerError {
+                start: expr.start,
+                end: expr.end,
+                message: "inline error payload exceeds 24 bytes; use errable<T,E> with a concrete E".to_string(),
+                is_warning: false,
+            });
+        }
         debug_assert!(matches!(interface_type.ident_kind, TypeIdentKind::Interface));
         debug_assert!(expr.type_.status == ReductionStatus::Done);
         debug_assert!(interface_type.status == ReductionStatus::Done);
@@ -2746,7 +2803,9 @@ impl<'a> Typesys<'a> {
 
         // 自动解引用指针类型
         let src_type = match &expr.type_.kind {
-            TypeKind::Ref(value_type) | TypeKind::Ptr(value_type) => *value_type.clone(),
+            TypeKind::Ref(value_type) | TypeKind::Ptr(value_type) if !(interface_type.is_error && expr.type_.ident_kind == TypeIdentKind::Def) => {
+                *value_type.clone()
+            }
             _ => expr.type_.clone(),
         };
 
@@ -2760,7 +2819,14 @@ impl<'a> Typesys<'a> {
                             });
         }
 
-        if src_type.symbol_id == 0 {
+        let symbol_id = if src_type.symbol_id == 0 {
+            self.symbol_table
+                .find_symbol_id(&src_type.ident, self.symbol_table.global_scope_id)
+                .unwrap_or(0)
+        } else {
+            src_type.symbol_id
+        };
+        if symbol_id == 0 {
             return Err(AnalyzerError {
                 start: 0,
                 end: 0,
@@ -2770,7 +2836,7 @@ impl<'a> Typesys<'a> {
         }
 
         // 获取类型定义
-        let symbol = self.symbol_table.get_symbol(src_type.symbol_id).unwrap();
+        let symbol = self.symbol_table.get_symbol(symbol_id).unwrap();
         let SymbolKind::Type(typedef_stmt_mutex) = symbol.kind.clone() else {
             unreachable!()
         };
@@ -3174,6 +3240,7 @@ impl<'a> Typesys<'a> {
         catch_err_mutex: &Arc<Mutex<VarDeclExpr>>,
         catch_body: &mut AstBody,
     ) -> Result<(), AnalyzerError> {
+        self.error_handlers.push(Vec::new());
         self.be_caught += 1;
 
         self.infer_body(try_body);
@@ -3182,7 +3249,7 @@ impl<'a> Typesys<'a> {
 
         {
             let mut catch_err = catch_err_mutex.lock().unwrap();
-            let errort = self.interface_throwable();
+            let errort = self.handler_error_type()?;
             catch_err.type_ = errort;
         }
 
@@ -3202,6 +3269,7 @@ impl<'a> Typesys<'a> {
         catch_err_mutex: &Arc<Mutex<VarDeclExpr>>,
         catch_body: &mut AstBody,
     ) -> Result<Type, AnalyzerError> {
+        self.error_handlers.push(Vec::new());
         self.be_caught += 1;
 
         let right_type = self.infer_right_expr(try_expr, Type::default())?;
@@ -3211,7 +3279,7 @@ impl<'a> Typesys<'a> {
         // reduction errort
         {
             let mut catch_err = catch_err_mutex.lock().unwrap();
-            let errort = self.interface_throwable();
+            let errort = self.handler_error_type()?;
             catch_err.type_ = errort;
         }
 
@@ -3730,7 +3798,12 @@ impl<'a> Typesys<'a> {
                 temp_fndef_mutex,
                 module_scope_id,
             )
-            .map_err(|e| AnalyzerError { start, end, message: e, is_warning: false })?;
+            .map_err(|e| AnalyzerError {
+                start,
+                end,
+                message: e,
+                is_warning: false,
+            })?;
 
         let special_fn = special_fn.lock().unwrap();
 
@@ -4176,6 +4249,10 @@ impl<'a> Typesys<'a> {
         let TypeKind::Fn(type_fn) = fn_kind else { unreachable!() };
         self.infer_call_args(call, *type_fn.clone());
         call.return_type = type_fn.return_type.clone();
+        if type_fn.errable && check_errable {
+            let error_type = type_fn.error_type.clone().unwrap_or_else(|| self.default_error_type());
+            self.record_error(error_type, start, end)?;
+        }
 
         {
             let current_fn = self.current_fn_mutex.lock().unwrap();
@@ -4308,11 +4385,108 @@ impl<'a> Typesys<'a> {
         self.in_for_count -= 1;
     }
 
-    pub fn interface_throwable(&mut self) -> Type {
-        let mut result = Type::ident_new("throwable".to_string(), TypeIdentKind::Interface);
+    fn result_parts(t: &Type) -> Option<(Type, Type)> {
+        if let TypeKind::TaggedUnion(ident, elements) = &t.kind {
+            if t.ident != "errable" && ident != "errable" {
+                return None;
+            }
+            let value = elements.iter().find(|e| e.tag == "value")?;
+            let error = elements.iter().find(|e| e.tag == "error")?;
+            return Some((value.type_.clone(), error.type_.clone()));
+        }
+        None
+    }
+
+    pub(crate) fn result_signature(&mut self, f: &mut TypeFn) {
+        if f.error_type.is_some() {
+            return;
+        }
+        if let Some((value, error)) = Self::result_parts(&f.return_type) {
+            f.errable = true;
+            f.return_type = value;
+            f.error_type = Some(error);
+        } else if f.errable {
+            f.error_type = Some(self.default_error_type());
+        }
+    }
+
+    fn current_error_type(&mut self) -> Type {
+        let current_fn = self.current_fn_mutex.lock().unwrap();
+        if let TypeKind::Fn(f) = &current_fn.type_.kind {
+            if let Some(error) = &f.error_type {
+                return error.clone();
+            }
+        }
+        let return_type = current_fn.return_type.clone();
+        drop(current_fn);
+        Self::result_parts(&return_type).map(|(_, e)| e).unwrap_or_else(|| self.default_error_type())
+    }
+
+    fn record_error(&mut self, source: Type, start: usize, end: usize) -> Result<(), AnalyzerError> {
+        if let Some(handler) = self.error_handlers.last_mut() {
+            handler.push(source);
+            return Ok(());
+        }
+        let target = self.current_error_type();
+        self.check_error_assignment(target, source, start, end)
+    }
+
+    fn record_caught_panic(&mut self, start: usize, end: usize) -> Result<(), AnalyzerError> {
+        if !self.error_handlers.is_empty() {
+            let error = self.default_error_type();
+            self.record_error(error, start, end)?;
+        }
+        Ok(())
+    }
+
+    fn check_error_assignment(&mut self, target: Type, source: Type, start: usize, end: usize) -> Result<(), AnalyzerError> {
+        if self.type_compare(&target, &source) {
+            return Ok(());
+        }
+        let convertible = match &target.kind {
+            TypeKind::Interface(..) => self.can_assign_to_interface(&source),
+            TypeKind::Union(any, _, elements) => self.can_assign_to_union(&source) && self.union_type_contains(&(*any, elements.clone()), &source),
+            _ => false,
+        };
+        if convertible {
+            let mut expr = Box::new(Expr {
+                start,
+                end,
+                type_: source,
+                target_type: Type::default(),
+                node: AstNode::Literal(TypeKind::Int, "0".to_string()),
+            });
+            self.infer_right_expr(&mut expr, target)?;
+            return Ok(());
+        }
+        Err(AnalyzerError {
+            start,
+            end,
+            message: format!("cannot propagate error '{}' into '{}'", source, target),
+            is_warning: false,
+        })
+    }
+
+    fn handler_error_type(&mut self) -> Result<Type, AnalyzerError> {
+        let types = self.error_handlers.pop().unwrap();
+        let mut target = types.first().cloned().unwrap_or_else(|| self.default_error_type());
+        for source in &types {
+            if !self.type_compare(&target, source) {
+                target = self.default_error_type();
+                break;
+            }
+        }
+        for source in types {
+            self.check_error_assignment(target.clone(), source, 0, 0)?;
+        }
+        Ok(target)
+    }
+
+    pub fn default_error_type(&mut self) -> Type {
+        let mut result = Type::ident_new("errort".to_string(), TypeIdentKind::Interface);
 
         // find symbol id from global
-        let symbol_id = self.symbol_table.find_symbol_id("throwable", self.symbol_table.global_scope_id).unwrap();
+        let symbol_id = self.symbol_table.find_symbol_id("errort", self.symbol_table.global_scope_id).unwrap();
         result.symbol_id = symbol_id;
         return self.reduction_type(result).unwrap();
     }
@@ -4456,7 +4630,7 @@ impl<'a> Typesys<'a> {
                         (current_fn.is_errable, current_fn.fn_name.clone(), current_fn.return_type.clone())
                     };
 
-                    if !is_errable {
+                    if !is_errable && self.error_handlers.is_empty() {
                         //  "can't use throw stmt in a fn without an errable! declaration. example: fn %s(...):%s!",
                         self.errors_push(
                             expr.start,
@@ -4467,17 +4641,38 @@ impl<'a> Typesys<'a> {
                             ),
                         );
                     }
-                    let target_type = self.interface_throwable();
-                    self.infer_right_expr(expr, target_type)?;
+                    if self.error_handlers.is_empty() {
+                        let target_type = self.current_error_type();
+                        self.infer_right_expr(expr, target_type)?;
+                    } else {
+                        let source = self.infer_right_expr(expr, Type::default())?;
+                        self.record_error(source, expr.start, expr.end)?;
+                    }
                 }
             }
             AstNode::Return(expr_option) => {
-                let target_type = {
+                let (mut target_type, result_type) = {
                     let current_fn = self.current_fn_mutex.lock().unwrap();
-                    current_fn.return_type.clone()
+                    (
+                        Self::result_parts(&current_fn.return_type)
+                            .map(|(v, _)| v)
+                            .unwrap_or_else(|| current_fn.return_type.clone()),
+                        current_fn.return_type.clone(),
+                    )
                 };
 
                 if let Some(expr) = expr_option {
+                    if Self::result_parts(&result_type).is_some() {
+                        if matches!(expr.node, AstNode::Call(..)) {
+                            self.try_rewrite_tagged_union_call(expr, &result_type)?;
+                        }
+                        if matches!(expr.node, AstNode::SelectExpr(..)) {
+                            self.try_rewrite_tagged_union_select(expr, &result_type)?;
+                        }
+                        if matches!(expr.node, AstNode::TaggedUnionNew(..)) {
+                            target_type = result_type;
+                        }
+                    }
                     if let Err(e) = self.infer_right_expr(expr, target_type) {
                         self.errors_push(e.start, e.end, e.message);
                     }
@@ -5041,12 +5236,23 @@ impl<'a> Typesys<'a> {
             param_types.push(param_type);
         }
 
+        let mut fn_type_error = None;
+        let mut fn_return = return_type.clone();
+        if let Some((value, error)) = Self::result_parts(&return_type) {
+            fn_return = value;
+            fn_type_error = Some(error);
+            fndef_mutex.lock().unwrap().is_errable = true;
+        } else if fndef.is_errable {
+            fn_type_error = Some(self.default_error_type());
+        }
+
         // type done
         let mut result = Type::new(TypeKind::Fn(Box::new(TypeFn {
-            return_type,
+            return_type: fn_return,
             name: fndef.fn_name.clone(),
             tpl: fndef.is_tpl,
-            errable: fndef.is_errable,
+            errable: fndef.is_errable || fn_type_error.is_some(),
+            error_type: fn_type_error.clone(),
             rest: fndef.rest_param,
             x: fndef.is_x,
             param_types,
@@ -5165,6 +5371,8 @@ impl<'a> Typesys<'a> {
     }
 
     pub fn infer_fndef(&mut self, fndef_mutex: Arc<Mutex<AstFnDef>>) {
+        self.error_handlers.clear();
+        self.be_caught = 0;
         self.current_fn_mutex = fndef_mutex;
 
         let params = {
@@ -5399,7 +5607,15 @@ impl<'a> Typesys<'a> {
             return;
         }
 
-        errors_push(self.module, AnalyzerError { start, end, message, is_warning: false });
+        errors_push(
+            self.module,
+            AnalyzerError {
+                start,
+                end,
+                message,
+                is_warning: false,
+            },
+        );
     }
 
     pub fn infer(&mut self) -> Vec<AnalyzerError> {

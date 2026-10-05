@@ -11,7 +11,7 @@ fn main():void! {
     }
 
     fd = syscall.open('asserts/open.txt', syscall.O_RDONLY | syscall.O_CREAT, 0666) catch err {
-        return print('open asserts/open.txt failed: ', err.msg(), '\n')
+        return print('open asserts/open.txt failed: ', describe_error(err), '\n')
         // fd default is zero
     }
 
@@ -22,10 +22,22 @@ fn main():void! {
     // read buf is [u8]
     var buf = vec<u8>.new(0, 20)
     var len = syscall.read(fd, buf.ref(), buf.len()) catch err {
-        return print(err.msg())
+        return print(describe_error(err))
     }
 
     print('actual read len: ', len, '\n')
     var str =  buf as string
     print('buf as string: ', str, '\n')
+}
+
+// Render diagnostics explicitly after catch; throw only carries enum values.
+fn describe_error(errort e):string {
+    if e == runtime_error_t.END_OF_FILE { return 'EOF' }
+    if e == runtime_error_t.TIMEOUT { return 'tcp read timeout' }
+    if e == runtime_error_t.CLOSED { return 'conn closed' }
+    if e == runtime_error_t.INDEX_OUT_OF_RANGE { return 'index out of range' }
+    if e == runtime_error_t.TYPE_MISMATCH { return 'type assert failed' }
+    if e == runtime_error_t.NULL_POINTER { return 'invalid memory address or nil pointer dereference' }
+    if e == runtime_error_t.KEY_NOT_FOUND { return 'key not found in map' }
+    return 'operation failed'
 }

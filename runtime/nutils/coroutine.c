@@ -1,14 +1,15 @@
 #include "runtime/processor.h"
 
 coroutine_t *rt_coroutine_async(void *fn, int64_t flag, n_future_t *fu) {
-    coroutine_t *co = rt_coroutine_new(fn, flag, fu, NULL);
+    coroutine_t *co = rt_coroutine_new(fn, flag | FLAG(CO_FLAG_RESULT), fu, NULL);
     rt_coroutine_dispatch(co);
     DEBUGF("[rt_coroutine_async] co=%p, fn=%p, flag=%ld, fu=%p, size=%ld", co, fn, flag, fu, fu->size);
 
     return co;
 }
 
-void rt_coroutine_async2(void *fn, int64_t flag, bool is_direct) {
+void rt_coroutine_async2(void *fn, int64_t flag, bool is_direct, bool returns_result) {
+    if (returns_result) flag |= FLAG(CO_FLAG_RESULT);
     if (is_direct) {
         flag |= FLAG(CO_FLAG_DIRECT);
     }

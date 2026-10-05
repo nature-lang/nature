@@ -3,15 +3,11 @@
 #include "tests/test.h"
 
 static void test_basic() {
-    char *raw = exec_output();
+    int status = 0;
+    char *raw = exec_output_status(&status);
+    assert(status != 0);
     char *str =
-        "hello nature\n"
-        "coroutine 'main' uncaught error: 'world error' at cases/20230422_01_throw.n:3:28\n"
-        "stack backtrace:\n"
-        "0:\tmain.hello\n"
-        "\t\tat cases/20230422_01_throw.n:3:28\n"
-        "1:\tmain.main\n"
-        "\t\tat cases/20230422_01_throw.n:7:10\n";
+            "hello nature\n";
     assert_string_equal(raw, str);
 }
 

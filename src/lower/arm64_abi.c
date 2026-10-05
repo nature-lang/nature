@@ -321,7 +321,12 @@ linked_t *arm64_lower_fn_begin(closure_t *c, lir_op_t *op) {
             assert(return_type.storage_kind == STORAGE_KIND_IND);
 
             // x8 中存储的是返回数据
-            c->return_big_operand = temp_var_operand(c->module, type_kind_new(TYPE_ANYPTR));
+            // Preserve the incoming sret address in a dedicated stack slot.
+            // Keeping it live as a virtual register across native calls can
+            // leave it in volatile x8 when returning a large Result.
+            c->stack_offset = align_up(c->stack_offset, POINTER_SIZE) + POINTER_SIZE;
+            c->return_big_operand = lir_stack_operand(c->module, -c->stack_offset,
+                                                      POINTER_SIZE, TYPE_ANYPTR);
 
             // 数组由于调用约定没有明确规定，所以我们也按照类似的处理方式
             // 大于 16 字节的结构体，通过内存返回，x8 中存储返回地址
@@ -687,16 +692,19 @@ linked_t *arm64_lower_return(closure_t *c, lir_op_t *op) {
                 linked_push(result, lir_op_move(dst, src));
             }
         } else if (return_size <= 16) {
-            // 小于等于 16 字节的结构体，使用 x0 和 x1 返回
-            lir_operand_t *src_lo = indirect_addr_operand(c->module, type_kind_new(TYPE_UINT64), return_operand, 0);
-            lir_operand_t *dst_lo = operand_new(LIR_OPERAND_REG, x0);
-            linked_push(result, lir_op_move(dst_lo, src_lo));
-
+            // Load the complete aggregate before touching ABI return registers:
+            // the source address may itself be allocated in x0 or x1.
+            lir_operand_t *lo = lower_temp_var_operand(c, result, type_kind_new(TYPE_UINT64));
+            linked_push(result, lir_op_move(lo, indirect_addr_operand(c->module,
+                                                                      type_kind_new(TYPE_UINT64), return_operand, 0)));
+            lir_operand_t *hi = NULL;
             if (return_size > 8) {
-                lir_operand_t *src_hi = indirect_addr_operand(c->module, type_kind_new(TYPE_UINT64), return_operand, 8);
-                lir_operand_t *dst_hi = operand_new(LIR_OPERAND_REG, x1);
-                linked_push(result, lir_op_move(dst_hi, src_hi));
+                hi = lower_temp_var_operand(c, result, type_kind_new(TYPE_UINT64));
+                linked_push(result, lir_op_move(hi, indirect_addr_operand(c->module,
+                                                                          type_kind_new(TYPE_UINT64), return_operand, 8)));
             }
+            linked_push(result, lir_op_move(operand_new(LIR_OPERAND_REG, x0), lo));
+            if (hi) linked_push(result, lir_op_move(operand_new(LIR_OPERAND_REG, x1), hi));
         } else {
             assert(c->return_big_operand);
             // fn begin 时 x8 寄存器中存储的指针被传递给了 c->return_operand

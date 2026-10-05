@@ -111,7 +111,7 @@ static inline void http_conn_close(http_conn_t *conn) {
 static inline void on_write_end_cb(uv_write_t *write_req, int status) {
     if (status < 0) {
         // 对端可能已经关闭了连接,导致写入失败等情况
-        char *msg = tlsprintf("uv_write failed: %s", uv_strerror(status));
+        const char *msg = "uv_write failed: %s";
         DEBUGF("[on_write_end_cb] %s", msg);
     }
 
@@ -202,7 +202,7 @@ static inline void on_read_cb(uv_stream_t *handle, ssize_t nread, const uv_buf_t
     uv_read_stop(handle);
 
     conn->n_server->inner->coroutine_count += 1;
-    coroutine_t *conn_co = rt_coroutine_new(conn->n_server->handler, 0, NULL, conn);
+    coroutine_t *conn_co = rt_coroutine_new(conn->n_server->handler, FLAG(CO_FLAG_RESULT), NULL, conn);
     rt_coroutine_dispatch(conn_co);
 }
 
@@ -385,7 +385,7 @@ static void uv_async_http_listen(inner_http_server_t *inner) {
 
     int result = uv_listen((uv_stream_t *) &inner->handle, DEFAULT_BACKLOG, on_http_conn_cb);
     if (result) {
-        rti_co_throw(inner->listen_co, tlsprintf("listen failed: %s", uv_strerror(result)), false);
+        rti_co_throw(inner->listen_co, native_uv_error(result), NULL);
         co_ready(inner->listen_co);
     }
 }

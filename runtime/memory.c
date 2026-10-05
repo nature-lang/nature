@@ -82,8 +82,6 @@ void rtypes_deserialize() {
             os_env_rtype = *r;
         } else if (r->kind == TYPE_VEC) {
             vec_rtype = *r;
-        } else if (str_equal(STRTABLE(r->ident_offset), THROWABLE_IDENT)) {
-            throwable_rtype = *r;
         }
 
         // rtype 已经组装完毕，现在加入到 rtype table 中

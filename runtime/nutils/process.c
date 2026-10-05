@@ -72,9 +72,9 @@ static inline void on_read_stderr_cb(uv_stream_t *stream, ssize_t nread, const u
 
     if (nread < 0) {
         if (nread == UV_EOF) {
-            rti_co_throw(co, "read eof", false);
+            rti_co_throw(co, native_error(N_ERROR_EOF), NULL);
         } else {
-            rti_co_throw(co, "read pipe failed", false);
+            rti_co_throw(co, native_error(N_ERROR_FAILED), NULL);
         }
         pipe_ctx->closed = true;
 
@@ -110,9 +110,9 @@ static inline void on_read_stdout_cb(uv_stream_t *stream, ssize_t nread, const u
 
     if (nread < 0) {
         if (nread == UV_EOF) {
-            rti_co_throw(co, "read eof", false);
+            rti_co_throw(co, native_error(N_ERROR_EOF), NULL);
         } else {
-            rti_co_throw(co, "read pipe failed", false);
+            rti_co_throw(co, native_error(N_ERROR_FAILED), NULL);
         }
         pipe_ctx->closed = true;
 
@@ -175,7 +175,7 @@ static void uv_async_process_spawn(process_context_t *ctx, coroutine_t *co) {
             free(ctx->envs);
             ctx->envs = NULL;
         }
-        rti_co_throw(co, (char *) uv_strerror(result), false);
+        rti_co_throw(co, native_uv_error(result), NULL);
     } else {
         // 设置 pid 的值
         ctx->pid = ctx->req.pid;
@@ -236,7 +236,7 @@ static inline void on_write_stdin_cb(uv_write_t *req, int status) {
     coroutine_t *co = ctx->stdin_pipe.pipe.data;
 
     if (status < 0) {
-        rti_co_throw(co, tlsprintf("write stdin failed: %s", uv_strerror(status)), false);
+        rti_co_throw(co, native_uv_error(status), NULL);
     }
     co_ready(co);
 }
@@ -244,7 +244,7 @@ static inline void on_write_stdin_cb(uv_write_t *req, int status) {
 static void uv_async_process_write_stdin(process_context_t *ctx) {
     coroutine_t *co = ctx->stdin_pipe.pipe.data;
     if (ctx->stdin_pipe.closed || uv_is_closing((uv_handle_t *) &ctx->stdin_pipe.pipe)) {
-        rti_co_throw(co, "stdin pipe closed", false);
+        rti_co_throw(co, native_error(N_ERROR_CLOSED), NULL);
         co_ready(co);
         return;
     }
@@ -254,7 +254,7 @@ static void uv_async_process_write_stdin(process_context_t *ctx) {
     int result = uv_write(&ctx->stdin_write_req, (uv_stream_t *) &ctx->stdin_pipe.pipe, &buf, 1,
                           on_write_stdin_cb);
     if (result < 0) {
-        rti_co_throw(co, tlsprintf("write stdin failed: %s", uv_strerror(result)), false);
+        rti_co_throw(co, native_uv_error(result), NULL);
         co_ready(co);
     }
 }
@@ -262,11 +262,11 @@ static void uv_async_process_write_stdin(process_context_t *ctx) {
 n_int_t rt_uv_process_write_stdin(process_context_t *ctx, n_vec_t buf) {
     coroutine_t *co = coroutine_get();
     if (ctx->stdin_pipe.closed) {
-        rti_co_throw(co, "stdin pipe closed", false);
+        rti_co_throw(co, native_error(N_ERROR_CLOSED), NULL);
         return 0;
     }
     if (buf.length > sizeof(ctx->stdin_pipe.buffer)) {
-        rti_co_throw(co, "stdin write exceeds pipe buffer", false);
+        rti_co_throw(co, native_error(N_ERROR_FAILED), NULL);
         return 0;
     }
 
@@ -325,7 +325,7 @@ n_string_t rt_uv_process_read_stdout(process_context_t *ctx) {
     coroutine_t *co = coroutine_get();
 
     if (ctx->stdout_pipe.closed) {
-        rti_co_throw(co, "stdout pipe closed", NULL);
+        rti_co_throw(co, native_error(N_ERROR_CLOSED), NULL);
         return (n_string_t) {0};
     }
 
@@ -350,7 +350,7 @@ n_string_t rt_uv_process_read_stderr(process_context_t *ctx) {
     n_processor_t *p = processor_get();
     coroutine_t *co = coroutine_get();
     if (ctx->stderr_pipe.closed) {
-        rti_co_throw(co, "stderr pipe closed", NULL);
+        rti_co_throw(co, native_error(N_ERROR_CLOSED), NULL);
         return (n_string_t) {0};
     }
 

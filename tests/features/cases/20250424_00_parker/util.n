@@ -9,6 +9,14 @@ import libc
 import fs
 import strings
 
+type test_error_t:errort = enum {
+    READ_FD_LEN_D_EXCEPTION,
+    EXTRACT_TGZ_SIZE_IS_ZERO,
+    READ_FD_RESULT_LEN_D_SIZE_D,
+    SET_PDEATHSIG_ERR_S,
+}
+
+
 const charset = 'abcdefghijklmnopqrstuvwxyz0123456789'
 
 fn arg_version():bool {
@@ -41,7 +49,7 @@ fn extract_tgz(string exe_path):[u8]! {
     var len = f.read(size_buf)
     if len != size_buf.len() {
         f.close()
-        throw errorf('read fd len %d exception', len)
+        throw test_error_t.READ_FD_LEN_D_EXCEPTION
     }
 
     var size_str = size_buf as string
@@ -49,7 +57,7 @@ fn extract_tgz(string exe_path):[u8]! {
     // atoi
     var size = size_str.to_int()
     if size == 0 {
-        throw errorf('extract tgz size is zero')
+        throw test_error_t.EXTRACT_TGZ_SIZE_IS_ZERO
     }
 
     logf('read tgz tail 16 size=%d success', size)
@@ -61,7 +69,7 @@ fn extract_tgz(string exe_path):[u8]! {
 
     len = f.read(result)
     if len != size {
-        throw errorf('read fd result len %d != size %d', len, size)
+        throw test_error_t.READ_FD_RESULT_LEN_D_SIZE_D
     }
 
     // close fd
@@ -120,7 +128,7 @@ fn run_target(string target_path):int! {
     // 9 = SIGKILL
     var result = libc.prctl(1, 9, 0, 0, 0)
     if result == -1 {
-       throw errorf('set pdeathsig err=%s', libc.error_string())
+       throw test_error_t.SET_PDEATHSIG_ERR_S
     }
 
     // 读取当前进程 id

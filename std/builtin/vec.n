@@ -4,7 +4,7 @@ pub fn vec<T>.new(T default_value, int len):vec<T> {
     int hash = @reflect_hash(vec<T>)
     int element_hash = @reflect_hash(T)
     return runtime.vec_new<T>(hash, element_hash, len, &default_value as anyptr) catch e {
-        panic(e.msg())
+        panic('vector operation failed')
         []
     }
 }
@@ -13,7 +13,7 @@ pub fn vec<T>.cap_of(int cap):vec<T> {
     int hash = @reflect_hash(vec<T>)
     int element_hash = @reflect_hash(T)
     return runtime.vec_cap<T>(hash, element_hash, cap) catch e {
-        panic(e.msg())
+        panic('vector operation failed')
         []
     }
 }
@@ -25,7 +25,7 @@ pub fn vec<T>.append(*self, vec<T> l2) {
 
 pub fn vec<T>.slice(*self, int start, int end):vec<T> {
     return runtime.vec_slice<T>(self as anyptr, start, end) catch e {
-        panic(e.msg())
+        panic('vector operation failed')
         []
     }
 }
@@ -239,7 +239,6 @@ pub fn vec<T>.search(*self, fn(int):bool predicate):int {
     }
 
     //if low >= self.len() || ??  {
-    //    throw errorf('not found')
     //}
 
     return low

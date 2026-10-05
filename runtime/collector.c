@@ -377,17 +377,10 @@ static void scan_stack(n_processor_t *p, coroutine_t *co) {
 
 
     if (co->has_error) {
-        if (co->error.value.ptr_value && span_of((addr_t) co->error.value.ptr_value)) {
-            insert_gc_worklist(worklist, co->error.value.ptr_value);
+        for (int i = 0; i < ERROR_INLINE_BYTES / POINTER_SIZE; ++i) {
+            void *ptr = (void *) (uintptr_t) co->error.payload[i];
+            if (ptr && span_of((addr_t) ptr)) insert_gc_worklist(worklist, ptr);
         }
-
-        if (co->error.methods && span_of((addr_t) co->error.methods)) {
-            insert_gc_worklist(worklist, co->error.methods);
-        }
-    }
-
-    if (co->traces.data && span_of((addr_t) co->traces.data)) {
-        insert_gc_worklist(worklist, co->traces.data);
     }
 
     if (co->flag & FLAG(CO_FLAG_RTFN)) {

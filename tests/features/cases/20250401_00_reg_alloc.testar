@@ -72,9 +72,14 @@ panic: 'index out of range [2] with length 2' at nature-test/main.n:13:22
 
 === test_live_in_phi_not_rename
 --- main.n
+
+type test_error_t:errort = enum {
+    DIVISOR_CANNOT_ZERO,
+}
+
 fn rem(int dividend, int divisor):int! {
 	if divisor == 0 {
-		throw errorf('divisor cannot zero')
+		throw test_error_t.DIVISOR_CANNOT_ZERO
 	}
 
 	return dividend % divisor
@@ -90,7 +95,7 @@ int result = 0
 
 fn main():void! {
     result = rem(10, 0) catch err {
-        test2(err.msg())
+        test2(describe_error(err))
         1
     }
     test1(result)
@@ -99,10 +104,20 @@ fn main():void! {
     result = rem(10, 0)
 }
 
+
+// Render diagnostics explicitly after catch; throw only carries enum values.
+fn describe_error(errort e):string {
+    if e == test_error_t.DIVISOR_CANNOT_ZERO { return 'divisor cannot zero' }
+    if e == runtime_error_t.END_OF_FILE { return 'EOF' }
+    if e == runtime_error_t.TIMEOUT { return 'tcp read timeout' }
+    if e == runtime_error_t.CLOSED { return 'conn closed' }
+    if e == runtime_error_t.INDEX_OUT_OF_RANGE { return 'index out of range' }
+    if e == runtime_error_t.TYPE_MISMATCH { return 'type assert failed' }
+    if e == runtime_error_t.NULL_POINTER { return 'invalid memory address or nil pointer dereference' }
+    if e == runtime_error_t.KEY_NOT_FOUND { return 'key not found in map' }
+    return 'operation failed'
+}
 --- output.txt
-coroutine 'main' uncaught error: 'divisor cannot zero' at nature-test/main.n:3:34
-stack backtrace:
-0:	main.rem
-		at nature-test/main.n:3:34
-1:	main.main
-		at nature-test/main.n:25:22
+
+--- status.txt
+1

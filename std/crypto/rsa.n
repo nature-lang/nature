@@ -3,6 +3,25 @@ import crypto.utils
 import time
 import fmt
 
+pub type error_t:errort = enum {
+    RANDOM_SEED,
+    KEY_GENERATION,
+    PUBLIC_KEY_PARSE,
+    KEY_COPY,
+    PRIVATE_KEY_PARSE,
+    ENCRYPTION,
+    DECRYPTION,
+    KEY_SETUP,
+    PUBLIC_KEY_WRITE,
+    PRIVATE_KEY_WRITE,
+}
+
+pub type failure_t:errort = struct {
+    error_t kind
+    i32 code
+}
+
+
 pub const SHA1 = 0x05
 pub const SHA224= 0x08
 pub const SHA256 = 0x09
@@ -44,7 +63,7 @@ pub fn generate_key(u32 key_bits):(ref<rsa_public_key_t>, ref<rsa_private_key_t>
     if seed_result != 0 {
         utils.mbedtls_ctr_drbg_free(&generator.ctr_drbg)
         utils.mbedtls_entropy_free(&generator.entropy)
-        throw errorf('failed to seed RNG')
+        throw error_t.RANDOM_SEED
     }
     
     // Initialize RSA context
@@ -56,7 +75,7 @@ pub fn generate_key(u32 key_bits):(ref<rsa_public_key_t>, ref<rsa_private_key_t>
         utils.mbedtls_rsa_free(&generator.rsa_ctx)
         utils.mbedtls_ctr_drbg_free(&generator.ctr_drbg)
         utils.mbedtls_entropy_free(&generator.entropy)
-        throw errorf('RSA key generation failed')
+        throw error_t.KEY_GENERATION
     }
     
     // Create public key instance
@@ -87,7 +106,7 @@ pub fn public_key_from_pem([u8] pem_data):ref<rsa_public_key_t>! {
     var parse_result = utils.mbedtls_pk_parse_public_key(&pk, (pem_data as string).to_cstr(), pem_data.len() + 1)
     if parse_result != 0 {
         utils.mbedtls_pk_free(&pk)
-        throw errorf('failed to parse public key PEM, error code: %d', parse_result)
+        throw failure_t{kind: error_t.PUBLIC_KEY_PARSE, code: parse_result as i32}
     }
     
     // Initialize RSA context and copy from PK context
@@ -97,7 +116,7 @@ pub fn public_key_from_pem([u8] pem_data):ref<rsa_public_key_t>! {
     if copy_result != 0 {
         utils.mbedtls_rsa_free(&public_key.rsa_ctx)
         utils.mbedtls_pk_free(&pk)
-        throw errorf('failed to copy RSA key')
+        throw error_t.KEY_COPY
     }
     
     // Clean up PK context
@@ -132,7 +151,7 @@ pub fn private_key_from_pem([u8] pem_data, [u8] password):ref<rsa_private_key_t>
     if seed_result != 0 {
         utils.mbedtls_ctr_drbg_free(&ctr_drbg)
         utils.mbedtls_entropy_free(&entropy)
-        throw errorf('failed to seed RNG')
+        throw error_t.RANDOM_SEED
     }
     
     var parse_result = utils.mbedtls_pk_parse_key(&pk, (pem_data as string).to_cstr(), pem_data.len() + 1, pwd_ptr, pwd_len, libc.to_cfn(utils.mbedtls_ctr_drbg_random as anyptr), &ctr_drbg as anyptr)
@@ -140,7 +159,7 @@ pub fn private_key_from_pem([u8] pem_data, [u8] password):ref<rsa_private_key_t>
         utils.mbedtls_pk_free(&pk)
         utils.mbedtls_ctr_drbg_free(&ctr_drbg)
         utils.mbedtls_entropy_free(&entropy)
-        throw errorf('failed to parse private key PEM, error code: %d', parse_result)
+        throw failure_t{kind: error_t.PRIVATE_KEY_PARSE, code: parse_result as i32}
     }
     
     // Initialize RSA context and copy from PK context
@@ -152,7 +171,7 @@ pub fn private_key_from_pem([u8] pem_data, [u8] password):ref<rsa_private_key_t>
         utils.mbedtls_pk_free(&pk)
         utils.mbedtls_ctr_drbg_free(&ctr_drbg)
         utils.mbedtls_entropy_free(&entropy)
-        throw errorf('failed to copy RSA key')
+        throw error_t.KEY_COPY
     }
     
     // Clean up temporary resources
@@ -177,7 +196,7 @@ pub fn rsa_public_key_t.encrypt_oaep(&self, i32 hash_algo, [u8] plaintext, [u8]?
     if seed_result != 0 {
         utils.mbedtls_ctr_drbg_free(&ctr_drbg)
         utils.mbedtls_entropy_free(&entropy)
-        throw errorf('failed to seed RNG for encryption')
+        throw error_t.RANDOM_SEED
     }
 
     // Set padding to OAEP with SHA256
@@ -203,7 +222,7 @@ pub fn rsa_public_key_t.encrypt_oaep(&self, i32 hash_algo, [u8] plaintext, [u8]?
     utils.mbedtls_entropy_free(&entropy)
 
     if result != 0 {
-        throw errorf('RSA OAEP encryption failed with error code: %d', result)
+        throw failure_t{kind: error_t.ENCRYPTION, code: result as i32}
     }
 
     return output
@@ -223,7 +242,7 @@ pub fn rsa_private_key_t.decrypt_oaep(&self, i32 hash_algo, [u8] ciphertext, [u8
     if seed_result != 0 {
         utils.mbedtls_ctr_drbg_free(&ctr_drbg)
         utils.mbedtls_entropy_free(&entropy)
-        throw errorf('failed to seed RNG for decryption')
+        throw error_t.RANDOM_SEED
     }
     
     // Set padding to OAEP with SHA256
@@ -249,7 +268,7 @@ pub fn rsa_private_key_t.decrypt_oaep(&self, i32 hash_algo, [u8] ciphertext, [u8
     utils.mbedtls_entropy_free(&entropy)
     
     if result != 0 {
-        throw errorf('RSA OAEP decryption failed with error code: %d', result)
+        throw failure_t{kind: error_t.DECRYPTION, code: result as i32}
     }
 
     return output[..output_len]
@@ -270,7 +289,7 @@ pub fn rsa_public_key_t.encrypt_pkcs_v15(&self, [u8] plaintext):[u8]! {
     if seed_result != 0 {
         utils.mbedtls_ctr_drbg_free(&ctr_drbg)
         utils.mbedtls_entropy_free(&entropy)
-        throw errorf('failed to seed RNG for encryption')
+        throw error_t.RANDOM_SEED
     }
 
     // Set padding to PKCS#1 v1.5
@@ -288,7 +307,7 @@ pub fn rsa_public_key_t.encrypt_pkcs_v15(&self, [u8] plaintext):[u8]! {
     utils.mbedtls_entropy_free(&entropy)
 
     if result != 0 {
-        throw errorf('RSA encryption failed with error code: %d', result)
+        throw failure_t{kind: error_t.ENCRYPTION, code: result as i32}
     }
 
     return output
@@ -308,7 +327,7 @@ pub fn rsa_private_key_t.decrypt_pkcs_v15(&self, [u8] ciphertext):[u8]! {
     if seed_result != 0 {
         utils.mbedtls_ctr_drbg_free(&ctr_drbg)
         utils.mbedtls_entropy_free(&entropy)
-        throw errorf('failed to seed RNG for decryption')
+        throw error_t.RANDOM_SEED
     }
     
     // Set padding to PKCS#1 v1.5
@@ -327,7 +346,7 @@ pub fn rsa_private_key_t.decrypt_pkcs_v15(&self, [u8] ciphertext):[u8]! {
     utils.mbedtls_entropy_free(&entropy)
     
     if result != 0 {
-        throw errorf('RSA decryption failed with error code: %d', result)
+        throw failure_t{kind: error_t.DECRYPTION, code: result as i32}
     }
 
     return output[..output_len]
@@ -343,20 +362,20 @@ pub fn rsa_public_key_t.to_pem(&self):[u8]! {
     var ret = utils.mbedtls_pk_setup(&pk, utils.mbedtls_pk_info_from_type(utils.MBEDTLS_PK_RSA))
     if ret != 0 {
         utils.mbedtls_pk_free(&pk)
-        throw errorf('mbedtls_pk_setup failed')
+        throw error_t.KEY_SETUP
     }
 
     var pk_rsa = pk.pk_ctx as ptr<utils.mbedtls_rsa_context>
     ret = utils.mbedtls_rsa_copy(pk_rsa, &self.rsa_ctx)
     if ret != 0 {
         utils.mbedtls_pk_free(&pk)
-        throw errorf('mbedtls_rsa_copy failed')
+        throw error_t.KEY_COPY
     }
 
     ret = utils.mbedtls_pk_write_pubkey_pem(&pk, pem_buff.ref(), pem_buff.len())
     if ret != 0 {
         utils.mbedtls_pk_free(&pk)
-        throw errorf('mbedtls_pk_write_pubkey_pem failed')
+        throw error_t.PUBLIC_KEY_WRITE
     }
 
     var len = libc.strlen((pem_buff as string).to_cstr())
@@ -375,20 +394,20 @@ pub fn rsa_private_key_t.to_pem(&self):[u8]! {
     var ret = utils.mbedtls_pk_setup(&pk, utils.mbedtls_pk_info_from_type(utils.MBEDTLS_PK_RSA))
     if ret != 0 {
         utils.mbedtls_pk_free(&pk)
-        throw errorf('mbedtls_pk_setup failed')
+        throw error_t.KEY_SETUP
     }
 
     var pk_rsa = pk.pk_ctx as ptr<utils.mbedtls_rsa_context>
     ret = utils.mbedtls_rsa_copy(pk_rsa, &self.rsa_ctx)
     if ret != 0 {
         utils.mbedtls_pk_free(&pk)
-        throw errorf('mbedtls_rsa_copy failed')
+        throw error_t.KEY_COPY
     }
 
     ret = utils.mbedtls_pk_write_key_pem(&pk, pem_buff.ref(), pem_buff.len())
     if ret != 0 {
         utils.mbedtls_pk_free(&pk)
-        throw errorf('mbedtls_pk_write_key_pem failed')
+        throw error_t.PRIVATE_KEY_WRITE
     }
 
     var len = libc.strlen((pem_buff as string).to_cstr())

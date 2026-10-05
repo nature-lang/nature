@@ -130,21 +130,39 @@ done
 
 === test_throw_unwind
 --- main.n
+
+type test_error_t:errort = enum {
+    X,
+}
+
 fn boom():void! {
     defer {
         println('cleanup')
     }
-    throw errorf('x')
+    throw test_error_t.X
 }
 
 fn main() {
     try {
         boom()
     } catch e {
-        println('caught', e.msg())
+        println('caught', describe_error(e))
     }
 }
 
+
+// Render diagnostics explicitly after catch; throw only carries enum values.
+fn describe_error(errort e):string {
+    if e == test_error_t.X { return 'x' }
+    if e == runtime_error_t.END_OF_FILE { return 'EOF' }
+    if e == runtime_error_t.TIMEOUT { return 'tcp read timeout' }
+    if e == runtime_error_t.CLOSED { return 'conn closed' }
+    if e == runtime_error_t.INDEX_OUT_OF_RANGE { return 'index out of range' }
+    if e == runtime_error_t.TYPE_MISMATCH { return 'type assert failed' }
+    if e == runtime_error_t.NULL_POINTER { return 'invalid memory address or nil pointer dereference' }
+    if e == runtime_error_t.KEY_NOT_FOUND { return 'key not found in map' }
+    return 'operation failed'
+}
 --- output.txt
 cleanup
 caught x
@@ -193,6 +211,11 @@ nature-test/main.n:3:14: return/break/continue/throw/ret are not allowed inside 
 
 === test_defer_errable_call_in_throwing_fn
 --- main.n
+
+type test_error_t:errort = enum {
+    BOOM,
+}
+
 // An errable call inside a defer body emits its own unwind, which walks the defer scope stack
 // again. Without a re-entrancy guard that re-enters the scope currently being emitted and
 // recurses until the compiler's own stack runs out.
@@ -204,17 +227,30 @@ fn work():int! {
     defer {
         cleanup()
     }
-    throw errorf('boom')
+    throw test_error_t.BOOM
 }
 
 fn main() {
     var v = work() catch e {
-        println('caught:', e.msg())
+        println('caught:', describe_error(e))
         -1
     }
     println(v)
 }
 
+
+// Render diagnostics explicitly after catch; throw only carries enum values.
+fn describe_error(errort e):string {
+    if e == test_error_t.BOOM { return 'boom' }
+    if e == runtime_error_t.END_OF_FILE { return 'EOF' }
+    if e == runtime_error_t.TIMEOUT { return 'tcp read timeout' }
+    if e == runtime_error_t.CLOSED { return 'conn closed' }
+    if e == runtime_error_t.INDEX_OUT_OF_RANGE { return 'index out of range' }
+    if e == runtime_error_t.TYPE_MISMATCH { return 'type assert failed' }
+    if e == runtime_error_t.NULL_POINTER { return 'invalid memory address or nil pointer dereference' }
+    if e == runtime_error_t.KEY_NOT_FOUND { return 'key not found in map' }
+    return 'operation failed'
+}
 --- output.txt
 caught: boom
 -1

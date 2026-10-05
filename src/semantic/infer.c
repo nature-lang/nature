@@ -10,6 +10,93 @@
 #include "src/error.h"
 
 static type_t reduction_type_visited(module_t *m, type_t t, struct sc_map_s64 *visited);
+static type_t result_type(module_t *m, type_t value_type, type_t error_type);
+static ast_expr_t as_to_interface(module_t *m, ast_expr_t *expr, type_t interface_type);
+
+static table_t *error_type_ids;
+static uint64_t next_error_type_id = SYSTEM_ERROR_TYPE_ID + 1;
+void error_type_ids_reset(void) {
+    error_type_ids = NULL;
+    next_error_type_id = SYSTEM_ERROR_TYPE_ID + 1;
+}
+uint64_t error_type_id(type_t type) {
+    if (type.ident && str_equal(type.ident, "runtime_error_t")) return RUNTIME_ERROR_TYPE_ID;
+    if (type.ident && str_equal(type.ident, "system_error_t")) return SYSTEM_ERROR_TYPE_ID;
+    if (!error_type_ids) error_type_ids = table_new();
+    char *name = type_format(type);
+    uint64_t *id = table_get(error_type_ids, name);
+    if (!id) {
+        id = NEW(uint64_t);
+        *id = next_error_type_id++;
+        table_set(error_type_ids, name, id);
+    }
+    return *id;
+}
+
+static type_t default_error_type(module_t *m) {
+    return reduction_type(m, type_ident_new("errort", TYPE_IDENT_INTERFACE));
+}
+
+static bool declared_result(type_t type) {
+    return type.kind == TYPE_TAGGED_UNION &&
+           ((type.ident && str_equal(type.ident, ERRABLE_IDENT)) ||
+            (type.tagged_union->ident && str_equal(type.tagged_union->ident, ERRABLE_IDENT)));
+}
+
+static type_t result_error_type(type_t type) {
+    assert(declared_result(type));
+    for (int i = 0; i < type.tagged_union->elements->length; ++i) {
+        tagged_union_element_t *e = ct_list_value(type.tagged_union->elements, i);
+        if (str_equal(e->tag, ERRABLE_ERROR_TAG)) return e->type;
+    }
+    assert(false);
+    return type;
+}
+
+static void infer_result_signature(module_t *m, type_fn_t *f) {
+    if (!f->errable_value_type.kind && declared_result(f->return_type)) {
+        // An explicit Result declaration uses the tagged ABI, including native C functions.
+        f->native_errable = false;
+        f->is_errable = true;
+        f->errable_error_type = result_error_type(f->return_type);
+        f->errable_value_type = ((tagged_union_element_t *) ct_list_value(f->return_type.tagged_union->elements, 0))->type;
+    } else if (f->is_errable && !f->errable_value_type.kind) {
+        INFER_ASSERTF(!f->native_errable || !f->is_x,
+                      "native T! declarations require .n; use an explicit errable<T,E> return type in .x");
+        f->errable_value_type = f->return_type;
+        f->errable_error_type = default_error_type(m);
+        if (!f->native_errable) f->return_type = result_type(m, f->return_type, f->errable_error_type);
+    }
+}
+
+static void infer_error_assignment(module_t *m, type_t target, type_t source);
+
+static void infer_error_call(module_t *m, type_t error) {
+    if (!stack_empty(m->error_handlers)) {
+        list_t *types = stack_top(m->error_handlers);
+        ct_list_push(types, &error);
+    } else {
+        infer_error_assignment(m, m->current_fn->errable_error_type, error);
+    }
+}
+
+static void infer_caught_panic(module_t *m) {
+    if (!stack_empty(m->error_handlers)) infer_error_call(m, default_error_type(m));
+}
+
+static type_t infer_handler_type(module_t *m, list_t *types) {
+    if (!types->length) return default_error_type(m);
+    type_t result = *(type_t *) ct_list_value(types, 0);
+    for (int i = 1; i < types->length; ++i) {
+        if (!type_compare(result, *(type_t *) ct_list_value(types, i))) {
+            result = default_error_type(m);
+            break;
+        }
+    }
+    for (int i = 0; i < types->length; ++i) infer_error_assignment(m, result, *(type_t *) ct_list_value(types, i));
+    return result;
+}
+
 
 static type_t reduction_type_ident(module_t *m, type_t t, struct sc_map_s64 *visited);
 
@@ -849,6 +936,16 @@ static bool can_assign_to_any(type_t t) {
     return true;
 }
 
+static void infer_error_assignment(module_t *m, type_t target, type_t source) {
+    if (type_compare(target, source)) return;
+    bool convertible = (target.kind == TYPE_INTERFACE && can_assign_to_interface(source)) ||
+                       (target.kind == TYPE_ANY && can_assign_to_any(source)) ||
+                       (target.kind == TYPE_UNION && can_assign_to_union(source) && union_type_contains(target.union_, source));
+    INFER_ASSERTF(convertible, "cannot propagate error '%s' into '%s'", type_format(source), type_format(target));
+    ast_expr_t value = {.type = source, .line = m->current_line, .column = m->current_column};
+    infer_right_expr(m, &value, target);
+}
+
 /**
  * integer literal 可以转换为 float 类型，不做检查
  * float literal 可以转换为 integer 类型，不做检查
@@ -1050,7 +1147,15 @@ static type_t infer_binary(module_t *m, ast_binary_expr_t *expr, type_t target_t
     if (left_type.kind != TYPE_UNION && left_type.kind != TYPE_ANY) {
         right_target_type = left_type;
     }
+    if (left_type.is_error || (left_type.kind == TYPE_ENUM && (expr->op == AST_OP_EE || expr->op == AST_OP_NE))) right_target_type = type_kind_new(TYPE_UNKNOWN);
     type_t right_type = infer_right_expr(m, &expr->right, right_target_type);
+    if (left_type.is_error || right_type.is_error) {
+        INFER_ASSERTF((expr->op == AST_OP_EE || expr->op == AST_OP_NE) && (left_type.kind == TYPE_ENUM || right_type.kind == TYPE_ENUM), "error equality requires an enum value");
+        type_t marker = left_type.is_error ? left_type : right_type;
+        if (!left_type.is_error) expr->left = as_to_interface(m, &expr->left, marker);
+        if (!right_type.is_error) expr->right = as_to_interface(m, &expr->right, marker);
+        return type_kind_new(TYPE_BOOL);
+    }
 
     // left type 和 right type 必须相同
     if (!type_compare(left_type, right_type)) {
@@ -1136,6 +1241,11 @@ static type_t infer_as_expr(module_t *m, ast_expr_t *expr) {
 
     type_t target_type = reduction_type(m, as_expr->target_type);
     as_expr->target_type = target_type;
+    if (target_type.is_error && !src_type.is_error &&
+        src_type.kind != TYPE_ANY && src_type.kind != TYPE_UNION) {
+        *expr = as_to_interface(m, &as_expr->src, target_type);
+        return target_type;
+    }
 
     // anyptr 可以 as 为任意类型
     if (as_expr->src.type.kind == TYPE_ANYPTR && !is_float(target_type.kind)) {
@@ -1145,6 +1255,11 @@ static type_t infer_as_expr(module_t *m, ast_expr_t *expr) {
     // 任意类型都可以 as anyptr
     if (!is_float(as_expr->src.type.kind) && target_type.kind == TYPE_ANYPTR) {
         return target_type;
+    }
+
+    if ((src_type.kind == TYPE_ANY || src_type.kind == TYPE_UNION || src_type.kind == TYPE_INTERFACE) ||
+        (src_type.kind == TYPE_PTR && target_type.kind == TYPE_REF)) {
+        infer_caught_panic(m);
     }
 
     // any 可以 as 为任意类型(除了 union)
@@ -1168,7 +1283,8 @@ static type_t infer_as_expr(module_t *m, ast_expr_t *expr) {
     // interface 可以 as 为任意类型(前提是实现了 interface)
     if (as_expr->src.type.kind == TYPE_INTERFACE) {
         type_t temp_target_type = target_type;
-        if (target_type.kind == TYPE_REF || target_type.kind == TYPE_PTR) {
+        if ((target_type.kind == TYPE_REF || target_type.kind == TYPE_PTR) &&
+            !(src_type.is_error && target_type.ident_kind == TYPE_IDENT_DEF)) {
             temp_target_type = target_type.ptr->value_type;
         }
 
@@ -1308,24 +1424,49 @@ static type_t infer_async(module_t *m, ast_expr_t *expr, type_t target_type) {
     type_t fn_type = co_expr->origin_call->left.type;
 
     assert(fn_type.kind == TYPE_FN);
-    co_expr->return_type = fn_type.fn->return_type;
+    co_expr->return_type = fn_type.fn->is_errable ? fn_type.fn->errable_value_type : fn_type.fn->return_type;
 
     // 快速线路: 无参数，无返回值处理，无挟持外部变量，可以作为纯函数进行快速 coroutine 触发
-    if (m->in_fake_stmt && co_expr->origin_call->args->length == 0 && co_expr->closure_fn_void->capture_exprs->length ==
-        0) {
+    if (m->in_fake_stmt && co_expr->return_type.kind == TYPE_VOID && !fn_type.fn->native_errable &&
+        (!fn_type.fn->is_errable || fn_type.fn->errable_error_type.is_error) &&
+        co_expr->origin_call->args->length == 0 && co_expr->closure_fn_void->capture_exprs->length == 0) {
         // 清空两个 fn body, 避免 infer void 异常
         co_expr->closure_fn->body = slice_new();
         co_expr->closure_fn_void->body = slice_new();
         return type_kind_new(TYPE_UNKNOWN);
     }
 
+    if (m->in_fake_stmt) {
+        // A detached task must return void (or Result<void,errort>) to the scheduler.
+        // Wrap nonvoid calls and argument captures instead of treating their ABI as void.
+        infer_fn_decl(m, co_expr->closure_fn_void, type_kind_new(TYPE_UNKNOWN));
+        co_expr->closure_fn->body = slice_new();
+        ast_call_t *dispatch = NEW(ast_call_t);
+        dispatch->args = ct_list_new(sizeof(ast_expr_t));
+        dispatch->left = (ast_expr_t) {.line = expr->line, .column = expr->column, .assert_type = AST_FNDEF, .value = co_expr->closure_fn_void, .type = co_expr->closure_fn_void->type};
+        co_expr->origin_call = dispatch;
+        ast_expr_fake_stmt_t *fake = NEW(ast_expr_fake_stmt_t);
+        fake->expr = *expr;
+        ast_stmt_t *stmt = NEW(ast_stmt_t);
+        stmt->assert_type = AST_STMT_EXPR_FAKE;
+        stmt->value = fake;
+        stmt->line = expr->line;
+        stmt->column = expr->column;
+        slice_push(co_expr->args_copy_stmts, stmt);
+        ast_block_expr_t *block = NEW(ast_block_expr_t);
+        block->body = co_expr->args_copy_stmts;
+        expr->assert_type = AST_EXPR_BLOCK;
+        expr->value = block;
+        return type_kind_new(TYPE_VOID);
+    }
+
     // -------------------------------------------- 消除 ast_async_t, 直接改造成 call async----------------------------------------------------------
     ast_expr_t first_arg = {0};
 
     // 如果原有的 go xxx() 没有参数和返回值，则直接使用原有版本的 origin call 传递给 async, 不需要包裹
-    if (co_expr->return_type.kind == TYPE_VOID && co_expr->origin_call->args->length == 0) {
+    if (co_expr->return_type.kind == TYPE_VOID && co_expr->origin_call->args->length == 0 &&
+        fn_type.fn->is_errable && fn_type.fn->errable_error_type.is_error) {
         first_arg = co_expr->origin_call->left; // 直接使用 left call fn ident, 而不是使用闭包
-        first_arg.type.fn->is_errable = true;
 
         // 清空两个 fn body, 避免 infer void 异常
         co_expr->closure_fn->body = slice_new();
@@ -1535,12 +1676,14 @@ static type_t infer_match(module_t *m, ast_match_t *match, type_t target_type) {
 }
 
 static void infer_try_catch_stmt(module_t *m, ast_try_catch_stmt_t *try_stmt) {
+    list_t *errors = ct_list_new(sizeof(type_t));
+    stack_push(m->error_handlers, errors);
     m->be_caught += 1;
     infer_body(m, try_stmt->try_body);
     m->be_caught -= 1;
 
-    type_t interface_error = interface_throwable();
-    interface_error = reduction_type(m, interface_error);
+    stack_pop(m->error_handlers);
+    type_t interface_error = infer_handler_type(m, errors);
     try_stmt->catch_err.type = interface_error;
 
     rewrite_var_decl(m, &try_stmt->catch_err);
@@ -1552,12 +1695,14 @@ static void infer_try_catch_stmt(module_t *m, ast_try_catch_stmt_t *try_stmt) {
 }
 
 static type_t infer_catch(module_t *m, ast_catch_t *catch_expr) {
+    list_t *errors = ct_list_new(sizeof(type_t));
+    stack_push(m->error_handlers, errors);
     m->be_caught += 1;
     type_t t = infer_right_expr(m, &catch_expr->try_expr, type_kind_new(TYPE_UNKNOWN));
     m->be_caught -= 1;
 
-    type_t interface_error = interface_throwable();
-    interface_error = reduction_type(m, interface_error);
+    stack_pop(m->error_handlers);
+    type_t interface_error = infer_handler_type(m, errors);
     catch_expr->catch_err.type = interface_error;
 
     rewrite_var_decl(m, &catch_expr->catch_err);
@@ -2119,6 +2264,8 @@ static type_t infer_access_expr(module_t *m, ast_expr_t *expr) {
     }
 
     // ast_access to ast_map_access
+    if (left_type.kind == TYPE_MAP || left_type.kind == TYPE_VEC || left_type.kind == TYPE_STRING ||
+        left_type.kind == TYPE_ARR) infer_caught_panic(m);
     if (left_type.kind == TYPE_MAP) {
         ast_map_access_t *map_access = NEW(ast_map_access_t);
         type_map_t *type_map = left_type.map;
@@ -2886,6 +3033,12 @@ static type_t infer_call(module_t *m, ast_call_t *call, type_t target_type, bool
 
     call->return_type = type_fn->return_type;
 
+    // A Result fn returns tagged errable<T,E>; the call still has the declared value type,
+    // and linear reads the fn type to learn the real ABI shape.
+    if (type_fn->is_errable) {
+        call->return_type = type_fn->errable_value_type;
+    }
+
     if (m->current_fn && m->current_fn->is_x && !type_fn->is_x) {
         INFER_ASSERTF(false, "calling .n fn '%s' from .x fn '%s' is not allowed.",
                       type_fn->fn_name ? type_fn->fn_name : "lambda", m->current_fn->fn_name);
@@ -2899,7 +3052,8 @@ static type_t infer_call(module_t *m, ast_call_t *call, type_t target_type, bool
                       m->current_fn->fn_name);
     }
 
-    return type_fn->return_type;
+    if (type_fn->is_errable && check_errable) infer_error_call(m, type_fn->errable_error_type);
+    return call->return_type;
 }
 
 static void infer_tagged_union_element(module_t *m, ast_expr_t *expr, type_t target_type) {
@@ -3228,7 +3382,22 @@ static void infer_typedef_stmt(module_t *m, ast_typedef_stmt_t *stmt) {
  */
 static void infer_return(module_t *m, ast_return_stmt_t *stmt) {
     type_t expect_type = m->current_fn->return_type;
+
+    // An errable function returns errable<T,E>, so `return v` is checked against T and
+    // linear constructs the value variant. The ABI shape stays invisible to the user.
+    if (m->current_fn->is_errable) {
+        expect_type = m->current_fn->errable_value_type;
+    }
+
     if (stmt->expr != NULL) {
+        if (m->current_fn->is_errable) {
+            if (stmt->expr->assert_type == AST_CALL) try_rewrite_tagged_union_call(m, stmt->expr, expect_type);
+            if (stmt->expr->assert_type == AST_EXPR_SELECT) try_rewrite_tagged_union_select(m, stmt->expr, expect_type);
+            if (stmt->expr->assert_type == AST_EXPR_IDENT || stmt->expr->assert_type == AST_EXPR_TAGGED_UNION_NEW) {
+                type_t actual = infer_right_expr(m, stmt->expr, type_kind_new(TYPE_UNKNOWN));
+                if (type_compare(actual, m->current_fn->return_type)) return;
+            }
+        }
         infer_right_expr(m, stmt->expr, expect_type);
     } else {
         INFER_ASSERTF(expect_type.kind == TYPE_VOID, "fn expect return type: %s, but got void",
@@ -3318,11 +3487,15 @@ static type_t infer_env_access(module_t *m, ast_env_access_t *expr) {
 }
 
 static void infer_throw(module_t *m, ast_throw_stmt_t *throw_stmt) {
-    INFER_ASSERTF(m->current_fn->is_errable,
-                  "can't use throw stmt in a fn without an errable! declaration. example: fn %s(...):%s!",
-                  m->current_fn->fn_name, type_origin_format(m->current_fn->return_type));
-
-    infer_right_expr(m, &throw_stmt->error, interface_throwable());
+    INFER_ASSERTF(m->current_fn->is_errable || !stack_empty(m->error_handlers),
+                  "throw requires an errable return type or an enclosing try/catch");
+    if (!stack_empty(m->error_handlers)) {
+        type_t type = infer_right_expr(m, &throw_stmt->error, type_kind_new(TYPE_UNKNOWN));
+        list_t *types = stack_top(m->error_handlers);
+        ct_list_push(types, &type);
+    } else {
+        infer_right_expr(m, &throw_stmt->error, m->current_fn->errable_error_type);
+    }
 }
 
 /**
@@ -3689,6 +3862,10 @@ static bool is_nullable_interface(type_t target_type) {
 }
 
 static ast_expr_t as_to_interface(module_t *m, ast_expr_t *expr, type_t interface_type) {
+    if (interface_type.is_error) {
+        INFER_ASSERTF(expr->type.storage_size <= ERROR_INLINE_BYTES,
+                      "inline error payload exceeds %d bytes; use errable<T,E> with a concrete E", ERROR_INLINE_BYTES);
+    }
     assert(interface_type.ident_kind == TYPE_IDENT_INTERFACE);
     assert(expr->type.status == REDUCTION_STATUS_DONE);
     assert(interface_type.status == REDUCTION_STATUS_DONE);
@@ -3711,7 +3888,8 @@ static ast_expr_t as_to_interface(module_t *m, ast_expr_t *expr, type_t interfac
 
     // auto destr ptr
     type_t src_type = expr->type;
-    if (expr->type.kind == TYPE_REF || expr->type.kind == TYPE_PTR) {
+    if ((expr->type.kind == TYPE_REF || expr->type.kind == TYPE_PTR) &&
+        !(interface_type.is_error && expr->type.ident_kind == TYPE_IDENT_DEF)) {
         src_type = expr->type.ptr->value_type;
     }
 
@@ -3920,6 +4098,7 @@ static type_t reduction_complex_type(module_t *m, type_t t, struct sc_map_s64 *v
     if (t.kind == TYPE_FN) {
         type_fn_t *fn = t.fn;
         fn->return_type = reduction_type_visited(m, fn->return_type, visited);
+        infer_result_signature(m, fn);
         for (int i = 0; i < fn->param_types->length; ++i) {
             type_t *formal_type = ct_list_value(fn->param_types, i);
             *formal_type = reduction_type_visited(m, *formal_type, visited);
@@ -3962,6 +4141,10 @@ static type_t reduction_type_ident(module_t *m, type_t t, struct sc_map_s64 *vis
 
     // 此时的 symbol 可能是其他 module 中声明的符号
     ast_typedef_stmt_t *typedef_stmt = symbol->ast_value;
+    // Builtin symbols are unqualified; user declarations are module/local qualified.
+    if (str_equal(symbol->ident, "errort") && typedef_stmt->is_interface) {
+        typedef_stmt->type_expr.is_error = true;
+    }
 
     if (!typedef_stmt->params) {
         INFER_ASSERTF(t.args == NULL, "typedef '%s' args mismatch", t.ident);
@@ -3972,6 +4155,7 @@ static type_t reduction_type_ident(module_t *m, type_t t, struct sc_map_s64 *vis
             t.value = temp.value;
             t.in_heap = temp.in_heap;
             t.status = temp.status;
+            t.is_error = temp.is_error;
             return t;
         }
     }
@@ -4029,6 +4213,7 @@ static type_t reduction_type_ident(module_t *m, type_t t, struct sc_map_s64 *vis
 
         t.kind = right_type_expr.kind;
         t.value = right_type_expr.value;
+        t.is_error = right_type_expr.is_error;
         t.in_heap = right_type_expr.in_heap;
         t.status = right_type_expr.status;
         REDUCTION_IDENT_LEAVE_DEPTH();
@@ -4049,8 +4234,13 @@ static type_t reduction_type_ident(module_t *m, type_t t, struct sc_map_s64 *vis
     typedef_stmt->type_expr = reduction_type_visited(m, typedef_stmt->type_expr, visited);
 
     type_t right_type_expr = type_copy(m, typedef_stmt->type_expr);
+    if (right_type_expr.kind == TYPE_TAGGED_UNION && right_type_expr.ident &&
+        str_equal(right_type_expr.ident, ERRABLE_IDENT)) {
+        right_type_expr.tagged_union->ident = ERRABLE_IDENT;
+    }
     t.kind = right_type_expr.kind;
     t.value = right_type_expr.value;
+    t.is_error = right_type_expr.is_error;
     t.in_heap = right_type_expr.in_heap;
     t.status = right_type_expr.status;
     REDUCTION_IDENT_LEAVE_DEPTH();
@@ -4149,6 +4339,25 @@ static type_t reduction_interface(module_t *m, type_t t, struct sc_map_s64 *visi
     return t;
 }
 
+// Both modes return value(T) or error(E) in the same tagged union.
+static type_t result_type(module_t *m, type_t value_type, type_t error_type) {
+    type_tagged_union_t *tagged = NEW(type_tagged_union_t);
+    tagged->ident = ERRABLE_IDENT;
+    tagged->elements = ct_list_new(sizeof(tagged_union_element_t));
+    tagged_union_element_t value = {.tag = ERRABLE_VALUE_TAG, .type = value_type};
+    tagged_union_element_t error = {.tag = ERRABLE_ERROR_TAG, .type = error_type};
+    ct_list_push(tagged->elements, &value);
+    ct_list_push(tagged->elements, &error);
+    type_t result = type_new(TYPE_TAGGED_UNION, tagged);
+    result.ident = ERRABLE_IDENT;
+    result.ident_kind = TYPE_IDENT_TAGGER_UNION;
+    result.args = ct_list_new(sizeof(type_t));
+    ct_list_push(result.args, &value_type);
+    ct_list_push(result.args, &error_type);
+    result.status = REDUCTION_STATUS_UNDO;
+    return reduction_type(m, result);
+}
+
 type_t reduction_type(module_t *m, type_t t) {
     struct sc_map_s64 visited;
     sc_map_init_s64(&visited, 0, 0);
@@ -4242,6 +4451,7 @@ static type_t reduction_type_visited(module_t *m, type_t t, struct sc_map_s64 *v
 
     INFER_ASSERTF(false, "cannot reduction type %s", type_format(t));
 STATUS_DONE:
+
     t.status = REDUCTION_STATUS_DONE;
     t.in_heap = kind_in_heap(t.kind);
     if (in_heap == true) {
@@ -4294,10 +4504,17 @@ static type_t infer_impl_fn_decl(module_t *m, ast_fndef_t *fndef) {
     type_fn_t *f = NEW(type_fn_t);
     f->fn_name = fndef->fn_name;
     f->is_tpl = fndef->is_tpl;
+    f->native_errable = fndef->linkid != NULL && fndef->body == NULL;
     f->is_errable = fndef->is_errable;
     f->is_x = fndef->is_x;
     f->param_types = ct_list_new(sizeof(type_t));
     f->return_type = reduction_type(m, fndef->return_type);
+    infer_result_signature(m, f);
+    fndef->is_errable = f->is_errable;
+    fndef->errable_value_type = f->errable_value_type;
+    fndef->errable_error_type = f->errable_error_type;
+    fndef->return_type = f->return_type;
+
     f->self_kind = fndef->self_kind;
 
     // 跳过 self(仅当存在 receiver)
@@ -4353,11 +4570,17 @@ static type_t infer_fn_decl(module_t *m, ast_fndef_t *fndef, type_t target_type)
     type_fn_t *type_fn = NEW(type_fn_t);
     type_fn->fn_name = fndef->fn_name;
     type_fn->is_tpl = fndef->is_tpl;
+    type_fn->native_errable = fndef->linkid != NULL && fndef->body == NULL;
     type_fn->is_errable = fndef->is_errable;
     type_fn->is_x = fndef->is_x;
     type_fn->param_types = ct_list_new(sizeof(type_t));
     fndef->return_type.status = REDUCTION_STATUS_UNDO;
     type_fn->return_type = reduction_type(m, fndef->return_type);
+
+    infer_result_signature(m, type_fn);
+    fndef->is_errable = type_fn->is_errable;
+    fndef->errable_value_type = type_fn->errable_value_type;
+    fndef->errable_error_type = type_fn->errable_error_type;
 
     fndef->return_type = type_fn->return_type;
 
@@ -4431,10 +4654,8 @@ static void infer_fndef(module_t *m, ast_fndef_t *fn) {
     m->current_line = fn->line;
     m->current_column = fn->column;
 
-    // v1 x mode subset. both are demonstrated crashes rather than style rules: an errable chain
-    // aborts register allocation, and a capturing closure segfaults on the gc env promotion.
+    // Capturing closures still require GC environment promotion, which .x does not support.
     if (fn->is_x) {
-        INFER_ASSERTF(!fn->is_errable, "errable fn declaration is not supported in .x");
         INFER_ASSERTF(fn->capture_exprs->length == 0, "closure capture is not supported in .x");
     }
 

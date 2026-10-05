@@ -1,10 +1,34 @@
 #include "test.h"
+#include "errort.h"
 
 #include "process.h"
 #include "runtime/processor.h"
 
 #include <stdatomic.h>
 #include <stdlib.h>
+
+test_error_int_result_t test_error_result(uint8_t failure) {
+    return (test_error_int_result_t) {
+            .tag = hash_string(failure ? ERRABLE_ERROR_TAG : ERRABLE_VALUE_TAG),
+            .payload = failure ? 0 : 42,
+    };
+}
+
+void test_error_clobber_return_register(void) {
+#ifdef __ARM64
+    __asm__ volatile("mov x8, #259" ::: "x8");
+#endif
+}
+
+int64_t test_error_native_read(int64_t *source, n_vec_t buffer) {
+    if (*source < 0) {
+        rti_throw(native_error(N_ERROR_EOF), NULL);
+        return 0;
+    }
+    if (buffer.length == 0) return 0;
+    ((uint8_t *) buffer.data)[0] = (uint8_t) *source;
+    return 1;
+}
 
 enum {
     PROCESSOR_TEST_WAITER_RAN = 1,

@@ -9,6 +9,12 @@ import unsafe
 import io
 import io.buf
 
+type test_error_t:errort = enum {
+    FAILED,
+    UNKNOWN_MODE_S,
+}
+
+
 fn logf(string format, ...[any] args) {
     var msg = fmt.sprintf(format, ...args)
     var t = time.now()
@@ -815,7 +821,7 @@ fn error_usage():void! {
     str += '  -m <string> mode: generate|chat, default: generate\n'
     str += '  -y <string> (optional) system prompt in chat mode\n'
 
-    throw errorf(str)
+    throw test_error_t.FAILED
 }
 
 fn print_safe(string piece) {
@@ -971,6 +977,6 @@ fn main():void! {
     if mode == 'generate' {
         generate(tf, t, s, prompt, steps)
     } else {
-        throw errorf('unknown mode: %s', mode)
+        throw test_error_t.UNKNOWN_MODE_S
     }
 }

@@ -3,6 +3,17 @@ import crypto.blowfish
 import time
 import libc
 
+pub type error_t:errort = enum {
+    INVALID_HASH_PREFIX,
+    INVALID_COST,
+    CIPHER_INITIALIZATION,
+    PASSWORD_TOO_LONG,
+    HASH_TOO_SHORT,
+    HASH_VERSION_TOO_NEW,
+    VERIFICATION_FAILED,
+}
+
+
 // bcrypt constant definitions
 pub const MIN_COST = 4
 pub const MAX_COST = 31
@@ -33,14 +44,6 @@ pub const MAGIC_CIPHER_COUNT = 24
     0x63, 0x72, 0x79, 0x44,
     0x6f, 0x75, 0x62, 0x74,
 ]
-
-// Error definitions for throw
-pub const ERROR_PASSWORD_TOO_LONG = "password too long"
-pub const ERROR_INVALID_COST = "invalid cost parameter"
-pub const ERROR_HASH_TOO_SHORT = "hash too short"
-pub const ERROR_INVALID_HASH_PREFIX = "invalid hash prefix"
-pub const ERROR_HASH_VERSION_TOO_NEW = "hash version too new"
-pub const ERROR_NOT_VERIFY = "verify failed"
 
 // bcrypt hash structure
 pub type bcrypt_hash_t = struct {
@@ -122,7 +125,7 @@ pub fn base64_decode([u8] src):[u8]! {
             } else {
                 val[j] = char_to_value(padded_src[i + j])
                 if val[j] == -1 {
-                    throw errorf(ERROR_INVALID_HASH_PREFIX)
+                    throw error_t.INVALID_HASH_PREFIX
                 }
             }
         }
@@ -147,7 +150,7 @@ pub fn base64_decode([u8] src):[u8]! {
 // Check if cost parameter is valid
 pub fn check_cost(int cost):void! {
     if cost < MIN_COST || cost > MAX_COST {
-        throw errorf(ERROR_INVALID_COST)
+        throw error_t.INVALID_COST
     }
 }
 
@@ -188,7 +191,7 @@ pub fn expensive_blowfish_setup([u8] key, u32 cost, [u8] salt):blowfish.cipher_t
     // Create salted cipher
     int result = blowfish.new_salted_cipher(ckey, csalt, &cipher)
     if result != 0 {
-        throw errorf("failed to create salted cipher")
+        throw error_t.CIPHER_INITIALIZATION
     }
     
     // Perform expensive key expansion
@@ -240,7 +243,7 @@ pub fn bcrypt([u8] password, int cost, [u8] salt):[u8]! {
 // Generate new hash from password
 pub fn new_from_password([u8] password, int cost):bcrypt_hash_t! {
     if password.len() > 72 {
-        throw errorf(ERROR_PASSWORD_TOO_LONG)
+        throw error_t.PASSWORD_TOO_LONG
     }
     
     if cost < MIN_COST {
@@ -269,7 +272,7 @@ pub fn new_from_password([u8] password, int cost):bcrypt_hash_t! {
 // Parse from hash string
 pub fn new_from_hash([u8] hashed_secret):bcrypt_hash_t! {
     if hashed_secret.len() < MIN_HASH_SIZE {
-        throw errorf(ERROR_HASH_TOO_SHORT)
+        throw error_t.HASH_TOO_SHORT
     }
     
     var hash_info = bcrypt_hash_t{
@@ -284,12 +287,12 @@ pub fn new_from_hash([u8] hashed_secret):bcrypt_hash_t! {
     
     // Parse version
     if hashed_secret[pos] != DOLLAR_CHAR {
-        throw errorf(ERROR_INVALID_HASH_PREFIX)
+        throw error_t.INVALID_HASH_PREFIX
     }
     pos += 1
     
     if hashed_secret[pos] > (MAJOR_VERSION as u8) {
-        throw errorf(ERROR_HASH_VERSION_TOO_NEW)
+        throw error_t.HASH_VERSION_TOO_NEW
     }
     hash_info.major = hashed_secret[pos]
     pos += 1
@@ -300,13 +303,13 @@ pub fn new_from_hash([u8] hashed_secret):bcrypt_hash_t! {
     }
     
     if hashed_secret[pos] != DOLLAR_CHAR {
-        throw errorf(ERROR_INVALID_HASH_PREFIX)
+        throw error_t.INVALID_HASH_PREFIX
     }
     pos += 1
     
     // Parse cost
     if pos + 2 >= hashed_secret.len() {
-        throw errorf(ERROR_HASH_TOO_SHORT)
+        throw error_t.HASH_TOO_SHORT
     }
     
     int cost = 0
@@ -315,7 +318,7 @@ pub fn new_from_hash([u8] hashed_secret):bcrypt_hash_t! {
         if c >= ZERO_CHAR && c <= NINE_CHAR {
             cost = cost * 10 + (c - ZERO_CHAR) as int
         } else {
-            throw errorf(ERROR_INVALID_HASH_PREFIX)
+            throw error_t.INVALID_HASH_PREFIX
         }
     }
     pos += 2
@@ -324,13 +327,13 @@ pub fn new_from_hash([u8] hashed_secret):bcrypt_hash_t! {
     hash_info.cost = cost
     
     if hashed_secret[pos] != DOLLAR_CHAR {
-        throw errorf(ERROR_INVALID_HASH_PREFIX)
+        throw error_t.INVALID_HASH_PREFIX
     }
     pos += 1
     
     // Extract salt
     if pos + ENCODED_SALT_SIZE > hashed_secret.len() {
-        throw errorf(ERROR_HASH_TOO_SHORT)
+        throw error_t.HASH_TOO_SHORT
     }
     
     for int i = 0; i < ENCODED_SALT_SIZE; i += 1 {
@@ -417,7 +420,7 @@ pub fn verify([u8] hashed_password, [u8] password):void! {
     [u8] hash2 = hash_to_string(other_hash_info)
     
     if !constant_time_compare(hash1, hash2) {
-        throw errorf(ERROR_NOT_VERIFY)
+        throw error_t.VERIFICATION_FAILED
     }
 }
 

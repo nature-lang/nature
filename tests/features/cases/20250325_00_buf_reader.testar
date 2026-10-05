@@ -31,11 +31,23 @@ fn main():void! {
         br.read(buf)
         panic('should throw EOF')
     } catch err {
-        assert(err.msg() == 'EOF')
-        println(err.msg())
+        assert(err == runtime_error_t.END_OF_FILE)
+        println(describe_error(err))
     }
 }
 
+
+// Render diagnostics explicitly after catch; throw only carries enum values.
+fn describe_error(errort e):string {
+    if e == runtime_error_t.END_OF_FILE { return 'EOF' }
+    if e == runtime_error_t.TIMEOUT { return 'tcp read timeout' }
+    if e == runtime_error_t.CLOSED { return 'conn closed' }
+    if e == runtime_error_t.INDEX_OUT_OF_RANGE { return 'index out of range' }
+    if e == runtime_error_t.TYPE_MISMATCH { return 'type assert failed' }
+    if e == runtime_error_t.NULL_POINTER { return 'invalid memory address or nil pointer dereference' }
+    if e == runtime_error_t.KEY_NOT_FOUND { return 'key not found in map' }
+    return 'operation failed'
+}
 --- output.txt
 EOF
 
@@ -136,11 +148,26 @@ fn main():void! {
         br.read_exact(buf)
         panic('an error should have occurred')
     } catch e {
-        println("expected error: " + e.msg())
-        assert(e.msg() == "EOF")
+        println("expected error: " + describe_error(e))
+        assert(e == runtime_error_t.END_OF_FILE)
     }
 }
 
+
+// Render diagnostics explicitly after catch; throw only carries enum values.
+fn describe_error(errort e):string {
+    if e == runtime_error_t.END_OF_FILE { return 'EOF' }
+    if e == runtime_error_t.TIMEOUT { return 'tcp read timeout' }
+    if e == runtime_error_t.CLOSED { return 'conn closed' }
+    if e == strings.error_t.INVALID_DIGIT { return 'invalid character in number' }
+    if e == strings.error_t.INVALID_NUMBER { return 'invalid number format' }
+    if e == strings.error_t.OVERFLOW { return 'number too large' }
+    if e == runtime_error_t.INDEX_OUT_OF_RANGE { return 'index out of range' }
+    if e == runtime_error_t.TYPE_MISMATCH { return 'type assert failed' }
+    if e == runtime_error_t.NULL_POINTER { return 'invalid memory address or nil pointer dereference' }
+    if e == runtime_error_t.KEY_NOT_FOUND { return 'key not found in map' }
+    return 'operation failed'
+}
 --- output.txt
 read data: hello
 second read data:  worl
@@ -162,11 +189,26 @@ fn main():void! {
         br.read_exact(buf)
         panic('an error should have occurred')
     } catch e {
-        println("expected error: " + e.msg())
-        assert(e.msg() == "EOF")
+        println("expected error: " + describe_error(e))
+        assert(e == runtime_error_t.END_OF_FILE)
     }
 }
 
+
+// Render diagnostics explicitly after catch; throw only carries enum values.
+fn describe_error(errort e):string {
+    if e == runtime_error_t.END_OF_FILE { return 'EOF' }
+    if e == runtime_error_t.TIMEOUT { return 'tcp read timeout' }
+    if e == runtime_error_t.CLOSED { return 'conn closed' }
+    if e == strings.error_t.INVALID_DIGIT { return 'invalid character in number' }
+    if e == strings.error_t.INVALID_NUMBER { return 'invalid number format' }
+    if e == strings.error_t.OVERFLOW { return 'number too large' }
+    if e == runtime_error_t.INDEX_OUT_OF_RANGE { return 'index out of range' }
+    if e == runtime_error_t.TYPE_MISMATCH { return 'type assert failed' }
+    if e == runtime_error_t.NULL_POINTER { return 'invalid memory address or nil pointer dereference' }
+    if e == runtime_error_t.KEY_NOT_FOUND { return 'key not found in map' }
+    return 'operation failed'
+}
 --- output.txt
 expected error: EOF
 
@@ -188,11 +230,26 @@ fn main():void! {
         br.read_exact(buf)
         panic('an error should have occurred')
     } catch e {
-        println("expected error: " + e.msg())
-        assert(e.msg() == "EOF")
+        println("expected error: " + describe_error(e))
+        assert(e == runtime_error_t.END_OF_FILE)
     }
 }
 
+
+// Render diagnostics explicitly after catch; throw only carries enum values.
+fn describe_error(errort e):string {
+    if e == runtime_error_t.END_OF_FILE { return 'EOF' }
+    if e == runtime_error_t.TIMEOUT { return 'tcp read timeout' }
+    if e == runtime_error_t.CLOSED { return 'conn closed' }
+    if e == strings.error_t.INVALID_DIGIT { return 'invalid character in number' }
+    if e == strings.error_t.INVALID_NUMBER { return 'invalid number format' }
+    if e == strings.error_t.OVERFLOW { return 'number too large' }
+    if e == runtime_error_t.INDEX_OUT_OF_RANGE { return 'index out of range' }
+    if e == runtime_error_t.TYPE_MISMATCH { return 'type assert failed' }
+    if e == runtime_error_t.NULL_POINTER { return 'invalid memory address or nil pointer dereference' }
+    if e == runtime_error_t.KEY_NOT_FOUND { return 'key not found in map' }
+    return 'operation failed'
+}
 --- output.txt
 expected error: EOF
 
@@ -248,11 +305,26 @@ fn main():void! {
     try {
         b = br.read_byte()
     } catch e {
-        println("expected err: " + e.msg())
-        assert(e.msg() == "EOF")
+        println("expected err: " + describe_error(e))
+        assert(e == runtime_error_t.END_OF_FILE)
     }
 }
 
+
+// Render diagnostics explicitly after catch; throw only carries enum values.
+fn describe_error(errort e):string {
+    if e == runtime_error_t.END_OF_FILE { return 'EOF' }
+    if e == runtime_error_t.TIMEOUT { return 'tcp read timeout' }
+    if e == runtime_error_t.CLOSED { return 'conn closed' }
+    if e == strings.error_t.INVALID_DIGIT { return 'invalid character in number' }
+    if e == strings.error_t.INVALID_NUMBER { return 'invalid number format' }
+    if e == strings.error_t.OVERFLOW { return 'number too large' }
+    if e == runtime_error_t.INDEX_OUT_OF_RANGE { return 'index out of range' }
+    if e == runtime_error_t.TYPE_MISMATCH { return 'type assert failed' }
+    if e == runtime_error_t.NULL_POINTER { return 'invalid memory address or nil pointer dereference' }
+    if e == runtime_error_t.KEY_NOT_FOUND { return 'key not found in map' }
+    return 'operation failed'
+}
 --- output.txt
 l
 l
@@ -291,10 +363,25 @@ fn main():void! {
         line = br.read_line()
         println("can't get here")
     } catch e {
-        println("catch e: " + e.msg())
+        println("catch e: " + describe_error(e))
     }
 }
 
+
+// Render diagnostics explicitly after catch; throw only carries enum values.
+fn describe_error(errort e):string {
+    if e == runtime_error_t.END_OF_FILE { return 'EOF' }
+    if e == runtime_error_t.TIMEOUT { return 'tcp read timeout' }
+    if e == runtime_error_t.CLOSED { return 'conn closed' }
+    if e == strings.error_t.INVALID_DIGIT { return 'invalid character in number' }
+    if e == strings.error_t.INVALID_NUMBER { return 'invalid number format' }
+    if e == strings.error_t.OVERFLOW { return 'number too large' }
+    if e == runtime_error_t.INDEX_OUT_OF_RANGE { return 'index out of range' }
+    if e == runtime_error_t.TYPE_MISMATCH { return 'type assert failed' }
+    if e == runtime_error_t.NULL_POINTER { return 'invalid memory address or nil pointer dereference' }
+    if e == runtime_error_t.KEY_NOT_FOUND { return 'key not found in map' }
+    return 'operation failed'
+}
 --- output.txt
 Line 1: 'Hello'
 Line 2: 'World'
@@ -322,10 +409,25 @@ fn main():void! {
         var line = br.read_line()
         println("unexpected line: '" + line + "'")
     } catch e {
-        println("catch e: " + e.msg())
+        println("catch e: " + describe_error(e))
     }
 }
 
+
+// Render diagnostics explicitly after catch; throw only carries enum values.
+fn describe_error(errort e):string {
+    if e == runtime_error_t.END_OF_FILE { return 'EOF' }
+    if e == runtime_error_t.TIMEOUT { return 'tcp read timeout' }
+    if e == runtime_error_t.CLOSED { return 'conn closed' }
+    if e == strings.error_t.INVALID_DIGIT { return 'invalid character in number' }
+    if e == strings.error_t.INVALID_NUMBER { return 'invalid number format' }
+    if e == strings.error_t.OVERFLOW { return 'number too large' }
+    if e == runtime_error_t.INDEX_OUT_OF_RANGE { return 'index out of range' }
+    if e == runtime_error_t.TYPE_MISMATCH { return 'type assert failed' }
+    if e == runtime_error_t.NULL_POINTER { return 'invalid memory address or nil pointer dereference' }
+    if e == runtime_error_t.KEY_NOT_FOUND { return 'key not found in map' }
+    return 'operation failed'
+}
 --- output.txt
 Read line: ''
 Read line: ''

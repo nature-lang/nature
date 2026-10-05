@@ -2,7 +2,7 @@ import syscall
 
 fn main():void! {
     var pid = syscall.fork() catch err {
-        return print('fork err: ', err.msg(), '\n')
+        return print('fork err: ', describe_error(err), '\n')
     }
 
     if pid > 0 {
@@ -17,14 +17,14 @@ fn main():void! {
 
     // 测试主动 kill
     pid = syscall.fork() catch err {
-        return print('fork err: ', err.msg(), '\n')
+        return print('fork err: ', describe_error(err), '\n')
     }
 
     if pid > 0 {
         // 主进程, wait 阻塞, 并读取返回值
         var has_err = false
         syscall.kill(pid, syscall.SIGKILL) catch err {
-            print('kill err: ', err.msg(), '\n')
+            print('kill err: ', describe_error(err), '\n')
             has_err = true
         }
 
@@ -34,4 +34,15 @@ fn main():void! {
     } else {
         syscall.exec('/bin/sleep', ['sleep', '1000'], [])
     }
+}
+// Render diagnostics explicitly after catch; throw only carries enum values.
+fn describe_error(errort e):string {
+    if e == runtime_error_t.END_OF_FILE { return 'EOF' }
+    if e == runtime_error_t.TIMEOUT { return 'tcp read timeout' }
+    if e == runtime_error_t.CLOSED { return 'conn closed' }
+    if e == runtime_error_t.INDEX_OUT_OF_RANGE { return 'index out of range' }
+    if e == runtime_error_t.TYPE_MISMATCH { return 'type assert failed' }
+    if e == runtime_error_t.NULL_POINTER { return 'invalid memory address or nil pointer dereference' }
+    if e == runtime_error_t.KEY_NOT_FOUND { return 'key not found in map' }
+    return 'operation failed'
 }

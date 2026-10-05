@@ -12,8 +12,8 @@ fn server():void! {
             var buf = vec<u8>.new(0, 1024)
             for true {
                 var len = conn.read(buf) catch e {
-                    if e.msg() != 'end of file' {
-                        println('conn read err:', e.msg())
+                    if e != runtime_error_t.END_OF_FILE {
+                        println('conn read err:', describe_error(e))
                     }
                     -1
                 }
@@ -51,6 +51,18 @@ fn main() {
     conn.close()
 }
 
+
+// Render diagnostics explicitly after catch; throw only carries enum values.
+fn describe_error(errort e):string {
+    if e == runtime_error_t.END_OF_FILE { return 'EOF' }
+    if e == runtime_error_t.TIMEOUT { return 'tcp read timeout' }
+    if e == runtime_error_t.CLOSED { return 'conn closed' }
+    if e == runtime_error_t.INDEX_OUT_OF_RANGE { return 'index out of range' }
+    if e == runtime_error_t.TYPE_MISMATCH { return 'type assert failed' }
+    if e == runtime_error_t.NULL_POINTER { return 'invalid memory address or nil pointer dereference' }
+    if e == runtime_error_t.KEY_NOT_FOUND { return 'key not found in map' }
+    return 'operation failed'
+}
 --- output.txt
 read buf 1: hello world
 read buf 2: hello nature
@@ -58,18 +70,18 @@ read buf 2: hello nature
 === test_connect_timeout[exclude_os=windows]
 --- main.n
 import net.tcp
-import co
 
 fn main() {
-    var conn = tcp.connect_timeout('10.255.255.1:8080', 1000) catch e {
-        throw errorf(e.msg())
+    // A loopback refusal is deterministic; public unroutable IPs may be proxied.
+    tcp.connect_timeout('127.0.0.1:19998', 1000) catch e {
+        assert(e is system_error_t || e == runtime_error_t.TIMEOUT)
+        println('connect error verified')
+        return
     }
-    conn.close()
+    panic('connection unexpectedly succeeded')
 }
-
 --- output.txt
-coroutine 'main' uncaught error: 'connection timeout' at nature-test/main.n:6:22
-
+connect error verified
 
 === test_cross_goroutine[exclude_os=windows]
 --- main.n
@@ -163,7 +175,7 @@ fn server():void! {
     conn.close()
 
     conn.read(buf) catch e {
-        panic(e.msg())
+        panic(describe_error(e))
         return
     }
 
@@ -185,9 +197,21 @@ fn main() {
     co.sleep(500) // wait exception
 }
 
+
+// Render diagnostics explicitly after catch; throw only carries enum values.
+fn describe_error(errort e):string {
+    if e == runtime_error_t.END_OF_FILE { return 'EOF' }
+    if e == runtime_error_t.TIMEOUT { return 'tcp read timeout' }
+    if e == runtime_error_t.CLOSED { return 'conn closed' }
+    if e == runtime_error_t.INDEX_OUT_OF_RANGE { return 'index out of range' }
+    if e == runtime_error_t.TYPE_MISMATCH { return 'type assert failed' }
+    if e == runtime_error_t.NULL_POINTER { return 'invalid memory address or nil pointer dereference' }
+    if e == runtime_error_t.KEY_NOT_FOUND { return 'key not found in map' }
+    return 'operation failed'
+}
 --- output.txt
 server is start
-panic: 'conn closed' at nature-test/main.n:17:15
+panic: 'conn closed' at nature-test/main.n:17:30
 
 === test_url_parser
 --- main.n
@@ -384,7 +408,7 @@ fn test_error_cases():void! {
         url.parse("")
         assert(false) // Should not reach here
     } catch e {
-        println("✓ Empty URL correctly throws error", e.msg())
+        println("✓ Empty URL correctly throws error", describe_error(e))
     }
 
     // Test invalid URL format (missing //)
@@ -392,7 +416,7 @@ fn test_error_cases():void! {
         url.parse("http:example.com")
         assert(false) // Should not reach here
     } catch e {
-        println("✓ Invalid URL format correctly throws error", e.msg())
+        println("✓ Invalid URL format correctly throws error", describe_error(e))
     }
 
     // Test URL with only scheme
@@ -400,10 +424,24 @@ fn test_error_cases():void! {
         url.parse("http:")
         assert(false) // Should not reach here
     } catch e {
-        println("✓ Incomplete URL correctly throws error", e.msg())
+        println("✓ Incomplete URL correctly throws error", describe_error(e))
     }
 
     println("✓ Error cases test passed")
+}
+
+// Render diagnostics explicitly after catch; throw only carries enum values.
+fn describe_error(errort e):string {
+    if e == runtime_error_t.END_OF_FILE { return 'EOF' }
+    if e == runtime_error_t.TIMEOUT { return 'tcp read timeout' }
+    if e == runtime_error_t.CLOSED { return 'conn closed' }
+    if e == url.error_t.EMPTY_URL { return 'url cannot empty' }
+    if e == url.error_t.INVALID_URL { return 'invalid url format' }
+    if e == runtime_error_t.INDEX_OUT_OF_RANGE { return 'index out of range' }
+    if e == runtime_error_t.TYPE_MISMATCH { return 'type assert failed' }
+    if e == runtime_error_t.NULL_POINTER { return 'invalid memory address or nil pointer dereference' }
+    if e == runtime_error_t.KEY_NOT_FOUND { return 'key not found in map' }
+    return 'operation failed'
 }
 
 === test_conn_interface[exclude_os=windows]
@@ -445,7 +483,7 @@ fn server():void! {
             var buf = vec<u8>.new(0, 1024)
             for true {
                 var len = conn.read(buf) catch e {
-                    println('conn read err:', e.msg())
+                    println('conn read err:', describe_error(e))
                     -1
                 }
                 if len == -1 {
@@ -471,6 +509,18 @@ fn main() {
     println('write success')
 }
 
+// Render diagnostics explicitly after catch; throw only carries enum values.
+fn describe_error(errort e):string {
+    if e == runtime_error_t.END_OF_FILE { return 'EOF' }
+    if e == runtime_error_t.TIMEOUT { return 'tcp read timeout' }
+    if e == runtime_error_t.CLOSED { return 'conn closed' }
+    if e == runtime_error_t.INDEX_OUT_OF_RANGE { return 'index out of range' }
+    if e == runtime_error_t.TYPE_MISMATCH { return 'type assert failed' }
+    if e == runtime_error_t.NULL_POINTER { return 'invalid memory address or nil pointer dereference' }
+    if e == runtime_error_t.KEY_NOT_FOUND { return 'key not found in map' }
+    return 'operation failed'
+}
+
 === test_timeout2[exclude_os=windows]
 --- main.n
 import co
@@ -479,11 +529,23 @@ import net.tcp
 
 fn main() {
     var conn = tcp.connect_timeout('64.233.170.108:465', 50) catch e {
-        println('in catch', e.msg())
+        println('in catch', describe_error(e))
 
         co.sleep(1000)
         return
     }
     println('connect success')
     co.sleep(1000)
+}
+
+// Render diagnostics explicitly after catch; throw only carries enum values.
+fn describe_error(errort e):string {
+    if e == runtime_error_t.END_OF_FILE { return 'EOF' }
+    if e == runtime_error_t.TIMEOUT { return 'tcp read timeout' }
+    if e == runtime_error_t.CLOSED { return 'conn closed' }
+    if e == runtime_error_t.INDEX_OUT_OF_RANGE { return 'index out of range' }
+    if e == runtime_error_t.TYPE_MISMATCH { return 'type assert failed' }
+    if e == runtime_error_t.NULL_POINTER { return 'invalid memory address or nil pointer dereference' }
+    if e == runtime_error_t.KEY_NOT_FOUND { return 'key not found in map' }
+    return 'operation failed'
 }

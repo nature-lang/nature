@@ -246,24 +246,27 @@ NO_OPTIMIZE static void coroutine_wrapper() {
 
     assert((addr_t) co->fn > 0);
 
-    // 调用到用户函数
+    n_void_result_t result = {0};
     if (co->flag & FLAG(CO_FLAG_DIRECT)) {
-        ((void_fn_t) co->fn)();
+        if (co->flag & FLAG(CO_FLAG_RESULT)) result = ((n_void_result_t(*)(void)) co->fn)();
+        else
+            ((void_fn_t) co->fn)();
     } else {
-        n_fn_t *runtime_fn = co->fn;
-        ((env_fn_t) runtime_fn->fn_addr)(runtime_fn->envs);
+        n_fn_t *fn = co->fn;
+        if (co->flag & FLAG(CO_FLAG_RESULT)) result = ((n_void_result_t(*)(void *)) fn->fn_addr)(fn->envs);
+        else
+            ((env_fn_t) fn->fn_addr)(fn->envs);
     }
-
-
-    DEBUGF(
-            "[runtime.coroutine_wrapper] user fn completed, p_index=%d co=%p, main=%d, rt_fn=%d,has_error=%d",
-            p->index, co,
-            co->main, co->flag & FLAG(CO_FLAG_RTFN), co->has_error);
-
-
-    // coroutine 即将退出，避免被 gc 清理，所以将 error保存在 co->future 中?
+    if (result.tag_hash == hash_string(ERRABLE_ERROR_TAG)) {
+        co->error = result.error;
+        co->has_error = true;
+    }
     if (co->has_error && co->future) {
-        union_casting(&co->future->error, throwable_rtype.hash, &co->error); // 将 co error 赋值给 co->future 避免被 gc
+        co->future->error = co->error;
+        co->future->has_error = true;
+        for (int i = 0; i < ERROR_INLINE_BYTES / POINTER_SIZE; ++i) {
+            rti_write_barrier_ptr((void **) &co->future->error.payload[i], (void *) (uintptr_t) co->error.payload[i], false);
+        }
     }
 
     // co->await_co 可能是随时写入的，所以需要 dead_locker 保证同步
@@ -274,7 +277,7 @@ NO_OPTIMIZE static void coroutine_wrapper() {
         co_set_status(p, await_co, CO_STATUS_RUNNABLE);
         rt_linked_fixalloc_push(&await_co->p->runnable_list, await_co);
     } else {
-        if (co->has_error) {
+        if (co->has_error && !co->future) {
             coroutine_dump_error(co);
             exit(EXIT_FAILURE);
         }
@@ -621,63 +624,22 @@ coroutine_t *coroutine_get() {
     return uv_key_get(&tls_coroutine_key);
 }
 
-void rti_throw(char *msg, bool panic) {
-    DEBUGF("[runtime.rti_throw] msg=%s", msg);
-    coroutine_t *co = coroutine_get();
-    n_interface_t error = n_error_new(string_new(msg, strlen(msg)), panic);
-
+void rti_co_throw(coroutine_t *co, n_error_t error, const char *panic_message) {
+    if (co->has_error) return;
+    co->error = error;
+    co->panic_message = panic_message;
     co->has_error = true;
-    if (co->traces.data == NULL) {
-        n_vec_t traces = rti_vec_new(&errort_trace_rtype, 0, 0);
-        co->traces = traces;
-    }
-    rti_write_barrier_rtype(&co->error, &error, &throwable_rtype);
 }
 
-void rti_co_throw(coroutine_t *co, char *msg, bool panic) {
-    n_interface_t error = n_error_new(string_new(msg, strlen(msg)), panic);
-    co->has_error = true;
-    if (co->traces.data == NULL) {
-        n_vec_t traces = rti_vec_new(&errort_trace_rtype, 0, 0);
-        co->traces = traces;
-    }
-    rti_write_barrier_rtype(&co->error, &error, &throwable_rtype);
+void rti_throw(n_error_t error, const char *panic_message) {
+    rti_co_throw(coroutine_get(), error, panic_message);
 }
 
 void coroutine_dump_error(coroutine_t *co) {
-    DEBUGF("[runtime.coroutine_dump_error] co=%p, errort base=%p", co, &co->error);
-
-    n_string_t msg = rti_error_msg(&co->error);
-    DEBUGF("[runtime.coroutine_dump_error] memory_string len: %lu, base: %p", msg.length, msg.data);
-
-    assert(co->traces.length > 0);
-
-    n_trace_t first_trace = {};
-    rti_vec_access(&co->traces, 0, &first_trace);
-    char *dump_msg;
-    if (co->main) {
-        dump_msg = tlsprintf("coroutine 'main' uncaught error: '%s' at %s:%d:%d\n", (char *) rt_string_ref(&msg),
-                             (char *) first_trace.path.data, first_trace.line,
-                             first_trace.column);
-    } else {
-        dump_msg = tlsprintf("coroutine %ld uncaught error: '%s' at %s:%d:%d\n", co->id, (char *) rt_string_ref(&msg),
-                             (char *) first_trace.path.data, first_trace.line,
-                             first_trace.column);
-    }
-
-    VOID write(STDOUT_FILENO, dump_msg, strlen(dump_msg));
-
-    if (co->traces.length > 1) {
-        char *temp = "stack backtrace:\n";
-        VOID write(STDOUT_FILENO, temp, strlen(temp));
-        for (int i = 0; i < co->traces.length; ++i) {
-            n_trace_t trace = {};
-            rti_vec_access(&co->traces, i, &trace);
-            temp = tlsprintf("%d:\t%s\n\t\tat %s:%d:%d\n", i, (char *) trace.ident.data, (char *) trace.path.data,
-                             trace.line, trace.column);
-            VOID write(STDOUT_FILENO, temp, strlen(temp));
-        }
-    }
+    int32_t code = 0;
+    memcpy(&code, co->error.payload, sizeof(code));
+    fprintf(stderr, "coroutine %s uncaught error: type=%llu code=%d\n", co->main ? "main" : "worker",
+            (unsigned long long) co->error.type_id, code);
 }
 
 void mark_ptr_black(void *value) {
@@ -736,8 +698,8 @@ coroutine_t *rt_coroutine_new(void *fn, int64_t flag, n_future_t *fu, void *arg)
     co->p = NULL;
     co->next = NULL;
     co->has_error = false;
-    co->error = (n_interface_t){0};
-    co->traces = (n_vec_t){0};
+    co->error = (n_error_t) {0};
+    co->panic_message = NULL;
     co->await_co = NULL;
     co->aco.inited = 0; // 标记为为初始化
 

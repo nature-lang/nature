@@ -101,7 +101,7 @@ int64_t rt_uv_udp_recvfrom(n_udp_socket_t *s, n_vec_t buf, n_udp_addr_t *addr) {
             continue;
         }
 
-        rti_co_throw(co, tlsprintf("udp recv failed: %s", uv_strerror(uv_translate_sys_error(socket_error))), false);
+        rti_co_throw(co, native_uv_error(uv_translate_sys_error(socket_error)), NULL);
         return 0;
 #else
         if (errno == EINTR) {
@@ -119,7 +119,7 @@ int64_t rt_uv_udp_recvfrom(n_udp_socket_t *s, n_vec_t buf, n_udp_addr_t *addr) {
         }
 
         // 其他错误
-        rti_co_throw(co, tlsprintf("udp recv failed: %s", strerror(errno)), false);
+        rti_co_throw(co, native_system_error(errno), NULL);
         return 0;
 #endif
     }
@@ -130,7 +130,7 @@ int64_t rt_uv_udp_sendto(n_udp_socket_t *s, n_vec_t buf, n_udp_addr_t udp_addr) 
     coroutine_t *co = coroutine_get();
     DEBUGF("[rt_uv_udp_sendto] start")
     if (s->closed) {
-        rti_co_throw(co, "socket closed", false);
+        rti_co_throw(co, native_error(N_ERROR_CLOSED), NULL);
         return 0;
     }
 
@@ -154,7 +154,7 @@ int64_t rt_uv_udp_sendto(n_udp_socket_t *s, n_vec_t buf, n_udp_addr_t udp_addr) 
                 continue;
             }
 
-            rti_throw(tlsprintf("udp send failed: %s", uv_strerror(length)), false);
+            rti_throw(native_uv_error(length), NULL);
             return 0;
         }
 
@@ -203,13 +203,13 @@ static void uv_async_udp_bind(n_udp_socket_t *s) {
     int result = uv_udp_bind(s->handle, (const struct sockaddr *) &addr, 0);
     if (result) {
         DEBUGF("[uv_async_udp_bind] bind failed: %s", uv_strerror(result));
-        rti_co_throw(s->co, tlsprintf("udp bind failed: %s", uv_strerror(result)), false);
+        rti_co_throw(s->co, native_uv_error(result), NULL);
     }
 
     uv_os_fd_t os_fd;
     int fileno_result = uv_fileno((uv_handle_t *) s->handle, &os_fd);
     if (fileno_result < 0) {
-        rti_co_throw(s->co, tlsprintf("udp fileno failed: %s", uv_strerror(fileno_result)), false);
+        rti_co_throw(s->co, native_uv_error(fileno_result), NULL);
         co_ready(s->co);
         return;
     }

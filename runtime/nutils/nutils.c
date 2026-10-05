@@ -1,5 +1,6 @@
 #include "nutils.h"
 
+#include <inttypes.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -196,10 +197,8 @@ static inline void panic_dump(caller_t *caller, char *msg) {
         line = caller->line;
         column = caller->column;
     }
-    char *dump_msg = tlsprintf("panic: '%s' at %s:%llu:%llu\n", msg, path,
-                               (unsigned long long) line,
-                               (unsigned long long) column);
-    VOID write(STDOUT_FILENO, dump_msg, strlen(dump_msg));
+    fprintf(stdout, "panic: '%s' at %s:%llu:%llu\n", msg, path,
+            (unsigned long long) line, (unsigned long long) column);
     // panic msg
     exit(EXIT_FAILURE);
 }
@@ -207,7 +206,7 @@ static inline void panic_dump(caller_t *caller, char *msg) {
 n_ptr_t *ptr_assert(n_ptr_t *ptr) {
     if (ptr == 0) {
         DEBUGF("[ptr_assert] raw pointer");
-        rti_throw("ptr is null, cannot assert", true);
+        rti_throw(native_error(N_ERROR_NULL_POINTER), "ptr is null, cannot assert");
         return 0;
     }
 
@@ -220,7 +219,7 @@ void interface_assert(n_interface_t *mu, int64_t target_rtype_hash, void *value_
                type_kind_str[mu->rtype->kind],
                target_rtype_hash);
 
-        rti_throw("type assert failed", true);
+        rti_throw(native_error(N_ERROR_TYPE_MISMATCH), "type assert failed");
         return;
     }
 
@@ -251,7 +250,7 @@ void union_assert(n_union_t *mu, int64_t target_rtype_hash, void *value_ref) {
                type_kind_str[mu->rtype->kind],
                target_rtype_hash);
 
-        rti_throw("type assert failed", true);
+        rti_throw(native_error(N_ERROR_TYPE_MISMATCH), "type assert failed");
         return;
     }
 
@@ -273,7 +272,7 @@ void any_assert(n_any_t *mu, int64_t target_rtype_hash, void *value_ref) {
                type_kind_str[mu->rtype->kind],
                target_rtype_hash);
 
-        rti_throw("type assert failed", true);
+        rti_throw(native_error(N_ERROR_TYPE_MISMATCH), "type assert failed");
         return;
     }
 
@@ -657,149 +656,39 @@ void iterator_take_value(void *iterator, int64_t hash, int64_t cursor, void *val
     exit(0);
 }
 
-// 基于字符串到快速设置不太需要考虑内存泄漏的问题， raw_string 都是 .data 段中的字符串
-void co_throw_error(n_interface_t *error, char *path, char *fn_name, n_int_t line, n_int_t column) {
-    assert(error->method_count == 1);
-    coroutine_t *co = coroutine_get();
-
-    n_string_t err_msg = rti_error_msg(error);
-    DEBUGF("[runtime.co_throw_error] co=%p, error=%p, path=%s, fn_name=%s, line=%ld, column=%ld, msg=%s", co,
-           (void *) error, path, fn_name,
-           line,
-           column, (char *) rt_string_ref(&err_msg));
-
-    assert(co->traces.data == NULL);
-    n_vec_t traces = rti_vec_new(&errort_trace_rtype, 0, 0);
-    co->traces = traces;
-
-    n_trace_t trace = {
-        .path = string_new(path, strlen(path)),
-        .ident = string_new(fn_name, strlen(fn_name)),
-        .line = line,
-        .column = column,
-    };
-    rt_vec_push(&co->traces, errort_trace_rtype.hash, &trace);
-
-    rti_write_barrier_rtype(&co->error, error, &throwable_rtype);
-    co->has_error = true;
-}
-
-void throw_index_out_error(n_int_t *index, n_int_t *len, n_bool_t be_catch) {
-    coroutine_t *co = coroutine_get();
+void throw_index_out_error(n_int_t index, n_int_t len, n_bool_t be_catch) {
+    if (be_catch) {
+        rti_throw(native_error(N_ERROR_INDEX_OUT_OF_RANGE), "index out of range");
+        return;
+    }
     addr_t ret_addr = CALLER_RET_ADDR();
-
-    assert(ret_addr);
-
     caller_t *caller = caller_from_return_address(ret_addr);
     assert(caller);
-
-    char *msg = tlsprintf("index out of range [%d] with length %d", index, len);
-
-    if (be_catch) {
-        n_interface_t error = n_error_new(string_new(msg, strlen(msg)), true);
-        assert(error.method_count == 1);
-
-        DEBUGF("[runtime.co_throw_error_msg] co=%p, error=%p, msg=%s", co, (void *) &error, (char *) msg);
-
-        assert(co->traces.data == NULL);
-
-        fndef_t *caller_fn = caller->data;
-
-        n_vec_t traces = rti_vec_new(&errort_trace_rtype, 0, 0);
-        co->traces = traces;
-        n_trace_t trace = {
-            .path = string_new(STRTABLE(caller_fn->relpath_offset), strlen(STRTABLE(caller_fn->relpath_offset))),
-            .ident = string_new(STRTABLE(caller_fn->name_offset), strlen(STRTABLE(caller_fn->name_offset))),
-            .line = caller->line,
-            .column = caller->column,
-        };
-        rt_vec_push(&co->traces, errort_trace_rtype.hash, &trace);
-        rti_write_barrier_rtype(&co->error, &error, &throwable_rtype);
-        co->has_error = true;
-    } else {
-        char *copy_msg = strdup(msg);
-        panic_dump(caller, copy_msg);
-        free(copy_msg);
-    }
+    panic_dump(caller, tlsprintf("index out of range [%" PRId64 "] with length %" PRId64, index, len));
 }
 
-n_interface_t co_remove_error() {
+void co_remove_error(n_error_t *out) {
     coroutine_t *co = coroutine_get();
-
     assert(co->has_error);
+    *out = co->error;
     co->has_error = false;
-
-    n_interface_t error = co->error;
-
-    n_interface_t empty = {0};
-    rti_write_barrier_rtype(&co->error, &empty, &throwable_rtype);
-    co->traces = (n_vec_t){0};
-    return error;
+    co->error = (n_error_t) {0};
+    co->panic_message = NULL;
 }
 
-uint8_t co_has_panic(bool be_catch, char *path, char *fn_name, n_int_t line, n_int_t column) {
+uint8_t co_has_error(void) { return coroutine_get()->has_error; }
+
+uint8_t co_has_panic(bool be_catch, char *path, n_int_t line, n_int_t column) {
     coroutine_t *co = coroutine_get();
-    if (!co->has_error) {
-        return 0;
-    }
-
-
-    assert(line >= 0 && line < 1000000);
-    assert(column >= 0 && column < 1000000);
-    assert(co->traces.data);
-
-    // build in panic 可以被 catch 捕获，但只能是立刻捕获，否则会全局异常退出。
-    if (be_catch) {
-        // 存在异常时顺便添加调用栈信息, 这样 catch 错误时可以更加准确的添加相关信息
-        n_trace_t trace = {
-            .path = string_new(path, strlen(path)),
-            .ident = string_new(fn_name, strlen(fn_name)),
-            .line = line,
-            .column = column,
-        };
-
-        rt_vec_push(&co->traces, errort_trace_rtype.hash, &trace);
-        return 1;
-    }
-
-    assert(co->has_error);
-
-    // 在 runtime 调用 nature 代码， rti_error_msg 会让 gc scan_stack 异常，不过马上就要退出了，问题不大
-    // 可以考虑增加 safepoint_lock, 避免进入 safepoint 状态
-    n_string_t msg = rti_error_msg(&co->error);
-
-    char *dump_msg = tlsprintf("panic: '%s' at %s:%d:%d\n", (char *) rt_string_ref(&msg),
-                             path, line, column);
-
-    VOID write(STDOUT_FILENO, dump_msg, strlen(dump_msg));
-    // panic msg
+    if (!co->has_error) return 0;
+    if (be_catch) return 1;
+    fprintf(stdout, "panic: '%s' at %s:%ld:%ld\n", co->panic_message ? co->panic_message : "native operation failed", path, line, column);
     exit(EXIT_FAILURE);
 }
 
-uint8_t co_has_error(char *path, char *fn_name, n_int_t line, n_int_t column) {
-    coroutine_t *co = coroutine_get();
-    if (!co->has_error) {
-        return 0;
-    }
-
-
-    DEBUGF("[runtime.co_has_error] error has, fn_name: %s, line: %ld, column: %ld",
-           fn_name, line, column)
-    assert(line >= 0 && line < 1000000);
-    assert(column >= 0 && column < 1000000);
-    assert(co->traces.data);
-
-    // 存在异常时顺便添加调用栈信息, 这样 catch 错误时可以更加准确的添加相关信息
-    n_trace_t trace = {
-        .path = string_new(path, strlen(path)),
-        .ident = string_new(fn_name, strlen(fn_name)),
-        .line = line,
-        .column = column,
-    };
-
-    rt_vec_push(&co->traces, errort_trace_rtype.hash, &trace);
-
-    return 1;
+void error_bad_cast(void) {
+    fprintf(stderr, "error type assertion failed\n");
+    exit(EXIT_FAILURE);
 }
 
 n_anyptr_t anyptr_casting(value_casting v) {
@@ -937,7 +826,7 @@ void ptr_valid(void *ptr) {
     // 修改状态避免抢占
     DEBUGF("[ptr_valid] ptr=%p", ptr);
     if (ptr <= 0) {
-        rti_throw("invalid memory address or nil pointer dereference", true);
+        rti_throw(native_error(N_ERROR_NULL_POINTER), "invalid memory address or nil pointer dereference");
     }
 }
 
@@ -977,8 +866,8 @@ typedef struct {
 
 n_string_t rt_string_new(n_anyptr_t raw_string) {
     if (!raw_string) {
-        rti_throw("raw string is empty", false);
-        return (n_string_t){0};
+        rti_throw(native_error(N_ERROR_FAILED), NULL);
+        return (n_string_t) {0};
     }
 
     char *str = (char *) raw_string;
@@ -1034,9 +923,24 @@ n_int_t rt_errno() {
     return errno;
 }
 
+
+void rt_x_index_panic(n_int_t index, n_int_t len, char *path, n_int_t line, n_int_t column) {
+    char *dump = tlsprintf("panic: 'index out of range [%" PRId64 "] with length %" PRId64 "' at %s:%" PRId64 ":%" PRId64 "\n",
+                           index, len, path, line, column);
+    VOID write(STDOUT_FILENO, dump, strlen(dump));
+    exit(EXIT_FAILURE);
+}
+
+void rt_x_panic(char *msg, char *path, n_int_t line, n_int_t column) {
+    char *dump = tlsprintf("panic: '%s' at %s:%ld:%ld\n", msg, path, line, column);
+    VOID write(STDOUT_FILENO, dump, strlen(dump));
+    exit(EXIT_FAILURE);
+}
+
+
 n_anyptr_t rt_array_new(int64_t element_hash, int64_t length) {
     if (length < 0) {
-        rti_throw("array_new length must be non-negative", true);
+        rti_throw(native_error(N_ERROR_INVALID_ARGUMENT), "array_new length must be non-negative");
         return 0;
     }
 
@@ -1071,8 +975,8 @@ n_vec_t unsafe_vec_new(int64_t hash, int64_t element_hash, int64_t len, void *da
 
 n_string_t rt_string_ref_new(void *raw_string, int64_t length) {
     if (length < 0) {
-        rti_throw("string_ref_new length must be non-negative", false);
-        return (n_string_t){0};
+        rti_throw(native_error(N_ERROR_INVALID_ARGUMENT), NULL);
+        return (n_string_t) {0};
     }
     n_string_t str = string_new(raw_string, length);
     DEBUGF("[rt_string_ref_new] create, str: %p", raw_string);
@@ -1081,8 +985,8 @@ n_string_t rt_string_ref_new(void *raw_string, int64_t length) {
 
 n_string_t rt_string_alloc(int64_t length) {
     if (length < 0 || length == INT64_MAX) {
-        rti_throw("string_alloc length is out of range", false);
-        return (n_string_t){0};
+        rti_throw(native_error(N_ERROR_INVALID_ARGUMENT), NULL);
+        return (n_string_t) {0};
     }
 
     mutator_safepoint_yield_if_needed();

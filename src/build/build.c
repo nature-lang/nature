@@ -37,8 +37,8 @@
 #include "src/semantic/analyzer.h"
 #include "src/semantic/generics.h"
 #include "src/semantic/global_eval.h"
-#include "src/semantic/interface.h"
 #include "src/semantic/infer.h"
+#include "src/semantic/interface.h"
 #include "src/ssa.h"
 #include "utils/helper.h"
 #include "utils/log.h"
@@ -1254,6 +1254,7 @@ static void build_init(char *build_entry) {
     env_init();
     config_init();
     symbol_init();
+    error_type_ids_reset();
     reg_init();
     package_unit_reset();
     global_var_unique_count = 0;

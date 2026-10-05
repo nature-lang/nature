@@ -153,7 +153,7 @@ fn main() {
     bool eof = false
     for !eof {
         var n = resp.read(scratch) catch e {
-            assert(e.msg() == 'EOF')
+            assert(e == runtime_error_t.END_OF_FILE)
             eof = true
             0
         }

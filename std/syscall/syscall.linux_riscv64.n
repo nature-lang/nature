@@ -737,7 +737,7 @@ pub fn wait(int pid, int option):(int, int)! {
     var status = 0
     int result = libc.waitpid(pid, &status, option)
     if result == -1 {
-        throw errorf(libc.error_string())
+        throw system_error_t{code: libc.errno() as i32}
     }
 
     return (result, status)
@@ -845,7 +845,7 @@ pub fn get_env(string key):string {
 pub fn set_env(string key, string value):void! {
     var result = setenv(key.ref(), value.ref(), 1)
     if result != 0 {
-        throw errorf('setenv error')
+        throw runtime_error_t.INVALID_ARGUMENT
     }
 }
 

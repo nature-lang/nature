@@ -22,6 +22,8 @@ closure_t *lir_closure_new(ast_fndef_t *fndef) {
     c->blocks = slice_new(); // basic_block_t
 
     c->catch_error_labels = stack_new();
+    c->catch_error_slots = stack_new();
+    c->result_storage = NULL;
     c->ret_targets = stack_new();
     c->ret_labels = stack_new();
     c->continue_labels = stack_new();

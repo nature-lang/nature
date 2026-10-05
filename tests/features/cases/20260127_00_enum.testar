@@ -63,7 +63,7 @@ fn main() {
 }
 
 --- output.txt
-nature-test/main.n:15:18: type inconsistency, expect=main.color(enum:i64), actual=i64
+nature-test/main.n:15:18: binary type inconsistency, left is 'main.color', right is 'i64'
 
 === test_cmp
 --- main.n

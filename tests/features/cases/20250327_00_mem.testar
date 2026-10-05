@@ -68,8 +68,8 @@ fn main():void! {
         mem.read_u32_le(buf)
         panic('should throw buffer too small')
     } catch err {
-        assert(err.msg() == 'buffer too small')
-        println('test u32 buffer too small: ' + err.msg())
+        assert(err == mem.error_t.BUFFER_TOO_SMALL)
+        println('test u32 buffer too small: ' + describe_error(err))
     }
 
     // test u64 with small buffer
@@ -77,11 +77,24 @@ fn main():void! {
         mem.read_u64_le(buf)
         panic('should throw buffer too small')
     } catch err {
-        assert(err.msg() == 'buffer too small')
-        println('test u64 buffer too small: ' + err.msg())
+        assert(err == mem.error_t.BUFFER_TOO_SMALL)
+        println('test u64 buffer too small: ' + describe_error(err))
     }
 }
 
+
+// Render diagnostics explicitly after catch; throw only carries enum values.
+fn describe_error(errort e):string {
+    if e == runtime_error_t.END_OF_FILE { return 'EOF' }
+    if e == runtime_error_t.TIMEOUT { return 'tcp read timeout' }
+    if e == runtime_error_t.CLOSED { return 'conn closed' }
+    if e == mem.error_t.BUFFER_TOO_SMALL { return 'buffer too small' }
+    if e == runtime_error_t.INDEX_OUT_OF_RANGE { return 'index out of range' }
+    if e == runtime_error_t.TYPE_MISMATCH { return 'type assert failed' }
+    if e == runtime_error_t.NULL_POINTER { return 'invalid memory address or nil pointer dereference' }
+    if e == runtime_error_t.KEY_NOT_FOUND { return 'key not found in map' }
+    return 'operation failed'
+}
 --- output.txt
 test u32 buffer too small: buffer too small
 test u64 buffer too small: buffer too small
@@ -97,11 +110,24 @@ fn main():void! {
         mem.read_u8_le(buf)
         panic('should throw buffer too small')
     } catch err {
-        assert(err.msg() == 'buffer too small')
-        println('test empty buffer: ' + err.msg())
+        assert(err == mem.error_t.BUFFER_TOO_SMALL)
+        println('test empty buffer: ' + describe_error(err))
     }
 }
 
+
+// Render diagnostics explicitly after catch; throw only carries enum values.
+fn describe_error(errort e):string {
+    if e == runtime_error_t.END_OF_FILE { return 'EOF' }
+    if e == runtime_error_t.TIMEOUT { return 'tcp read timeout' }
+    if e == runtime_error_t.CLOSED { return 'conn closed' }
+    if e == mem.error_t.BUFFER_TOO_SMALL { return 'buffer too small' }
+    if e == runtime_error_t.INDEX_OUT_OF_RANGE { return 'index out of range' }
+    if e == runtime_error_t.TYPE_MISMATCH { return 'type assert failed' }
+    if e == runtime_error_t.NULL_POINTER { return 'invalid memory address or nil pointer dereference' }
+    if e == runtime_error_t.KEY_NOT_FOUND { return 'key not found in map' }
+    return 'operation failed'
+}
 --- output.txt
 test empty buffer: buffer too small
 
@@ -123,11 +149,24 @@ fn main():void! {
         mem.copy(small_buf, &v)
         panic('should throw buffer too small')
     } catch err {
-        assert(err.msg() == 'buffer too small')
-        println('test copy buffer too small: ' + err.msg())
+        assert(err == mem.error_t.BUFFER_TOO_SMALL)
+        println('test copy buffer too small: ' + describe_error(err))
     }
 }
 
+
+// Render diagnostics explicitly after catch; throw only carries enum values.
+fn describe_error(errort e):string {
+    if e == runtime_error_t.END_OF_FILE { return 'EOF' }
+    if e == runtime_error_t.TIMEOUT { return 'tcp read timeout' }
+    if e == runtime_error_t.CLOSED { return 'conn closed' }
+    if e == mem.error_t.BUFFER_TOO_SMALL { return 'buffer too small' }
+    if e == runtime_error_t.INDEX_OUT_OF_RANGE { return 'index out of range' }
+    if e == runtime_error_t.TYPE_MISMATCH { return 'type assert failed' }
+    if e == runtime_error_t.NULL_POINTER { return 'invalid memory address or nil pointer dereference' }
+    if e == runtime_error_t.KEY_NOT_FOUND { return 'key not found in map' }
+    return 'operation failed'
+}
 --- output.txt
 test copy success: 67305985
 test copy buffer too small: buffer too small

@@ -1,4 +1,5 @@
 #include "string.h"
+#include "errort.h"
 
 #include <runtime/rtype.h>
 #include <stdlib.h>
@@ -63,7 +64,7 @@ n_string_t string_concat(n_string_t *a, n_string_t *b) {
     mutator_safepoint_yield_if_needed();
 
     if (a->length > INT64_MAX - b->length) {
-        rti_throw("string concatenation result is too large", true);
+        rti_throw(native_error(N_ERROR_FAILED), "string concatenation result is too large");
         return (n_string_t) {0};
     }
 

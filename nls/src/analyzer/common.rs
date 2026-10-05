@@ -57,10 +57,20 @@ pub struct AnalyzerError {
 
 impl AnalyzerError {
     pub fn new(start: usize, end: usize, message: String) -> Self {
-        Self { start, end, message, is_warning: false }
+        Self {
+            start,
+            end,
+            message,
+            is_warning: false,
+        }
     }
     pub fn warning(start: usize, end: usize, message: String) -> Self {
-        Self { start, end, message, is_warning: true }
+        Self {
+            start,
+            end,
+            message,
+            is_warning: true,
+        }
     }
 }
 
@@ -78,6 +88,7 @@ pub struct Type {
     pub storage_kind: StorageKind,
     pub in_heap: bool,
     pub err: bool,
+    pub is_error: bool,
 }
 
 impl Default for Type {
@@ -95,6 +106,7 @@ impl Default for Type {
             storage_kind: StorageKind::Ptr,
             in_heap: false,
             err: false,
+            is_error: false,
         }
     }
 }
@@ -139,6 +151,7 @@ impl Type {
             storage_kind: Self::storage_kind(&kind),
             in_heap: Self::kind_in_heap(&kind),
             err: false,
+            is_error: false,
         };
 
         if Self::is_origin_type(&kind) {
@@ -164,6 +177,7 @@ impl Type {
             storage_kind: StorageKind::Ptr,
             in_heap: false,
             err: false,
+            is_error: false,
         }
     }
 
@@ -181,6 +195,7 @@ impl Type {
             storage_kind: Self::storage_kind(&kind),
             in_heap: Self::kind_in_heap(&kind),
             err: false,
+            is_error: false,
         }
     }
 
@@ -409,10 +424,11 @@ impl Type {
     pub fn type_struct_sizeof(kind: &TypeKind) -> u64 {
         let TypeKind::Struct(_, align, properties) = kind else { unreachable!() };
         // 如果 align 为 0,说明结构体没有元素或嵌套结构体也没有元素
-        if *align == 0 {
+        if properties.is_empty() {
             return 0;
         }
 
+        let align = properties.iter().map(|p| Self::alignof(&p.type_.kind) as u64).max().unwrap_or(*align as u64);
         let mut size: u64 = 0;
 
         // 遍历所有属性
@@ -426,7 +442,7 @@ impl Type {
         }
 
         // 最后按照结构体整体的对齐要求进行对齐
-        size = align_up(size, *align as u64);
+        size = align_up(size, align);
 
         size
     }
@@ -435,14 +451,45 @@ impl Type {
         match &kind {
             TypeKind::Struct(..) => Self::type_struct_sizeof(kind),
             TypeKind::Arr(_, len, element_type) => len * Self::sizeof(&element_type.kind),
+            TypeKind::String | TypeKind::Vec(..) => 48,
+            TypeKind::Map(..) => 56,
+            TypeKind::Set(..) => 40,
+            TypeKind::Interface(..) => 32,
+            TypeKind::Enum(element, _) => Self::sizeof(&element.kind),
+            TypeKind::Union(_, _, elements) => {
+                let payload = elements.iter().map(|e| Self::sizeof(&e.kind)).max().unwrap_or(8).max(8);
+                align_up(8 + payload, 8)
+            }
+            TypeKind::TaggedUnion(_, elements) => {
+                let payload = elements.iter().map(|e| Self::sizeof(&e.type_.kind)).max().unwrap_or(8).max(8);
+                align_up(8 + payload, 8)
+            }
+            TypeKind::Tuple(elements, _) => {
+                let mut size = 0;
+                for element in elements {
+                    size = align_up(size, Self::alignof(&element.kind) as u64) + Self::sizeof(&element.kind);
+                }
+                align_up(size, Self::alignof(kind) as u64)
+            }
             _ => kind.sizeof(),
         }
     }
 
     pub fn alignof(kind: &TypeKind) -> u8 {
         match &kind {
-            TypeKind::Struct(_, align, _) => *align as u8,
+            TypeKind::Struct(_, _, properties) => properties.iter().map(|p| Self::alignof(&p.type_.kind)).max().unwrap_or(1),
+            TypeKind::Tuple(elements, _) => elements.iter().map(|e| Self::alignof(&e.kind)).max().unwrap_or(1),
             TypeKind::Arr(_, _, element_type) => Self::alignof(&element_type.kind),
+            TypeKind::Enum(element, _) => Self::alignof(&element.kind),
+            TypeKind::Interface(..)
+            | TypeKind::String
+            | TypeKind::Vec(..)
+            | TypeKind::Map(..)
+            | TypeKind::Set(..)
+            | TypeKind::Union(..)
+            | TypeKind::TaggedUnion(..)
+            | TypeKind::Ref(..)
+            | TypeKind::Ptr(..) => 8,
             _ => kind.sizeof() as u8,
         }
     }
@@ -650,6 +697,7 @@ pub struct TypeFn {
     pub return_type: Type,
     pub param_types: Vec<Type>,
     pub errable: bool,
+    pub error_type: Option<Type>,
     pub rest: bool,
     pub x: bool,
     pub tpl: bool,

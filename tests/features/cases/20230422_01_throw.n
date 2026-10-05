@@ -1,6 +1,11 @@
+
+type test_error_t:errort = enum {
+    WORLD_ERROR,
+}
+
 fn hello():void! {
     println('hello nature')
-    throw errorf('world error')
+    throw test_error_t.WORLD_ERROR
 }
 
 fn main():void! {

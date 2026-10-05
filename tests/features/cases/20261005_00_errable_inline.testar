@@ -1,0 +1,1027 @@
+=== test_leaf_value_n
+--- main.n
+fn leaf(int v):int! { return v * 2 }
+fn middle(int v):int! { return leaf(v) }
+fn main() { println(middle(21) catch e { -1 }) }
+--- output.txt
+42
+
+=== test_leaf_value_x
+--- main.x
+fn leaf(int v):int! { return v * 2 }
+fn middle(int v):int! { return leaf(v) }
+fn main() { println(middle(21) catch e { -1 }) }
+--- output.txt
+42
+
+=== test_smoke_n
+--- main.n
+type io_error_t:errort = enum { NET_TIMEOUT, CONNECTION_CLOSED }
+type string_error_t:errort = enum { LENGTH_LIMIT }
+fn leaf(int k):int! {
+    if k == 1 { throw io_error_t.NET_TIMEOUT }
+    if k == 2 { throw string_error_t.LENGTH_LIMIT }
+    return 42
+}
+fn middle(int k):int! { return leaf(k) }
+fn rethrow(int k):int! { return middle(k) catch e { throw e } }
+fn decode(int k):int {
+    return rethrow(k) catch e {
+        println(e is io_error_t, e is string_error_t, e == io_error_t.NET_TIMEOUT, string_error_t.LENGTH_LIMIT == e)
+        if e is io_error_t { var v = e as io_error_t; println(v == io_error_t.NET_TIMEOUT) }
+        return -1
+    }
+}
+fn main() { println(decode(0), decode(1), decode(2)) }
+--- output.txt
+true false true false
+true
+false true false true
+42 -1 -1
+
+=== test_smoke_x
+--- main.x
+type io_error_t:errort = enum { NET_TIMEOUT, CONNECTION_CLOSED }
+type string_error_t:errort = enum { LENGTH_LIMIT }
+fn leaf(int k):int! {
+    if k == 1 { throw io_error_t.NET_TIMEOUT }
+    if k == 2 { throw string_error_t.LENGTH_LIMIT }
+    return 42
+}
+fn middle(int k):int! { return leaf(k) }
+fn rethrow(int k):int! { return middle(k) catch e { throw e } }
+fn decode(int k):int {
+    return rethrow(k) catch e {
+        println(e is io_error_t, e is string_error_t, e == io_error_t.NET_TIMEOUT, string_error_t.LENGTH_LIMIT == e)
+        if e is io_error_t { var v = e as io_error_t; println(v == io_error_t.NET_TIMEOUT) }
+        return -1
+    }
+}
+fn main() { println(decode(0), decode(1), decode(2)) }
+--- output.txt
+true false true false
+true
+false true false true
+42 -1 -1
+
+=== test_scalars_n
+--- main.n
+type tiny_t:errort = u8
+type signed_t:errort = i32
+type fraction_t:errort = f64
+type fraction32_t:errort = f32
+type flag_t:errort = bool
+fn leaf(int k):int! {
+    if k == 1 { throw 255 as tiny_t }
+    if k == 2 { throw -2147483648 as signed_t }
+    if k == 3 { throw -123.125 as fraction_t }
+    if k == 4 { throw 0.0625 as fraction32_t }
+    if k == 5 { throw true as flag_t }
+    return 42
+}
+fn middle(int k):int! { return leaf(k) }
+fn outer(int k):int! { return middle(k) catch e { throw e } }
+fn inspect(int k):int {
+    return outer(k) catch e {
+        if e is tiny_t { var x = e as tiny_t; println(x as u8) }
+        if e is signed_t { var x = e as signed_t; println(x as i32) }
+        if e is fraction_t { var x = e as fraction_t; println(x as f64) }
+        if e is fraction32_t { var x = e as fraction32_t; println(x as f32) }
+        if e is flag_t { var x = e as flag_t; println(x as bool) }
+        return -k
+    }
+}
+fn main() {
+    for int i = 0; i < 6; i += 1 {
+        println(inspect(i))
+    }
+}
+
+--- output.txt
+42
+255
+-1
+-2147483648
+-2
+-123.125000
+-3
+0.062500
+-4
+true
+-5
+
+=== test_scalars_x
+--- main.x
+type tiny_t:errort = u8
+type signed_t:errort = i32
+type fraction_t:errort = f64
+type fraction32_t:errort = f32
+type flag_t:errort = bool
+fn leaf(int k):int! {
+    if k == 1 { throw 255 as tiny_t }
+    if k == 2 { throw -2147483648 as signed_t }
+    if k == 3 { throw -123.125 as fraction_t }
+    if k == 4 { throw 0.0625 as fraction32_t }
+    if k == 5 { throw true as flag_t }
+    return 42
+}
+fn middle(int k):int! { return leaf(k) }
+fn outer(int k):int! { return middle(k) catch e { throw e } }
+fn inspect(int k):int {
+    return outer(k) catch e {
+        if e is tiny_t { var x = e as tiny_t; println(x as u8) }
+        if e is signed_t { var x = e as signed_t; println(x as i32) }
+        if e is fraction_t { var x = e as fraction_t; println(x as f64) }
+        if e is fraction32_t { var x = e as fraction32_t; println(x as f32) }
+        if e is flag_t { var x = e as flag_t; println(x as bool) }
+        return -k
+    }
+}
+fn main() {
+    for int i = 0; i < 6; i += 1 {
+        println(inspect(i))
+    }
+}
+
+--- output.txt
+42
+255
+-1
+-2147483648
+-2
+-123.125000
+-3
+0.062500
+-4
+true
+-5
+
+=== test_small_struct_n
+--- main.n
+type pair_t:errort = struct { i64 count; f64 scale }
+type triple_t:errort = struct { i64 a; i64 b; i64 c }
+fn leaf(int k):int! {
+    if k == 1 { var p = pair_t{count: -9000000000, scale: 0.125}; throw p }
+    throw triple_t{a: 0, b: -42, c: 123456789}
+}
+fn outer(int k):int! { return leaf(k) catch e { throw e } }
+fn grab(int k):errort {
+    errort saved = triple_t{a: 0, b: 0, c: 0}
+    var ignored = outer(k) catch e { saved = e; 0 }
+    return saved
+}
+fn main() {
+    var p = grab(1) as pair_t
+    var q = grab(2) as triple_t
+    println(p.count, p.scale, q.a, q.b, q.c)
+}
+--- output.txt
+-9000000000 0.125000 0 -42 123456789
+
+=== test_small_struct_x
+--- main.x
+type pair_t:errort = struct { i64 count; f64 scale }
+type triple_t:errort = struct { i64 a; i64 b; i64 c }
+fn leaf(int k):int! {
+    if k == 1 { var p = pair_t{count: -9000000000, scale: 0.125}; throw p }
+    throw triple_t{a: 0, b: -42, c: 123456789}
+}
+fn outer(int k):int! { return leaf(k) catch e { throw e } }
+fn grab(int k):errort {
+    errort saved = triple_t{a: 0, b: 0, c: 0}
+    var ignored = outer(k) catch e { saved = e; 0 }
+    return saved
+}
+fn main() {
+    var p = grab(1) as pair_t
+    var q = grab(2) as triple_t
+    println(p.count, p.scale, q.a, q.b, q.c)
+}
+--- output.txt
+-9000000000 0.125000 0 -42 123456789
+
+=== test_enum_members_n
+--- main.n
+type io_error_t:errort = enum:u8 { NET_TIMEOUT, CONNECTION_CLOSED }
+fn fail(bool closed):int! {
+    if closed { throw io_error_t.CONNECTION_CLOSED }
+    throw io_error_t.NET_TIMEOUT
+}
+fn main() {
+    for int i = 0; i < 2; i += 1 {
+        var ignored = fail(i == 1) catch e {
+            println(e == io_error_t.NET_TIMEOUT, io_error_t.CONNECTION_CLOSED == e, e != io_error_t.NET_TIMEOUT)
+            0
+        }
+    }
+}
+--- output.txt
+true false false
+false true true
+
+=== test_enum_members_x
+--- main.x
+type io_error_t:errort = enum:u8 { NET_TIMEOUT, CONNECTION_CLOSED }
+fn fail(bool closed):int! {
+    if closed { throw io_error_t.CONNECTION_CLOSED }
+    throw io_error_t.NET_TIMEOUT
+}
+fn main() {
+    for int i = 0; i < 2; i += 1 {
+        var ignored = fail(i == 1) catch e {
+            println(e == io_error_t.NET_TIMEOUT, io_error_t.CONNECTION_CLOSED == e, e != io_error_t.NET_TIMEOUT)
+            0
+        }
+    }
+}
+--- output.txt
+true false false
+false true true
+
+=== test_modules_n
+--- main.n
+import 'left.n' as left
+import 'right.n' as right
+fn fail(int k):int! { if k == 0 { throw left.error_t.TIMEOUT }; throw right.error_t.TIMEOUT }
+fn main() {
+    for int i = 0; i < 2; i += 1 {
+        var ignored = fail(i) catch e {
+            println(e is left.error_t, e is right.error_t, e == left.error_t.TIMEOUT, e == right.error_t.TIMEOUT)
+            0
+        }
+    }
+}
+--- left.n
+pub type error_t:errort = enum:u8 { TIMEOUT }
+--- left.x
+pub type error_t:errort = enum:u8 { TIMEOUT }
+--- right.n
+pub type error_t:errort = enum:u8 { TIMEOUT }
+--- right.x
+pub type error_t:errort = enum:u8 { TIMEOUT }
+--- output.txt
+true false true false
+false true false true
+
+=== test_modules_x
+--- main.x
+import 'left.x' as left
+import 'right.x' as right
+fn fail(int k):int! { if k == 0 { throw left.error_t.TIMEOUT }; throw right.error_t.TIMEOUT }
+fn main() {
+    for int i = 0; i < 2; i += 1 {
+        var ignored = fail(i) catch e {
+            println(e is left.error_t, e is right.error_t, e == left.error_t.TIMEOUT, e == right.error_t.TIMEOUT)
+            0
+        }
+    }
+}
+--- left.n
+pub type error_t:errort = enum:u8 { TIMEOUT }
+--- left.x
+pub type error_t:errort = enum:u8 { TIMEOUT }
+--- right.n
+pub type error_t:errort = enum:u8 { TIMEOUT }
+--- right.x
+pub type error_t:errort = enum:u8 { TIMEOUT }
+--- output.txt
+true false true false
+false true false true
+
+=== test_nested_n
+--- main.n
+type error_t:errort = enum { FIRST, SECOND }
+fn fail(bool first):int! { if first { throw error_t.FIRST }; throw error_t.SECOND }
+fn main() {
+    var ignored = fail(true) catch e {
+        var nested = fail(false) catch inner {
+            println(inner == error_t.SECOND, inner == error_t.FIRST)
+            0
+        }
+        println(e == error_t.FIRST, e == error_t.SECOND)
+        0
+    }
+}
+--- output.txt
+true false
+true false
+
+=== test_nested_x
+--- main.x
+type error_t:errort = enum { FIRST, SECOND }
+fn fail(bool first):int! { if first { throw error_t.FIRST }; throw error_t.SECOND }
+fn main() {
+    var ignored = fail(true) catch e {
+        var nested = fail(false) catch inner {
+            println(inner == error_t.SECOND, inner == error_t.FIRST)
+            0
+        }
+        println(e == error_t.FIRST, e == error_t.SECOND)
+        0
+    }
+}
+--- output.txt
+true false
+true false
+
+=== test_defer_n
+--- main.n
+type error_t:errort = enum { FIRST, SECOND }
+fn fail(bool first):int! { if first { throw error_t.FIRST }; throw error_t.SECOND }
+fn unwind():int! { defer { fail(false) }; throw error_t.FIRST }
+fn success_then_defer():int! { defer { fail(false) }; return 42 }
+fn main() {
+    var ignored = unwind() catch e { println(e == error_t.FIRST); 0 }
+    var other = success_then_defer() catch e { println(e == error_t.SECOND); 0 }
+}
+--- output.txt
+true
+true
+
+=== test_defer_x
+--- main.x
+type error_t:errort = enum { FIRST, SECOND }
+fn fail(bool first):int! { if first { throw error_t.FIRST }; throw error_t.SECOND }
+fn unwind():int! { defer { fail(false) }; throw error_t.FIRST }
+fn success_then_defer():int! { defer { fail(false) }; return 42 }
+fn main() {
+    var ignored = unwind() catch e { println(e == error_t.FIRST); 0 }
+    var other = success_then_defer() catch e { println(e == error_t.SECOND); 0 }
+}
+--- output.txt
+true
+true
+
+=== test_pointer_gc_n
+--- main.n
+import runtime
+type node_t:errort = struct { int value }
+fn leaf():int! { var n = new node_t(value = 314159); throw n }
+fn middle():int! { defer { runtime.gc() }; return leaf() }
+fn main() {
+    var ignored = middle() catch e {
+        runtime.gc()
+        var node = e as ref<node_t>
+        println(e is ref<node_t>, node.value)
+        0
+    }
+}
+--- output.txt
+true 314159
+
+=== test_heap_carrier_gc_n
+--- main.n
+import runtime
+type node_t:errort = struct { int value }
+type box_t = struct { errort error }
+fn make():ref<box_t> {
+    var p = new node_t(value = 271828)
+    return new box_t(error = p)
+}
+fn main() {
+    var b = make()
+    runtime.gc()
+    var p = b.error as ref<node_t>
+    println(p.value)
+}
+--- output.txt
+271828
+
+=== test_pointer_tail_gc_n
+--- main.n
+import runtime
+type node_t = struct { int value }
+type payload_t:errort = struct { int a; int b; ref<node_t> node }
+fn leaf():int! { throw payload_t{a: 1, b: 2, node: new node_t(value = 161803)} }
+fn middle():int! { defer { runtime.gc() }; return leaf() }
+fn main() {
+    var ignored = middle() catch e {
+        runtime.gc()
+        var p = e as payload_t
+        println(p.a, p.b, p.node.value)
+        0
+    }
+}
+--- output.txt
+1 2 161803
+
+=== test_heap_tail_gc_n
+--- main.n
+import runtime
+type node_t = struct { int value }
+type payload_t:errort = struct { int a; int b; ref<node_t> node }
+type box_t = struct { errort error }
+fn make():ref<box_t> {
+    var p = new node_t(value = 141421)
+    var data = payload_t{a: 7, b: 9, node: p}
+    return new box_t(error = data)
+}
+fn main() {
+    var b = make()
+    runtime.gc()
+    var p = b.error as payload_t
+    println(p.a, p.b, p.node.value)
+}
+--- output.txt
+7 9 141421
+
+=== test_x_pointer_x
+--- main.x
+type node_t:errort = struct { int value }
+fn fail(ptr<node_t> p):int! { throw p }
+fn main() {
+    var n = node_t{value: 1234567}
+    var ignored = fail(&n) catch e {
+        var p = e as ptr<node_t>
+        println(e is ptr<node_t>, p.value)
+        0
+    }
+}
+--- output.txt
+true 1234567
+
+=== test_void_wide_n
+--- main.n
+type error_t:errort = enum { TIMEOUT }
+type wide_t = struct { int a; int b; int c }
+fn check(bool bad):void! { if bad { throw error_t.TIMEOUT } }
+fn get(bool bad):wide_t! { check(bad); return wide_t{a: 1, b: 2, c: 3} }
+fn main() {
+    check(false) catch e { println('unexpected') }
+    var v = get(false) catch e { wide_t{a: 0, b: 0, c: 0} }
+    println(v.a, v.b, v.c)
+    var w = get(true) catch e { println(e == error_t.TIMEOUT); wide_t{a: 4, b: 5, c: 6} }
+    println(w.a, w.b, w.c)
+}
+--- output.txt
+1 2 3
+true
+4 5 6
+
+=== test_void_wide_x
+--- main.x
+type error_t:errort = enum { TIMEOUT }
+type wide_t = struct { int a; int b; int c }
+fn check(bool bad):void! { if bad { throw error_t.TIMEOUT } }
+fn get(bool bad):wide_t! { check(bad); return wide_t{a: 1, b: 2, c: 3} }
+fn main() {
+    check(false) catch e { println('unexpected') }
+    var v = get(false) catch e { wide_t{a: 0, b: 0, c: 0} }
+    println(v.a, v.b, v.c)
+    var w = get(true) catch e { println(e == error_t.TIMEOUT); wide_t{a: 4, b: 5, c: 6} }
+    println(w.a, w.b, w.c)
+}
+--- output.txt
+1 2 3
+true
+4 5 6
+
+=== test_hash_collision_n
+--- main.n
+type error_842109896116_t:errort = enum:u8 { TIMEOUT }
+type error_716211875559_t:errort = enum:u8 { TIMEOUT }
+fn fail(bool first):int! { if first { throw error_842109896116_t.TIMEOUT }; throw error_716211875559_t.TIMEOUT }
+fn main() {
+    for int i = 0; i < 2; i += 1 {
+        var ignored = fail(i == 0) catch e {
+            println(e is error_842109896116_t, e is error_716211875559_t, e == error_842109896116_t.TIMEOUT, e == error_716211875559_t.TIMEOUT)
+            0
+        }
+    }
+}
+--- output.txt
+true false true false
+false true false true
+
+=== test_hash_collision_x
+--- main.x
+type error_842109896116_t:errort = enum:u8 { TIMEOUT }
+type error_716211875559_t:errort = enum:u8 { TIMEOUT }
+fn fail(bool first):int! { if first { throw error_842109896116_t.TIMEOUT }; throw error_716211875559_t.TIMEOUT }
+fn main() {
+    for int i = 0; i < 2; i += 1 {
+        var ignored = fail(i == 0) catch e {
+            println(e is error_842109896116_t, e is error_716211875559_t, e == error_842109896116_t.TIMEOUT, e == error_716211875559_t.TIMEOUT)
+            0
+        }
+    }
+}
+--- output.txt
+true false true false
+false true false true
+
+=== test_mixed_n
+--- main.n
+import 'fast.x' as fast
+fn middle(int kind):int! { return fast.leaf(kind) }
+fn decode(int kind):int {
+    return middle(kind) catch e {
+        if e == fast.error_t.TIMEOUT { return 1 }
+        if e == fast.error_t.CLOSED { return 2 }
+        return -1
+    }
+}
+fn main() { println(decode(0), decode(1), decode(2)) }
+--- fast.x
+pub type error_t:errort = enum:u8 { TIMEOUT, CLOSED }
+pub fn leaf(int kind):int! {
+    if kind == 1 { throw error_t.TIMEOUT }
+    if kind == 2 { throw error_t.CLOSED }
+    return 42
+}
+--- output.txt
+42 1 2
+
+=== test_concrete_error_n
+--- main.n
+type large_t = struct { int a; int b; int c; int d }
+fn number():errable<int,int> { throw 0 }
+fn text():errable<int,string> { throw 'typed text' }
+fn large():errable<int,large_t> { throw large_t{a:1,b:2,c:3,d:4} }
+fn propagate():errable<int,large_t> { return large() }
+fn constructor(bool bad):errable<int,int> {
+    if bad { return errable<int,int>.error(17) }
+    return errable<int,int>.value(42)
+}
+fn main() {
+    var a = number() catch e { println(e); -1 }
+    var b = text() catch e { println(e); -2 }
+    var c = propagate() catch e { println(e.a,e.b,e.c,e.d); -3 }
+    var d = constructor(true) catch e { println(e); -4 }
+    var success = constructor(false) catch e { -99 }
+    println(a,b,c,d,success)
+    var result = errable<int,string>.error('manual result')
+    if result is errable.error e { println(e) }
+}
+--- output.txt
+0
+typed text
+1 2 3 4
+17
+-1 -2 -3 -4 42
+manual result
+
+=== test_no_error_allocation_n
+--- main.n
+#linkid runtime_malloc_bytes
+fn allocated():u64
+type error_t:errort = enum { FIRST, SECOND }
+fn leaf(int k):int! {
+    if k % 2 == 0 { throw error_t.FIRST }
+    throw error_t.SECOND
+}
+fn middle(int k):int! { return leaf(k) }
+fn outer(int k):int! { return middle(k) catch e { throw e } }
+fn main() {
+    var before = allocated()
+    int sum = 0
+    for int i = 0; i < 10000; i += 1 {
+        sum += outer(i) catch e { e == error_t.FIRST ? 1 : 2 }
+    }
+    var bytes = allocated() - before
+    println(sum,bytes)
+}
+--- output.txt
+15000 0
+
+=== test_concrete_error_x
+--- main.x
+type large_t = struct { int a; int b; int c; int d }
+fn number():errable<int,int> { throw 0 }
+fn text():errable<int,string> { throw 'typed text' }
+fn large():errable<int,large_t> { throw large_t{a:1,b:2,c:3,d:4} }
+fn propagate():errable<int,large_t> { return large() }
+fn constructor(bool bad):errable<int,int> {
+    if bad { return errable<int,int>.error(17) }
+    return errable<int,int>.value(42)
+}
+fn main() {
+    var a = number() catch e { println(e); -1 }
+    var b = text() catch e { println(e); -2 }
+    var c = propagate() catch e { println(e.a,e.b,e.c,e.d); -3 }
+    var d = constructor(true) catch e { println(e); -4 }
+    var success = constructor(false) catch e { -99 }
+    println(a,b,c,d,success)
+    var result = errable<int,string>.error('manual result')
+    if result is errable.error e { println(e) }
+}
+--- output.txt
+0
+typed text
+1 2 3 4
+17
+-1 -2 -3 -4 42
+manual result
+
+=== test_no_error_allocation_x
+--- main.x
+#linkid runtime_malloc_bytes
+fn allocated():u64
+type error_t:errort = enum { FIRST, SECOND }
+fn leaf(int k):int! {
+    if k % 2 == 0 { throw error_t.FIRST }
+    throw error_t.SECOND
+}
+fn middle(int k):int! { return leaf(k) }
+fn outer(int k):int! { return middle(k) catch e { throw e } }
+fn main() {
+    var before = allocated()
+    int sum = 0
+    for int i = 0; i < 10000; i += 1 {
+        sum += outer(i) catch e { e == error_t.FIRST ? 1 : 2 }
+    }
+    var bytes = allocated() - before
+    println(sum,bytes)
+}
+--- output.txt
+15000 0
+
+=== test_future_result_abi
+--- main.n
+import co
+type error_t:errort = enum { TIMEOUT }
+fn fail():int! { co.sleep(20); throw error_t.TIMEOUT }
+fn okay():int { return 42 }
+fn empty() {}
+fn failed_void():void! { throw error_t.TIMEOUT }
+fn main() {
+    var fu = @async(fail())
+    co.sleep(100)
+    var value = fu.await() catch e { println(e is error_t, e == error_t.TIMEOUT); -1 }
+    var success = @async(okay())
+    println(value,success.await())
+    var nothing = @async(empty())
+    nothing.await_void()
+    var failure = @async(failed_void())
+    failure.await_void() catch e { println(e == error_t.TIMEOUT) }
+}
+--- output.txt
+true true
+-1 42
+true
+
+=== test_native_result_n
+--- main.n
+#linkid test_error_result
+fn native_result(bool failed):errable<int,int>
+fn main() {
+    var a = native_result(false) catch e { -1 }
+    var b = native_result(true) catch e { e == 0 ? 10 : -1 }
+    println(a,b)
+}
+--- output.txt
+42 10
+
+=== test_union_error_n
+--- main.n
+type issue_t = int|string
+fn leaf(bool text):errable<int,issue_t> {
+    if text { throw 'typed union' }
+    throw 12
+}
+fn middle(bool text):errable<int,issue_t> { return leaf(text) }
+fn main() {
+    try { middle(false) } catch e { println(e is int,e as int) }
+    try { middle(true) } catch e { println(e is string,e as string) }
+}
+--- output.txt
+true 12
+true typed union
+
+=== test_result_alias_n
+--- main.n
+type result_t = errable<int,int>
+fn leaf():result_t { throw 7 }
+fn main() { var value = leaf() catch e { e }; println(value) }
+--- output.txt
+7
+
+=== test_pointer_alias_n
+--- main.n
+type address_t:errort = ptr<int>
+fn leaf(address_t address):int! { throw address }
+fn main() {
+    int value = 42
+    var address = &value as address_t
+    leaf(address) catch e {
+        var actual = e as address_t
+        println(e is address_t,*actual)
+        -1
+    }
+}
+--- output.txt
+true 42
+
+=== test_error_cast_catch_n
+--- main.n
+type first_t:errort = enum { FAILED }
+type second_t:errort = enum { FAILED }
+fn main() {
+    errort error = first_t.FAILED
+    var value = error as second_t catch e {
+        println(e == runtime_error_t.TYPE_MISMATCH)
+        second_t.FAILED
+    }
+}
+--- output.txt
+true
+
+=== test_native_result_x
+--- main.x
+#linkid test_error_result
+fn native_result(bool failed):errable<int,int>
+fn main() {
+    var a = native_result(false) catch e { -1 }
+    var b = native_result(true) catch e { e == 0 ? 10 : -1 }
+    println(a,b)
+}
+--- output.txt
+42 10
+
+=== test_union_error_x
+--- main.x
+type issue_t = int|string
+fn leaf(bool text):errable<int,issue_t> {
+    if text { throw 'typed union' }
+    throw 12
+}
+fn middle(bool text):errable<int,issue_t> { return leaf(text) }
+fn main() {
+    try { middle(false) } catch e { println(e is int,e as int) }
+    try { middle(true) } catch e { println(e is string,e as string) }
+}
+--- output.txt
+true 12
+true typed union
+
+=== test_result_alias_x
+--- main.x
+type result_t = errable<int,int>
+fn leaf():result_t { throw 7 }
+fn main() { var value = leaf() catch e { e }; println(value) }
+--- output.txt
+7
+
+=== test_pointer_alias_x
+--- main.x
+type address_t:errort = ptr<int>
+fn leaf(address_t address):int! { throw address }
+fn main() {
+    int value = 42
+    var address = &value as address_t
+    leaf(address) catch e {
+        var actual = e as address_t
+        println(e is address_t,*actual)
+        -1
+    }
+}
+--- output.txt
+true 42
+
+=== test_error_cast_catch_x
+--- main.x
+type first_t:errort = enum { FAILED }
+type second_t:errort = enum { FAILED }
+fn main() {
+    errort error = first_t.FAILED
+    var value = error as second_t catch e {
+        println(e == runtime_error_t.TYPE_MISMATCH)
+        second_t.FAILED
+    }
+}
+--- output.txt
+true
+
+=== test_native_interface_error
+--- main.n
+type reader_t = interface { fn read([u8] buffer):int! }
+type source_t:reader_t = struct { int value }
+#linkid test_error_native_read
+fn source_t.read(&self,[u8] buffer):int!
+fn main() {
+    reader_t source = new source_t(value=42)
+    var bytes = vec<u8>.new(0,1)
+    println(source.read(bytes),bytes[0])
+    reader_t failed = new source_t(value=-1)
+    failed.read(bytes) catch e { println(e == runtime_error_t.END_OF_FILE); 0 }
+    println(source.read(bytes),bytes[0])
+}
+--- output.txt
+1 42
+true
+1 42
+
+=== test_native_clobber_sret_n
+--- main.n
+#linkid test_error_clobber_return_register
+fn clobber()
+fn complete():void! { clobber() }
+fn main() { complete(); println('return address preserved') }
+--- output.txt
+return address preserved
+
+=== test_native_clobber_sret_x
+--- main.x
+#linkid test_error_clobber_return_register
+fn clobber()
+fn complete():void! { clobber() }
+fn main() { complete(); println('return address preserved') }
+--- output.txt
+return address preserved
+
+=== test_error_storage_roundtrip_n
+--- main.n
+type error_t:errort = enum:u8 { TIMEOUT }
+type issue_t = errort|int
+fn number():errable<int,int> { throw 7 }
+fn main() {
+    errort original = error_t.TIMEOUT
+    any boxed = original
+    var restored = boxed as errort
+    println(boxed is errort, restored == error_t.TIMEOUT)
+    issue_t union_value = original
+    var unwrapped = union_value as errort
+    println(union_value is errort, unwrapped == error_t.TIMEOUT)
+    var raw = original as anyptr
+    var address = raw as ptr<errort>
+    println(*address == error_t.TIMEOUT)
+    any scalar = 42
+    println(scalar as int)
+    var ignored = scalar as errort catch e {
+        println(e == runtime_error_t.TYPE_MISMATCH)
+        original
+    }
+    try { var pointer = original as anyptr; number() } catch code { println(code) }
+}
+--- output.txt
+true true
+true true
+true
+42
+true
+7
+
+=== test_error_storage_roundtrip_x
+--- main.x
+type error_t:errort = enum:u8 { TIMEOUT }
+type issue_t = errort|int
+fn number():errable<int,int> { throw 7 }
+fn main() {
+    errort original = error_t.TIMEOUT
+    any boxed = original
+    var restored = boxed as errort
+    println(boxed is errort, restored == error_t.TIMEOUT)
+    issue_t union_value = original
+    var unwrapped = union_value as errort
+    println(union_value is errort, unwrapped == error_t.TIMEOUT)
+    var raw = original as anyptr
+    var address = raw as ptr<errort>
+    println(*address == error_t.TIMEOUT)
+    any scalar = 42
+    println(scalar as int)
+    var ignored = scalar as errort catch e {
+        println(e == runtime_error_t.TYPE_MISMATCH)
+        original
+    }
+    try { var pointer = original as anyptr; number() } catch code { println(code) }
+}
+--- output.txt
+true true
+true true
+true
+42
+true
+7
+
+=== test_concrete_error_to_union_n
+--- main.n
+type error_t:errort = enum { TIMEOUT }
+type issue_t = int|string|errort
+fn number():errable<int,int> { throw 7 }
+fn text():errable<int,string> { throw 'propagated text' }
+fn marked():int! { throw error_t.TIMEOUT }
+fn outer(int kind):errable<int,issue_t> {
+    if kind == 0 { return number() }
+    if kind == 1 { return text() }
+    return marked()
+}
+fn main() {
+    try { outer(0) } catch e { println(e is int,e as int) }
+    try { outer(1) } catch e { println(e is string,e as string) }
+    try { outer(2) } catch e { var error = e as errort; println(error == error_t.TIMEOUT) }
+}
+--- output.txt
+true 7
+true propagated text
+true
+
+=== test_concrete_error_to_union_x
+--- main.x
+type error_t:errort = enum { TIMEOUT }
+type issue_t = int|string|errort
+fn number():errable<int,int> { throw 7 }
+fn text():errable<int,string> { throw 'propagated text' }
+fn marked():int! { throw error_t.TIMEOUT }
+fn outer(int kind):errable<int,issue_t> {
+    if kind == 0 { return number() }
+    if kind == 1 { return text() }
+    return marked()
+}
+fn main() {
+    try { outer(0) } catch e { println(e is int,e as int) }
+    try { outer(1) } catch e { println(e is string,e as string) }
+    try { outer(2) } catch e { var error = e as errort; println(error == error_t.TIMEOUT) }
+}
+--- output.txt
+true 7
+true propagated text
+true
+
+=== test_error_union_widening_n
+--- main.n
+type large_t = struct { int a; int b; int c; int d; int e; int f; int g; int h }
+type narrow_t = int|string
+type wide_t = int|string|large_t
+fn leaf(bool text):errable<int,narrow_t> {
+    if text { throw 'widened text' }
+    throw 17
+}
+fn outer(bool text):errable<int,wide_t> { return leaf(text) }
+fn main() {
+    try { outer(false) } catch e { println(e is int,e as int) }
+    try { outer(true) } catch e { println(e is string,e as string) }
+}
+--- output.txt
+true 17
+true widened text
+
+=== test_error_union_widening_x
+--- main.x
+type large_t = struct { int a; int b; int c; int d; int e; int f; int g; int h }
+type narrow_t = int|string
+type wide_t = int|string|large_t
+fn leaf(bool text):errable<int,narrow_t> {
+    if text { throw 'widened text' }
+    throw 17
+}
+fn outer(bool text):errable<int,wide_t> { return leaf(text) }
+fn main() {
+    try { outer(false) } catch e { println(e is int,e as int) }
+    try { outer(true) } catch e { println(e is string,e as string) }
+}
+--- output.txt
+true 17
+true widened text
+
+=== test_bounds_64bit_x
+--- main.x
+fn main() { [int;2] a = [1,2]; int i = 4294967296; println(a[i]) }
+--- output.txt
+panic: 'index out of range [4294967296] with length 2' at nature-test/main.x:1:63
+
+--- status.txt
+1
+
+=== test_print_error_n
+--- main.n
+type error_t:errort = enum { TIMEOUT }
+fn main() { errort error = error_t.TIMEOUT; println(error) }
+
+=== test_print_error_x
+--- main.x
+type error_t:errort = enum { TIMEOUT }
+fn main() { errort error = error_t.TIMEOUT; println(error) }
+
+=== test_absent_union_error_member_n
+--- main.n
+type issue_t = int|string
+fn leaf():errable<int,bool> { throw false }
+fn outer():errable<int,issue_t> { return leaf() }
+fn main() {}
+--- output.txt
+nature-test/main.n:3:45: cannot propagate error 'bool' into 'main.issue_t(union)'
+
+=== test_absent_union_error_member_x
+--- main.x
+type issue_t = int|string
+fn leaf():errable<int,bool> { throw false }
+fn outer():errable<int,issue_t> { return leaf() }
+fn main() {}
+--- output.txt
+nature-test/main.x:3:45: cannot propagate error 'bool' into 'main.issue_t(union)'
+
+=== test_oversized_inline_error_n
+--- main.n
+type large_t:errort = struct { int a; int b; int c; int d }
+fn fail():void! { throw large_t{a:1,b:2,c:3,d:4} }
+fn main() {}
+--- output.txt
+nature-test/main.n:2:47: inline error payload exceeds 24 bytes; use errable<T,E> with a concrete E
+
+=== test_oversized_inline_error_x
+--- main.x
+type large_t:errort = struct { int a; int b; int c; int d }
+fn fail():void! { throw large_t{a:1,b:2,c:3,d:4} }
+fn main() {}
+--- output.txt
+nature-test/main.x:2:47: inline error payload exceeds 24 bytes; use errable<T,E> with a concrete E

@@ -1,8 +1,13 @@
 === test_basic
 --- main.n
+
+type test_error_t:errort = enum {
+    B_CANNOT_ZERO,
+}
+
 fn div(int a, int b):int! {
     if b == 0 {
-        throw errorf('b cannot zero')
+        throw test_error_t.B_CANNOT_ZERO
     }
 
     return a / b
@@ -39,7 +44,7 @@ fn main() {
 
     var a2 = div(10, 0) catch e {
         10
-        println('in div catch', e.msg())
+        println('in div catch', describe_error(e))
         100
         10000
     }
@@ -55,11 +60,29 @@ fn main() {
     println(a4)
 }
 
+// Render diagnostics explicitly after catch; throw only carries enum values.
+fn describe_error(errort e):string {
+    if e == test_error_t.B_CANNOT_ZERO { return 'b cannot zero' }
+    if e == runtime_error_t.END_OF_FILE { return 'EOF' }
+    if e == runtime_error_t.TIMEOUT { return 'tcp read timeout' }
+    if e == runtime_error_t.CLOSED { return 'conn closed' }
+    if e == runtime_error_t.INDEX_OUT_OF_RANGE { return 'index out of range' }
+    if e == runtime_error_t.TYPE_MISMATCH { return 'type assert failed' }
+    if e == runtime_error_t.NULL_POINTER { return 'invalid memory address or nil pointer dereference' }
+    if e == runtime_error_t.KEY_NOT_FOUND { return 'key not found in map' }
+    return 'operation failed'
+}
+
 === test_break_failed
 --- main.n
+
+type test_error_t:errort = enum {
+    B_CANNOT_ZERO,
+}
+
 fn div(int a, int b):int! {
     if b == 0 {
-        throw errorf('b cannot zero')
+        throw test_error_t.B_CANNOT_ZERO
     }
 
     return a / b
@@ -75,13 +98,18 @@ fn main() {
 }
 
 --- output.txt
-nature-test/main.n:12:17: excepted ';' or '}' at end of statement
+nature-test/main.n:17:17: excepted ';' or '}' at end of statement
 
 === test_break_failed2
 --- main.n
+
+type test_error_t:errort = enum {
+    B_CANNOT_ZERO,
+}
+
 fn div(int a, int b):int! {
     if b == 0 {
-        throw errorf('b cannot zero')
+        throw test_error_t.B_CANNOT_ZERO
     }
 
     return a / b
@@ -97,5 +125,5 @@ fn main() {
 }
 
 --- output.txt
-nature-test/main.n:12:17: break must use in for stmt body
+nature-test/main.n:17:17: break must use in for stmt body
 

@@ -51,7 +51,7 @@ pub fn listdir(string dir_path):[string]! {
     var name_buf = vec<u8>.new(0, 32768)
     anyptr handle = windows_find_first(pattern.ref(), name_buf.ref(), name_buf.len() as u64)
     if handle == 0 {
-        throw errorf('FindFirstFileW failed with Windows error %d', windows_last_error())
+        throw system_error_t{code: windows_last_error() as i32}
     }
 
     for true {
@@ -64,7 +64,7 @@ pub fn listdir(string dir_path):[string]! {
         if next < 0 {
             u32 code = windows_last_error()
             windows_find_close(handle)
-            throw errorf('FindNextFileW failed with Windows error %d', code)
+            throw system_error_t{code: code as i32}
         }
         if next == 0 {
             break
@@ -72,7 +72,7 @@ pub fn listdir(string dir_path):[string]! {
     }
 
     if windows_find_close(handle) == 0 {
-        throw errorf('FindClose failed with Windows error %d', windows_last_error())
+        throw system_error_t{code: windows_last_error() as i32}
     }
     dirs_sort(result)
     return result
@@ -80,7 +80,7 @@ pub fn listdir(string dir_path):[string]! {
 
 pub fn mkdirs(string dir, u32 mode):void! {
     if dir == '' {
-        throw errorf('dir is empty')
+        throw runtime_error_t.INVALID_ARGUMENT
     }
     if path.exists(dir) {
         return

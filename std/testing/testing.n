@@ -2,6 +2,6 @@ mod testing
 
 pub fn assert(bool cond):void! {
     if !cond {
-        throw errorf("assertion failed")
+        throw runtime_error_t.FAILED
     }
 }

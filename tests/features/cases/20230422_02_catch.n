@@ -1,29 +1,36 @@
+
+type test_error_t:errort = enum {
+    HELLO_ERROR,
+    WORLD_ERROR,
+    FAILED,
+}
+
 fn hello():void! {
     println('hello nature')
-    throw errorf('hello error')
+    throw test_error_t.HELLO_ERROR
 }
 
 fn main():void! {
     hello() catch err {
-        println('catch err:', err.msg())
+        println('catch err:', describe_error(err))
     }
 
     // closure fn
     var world = fn(bool e):int! {
         if e {
-            throw errorf('world error')
+            throw test_error_t.WORLD_ERROR
         }
         return 233
     }
 
     int foo = world(true) catch err {
-        println('catch err:', err.msg())
+        println('catch err:', describe_error(err))
         12
     }
     println('foo =', foo)
 
     foo = world(false) catch err {
-        println('catch err:', err.msg())
+        println('catch err:', describe_error(err))
         12
     }
     println('foo =', foo)
@@ -31,6 +38,21 @@ fn main():void! {
 
     // return
     hello() catch err1 {
-        throw errorf('??' + err1.msg())
+        throw test_error_t.FAILED
     }
+}
+
+// Render diagnostics explicitly after catch; throw only carries enum values.
+fn describe_error(errort e):string {
+    if e == test_error_t.HELLO_ERROR { return 'hello error' }
+    if e == test_error_t.WORLD_ERROR { return 'world error' }
+    if e == test_error_t.FAILED { return '??' }
+    if e == runtime_error_t.END_OF_FILE { return 'EOF' }
+    if e == runtime_error_t.TIMEOUT { return 'tcp read timeout' }
+    if e == runtime_error_t.CLOSED { return 'conn closed' }
+    if e == runtime_error_t.INDEX_OUT_OF_RANGE { return 'index out of range' }
+    if e == runtime_error_t.TYPE_MISMATCH { return 'type assert failed' }
+    if e == runtime_error_t.NULL_POINTER { return 'invalid memory address or nil pointer dereference' }
+    if e == runtime_error_t.KEY_NOT_FOUND { return 'key not found in map' }
+    return 'operation failed'
 }

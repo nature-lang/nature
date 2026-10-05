@@ -1,8 +1,8 @@
 #ifndef NATURE_RUNTIME_RUNTIME_H
 #define NATURE_RUNTIME_RUNTIME_H
 
-#include "utils/helper.h"
 #include "runtime/uv_compat.h"
+#include "utils/helper.h"
 #include <pthread.h>
 
 #include "aco/aco.h"
@@ -49,14 +49,14 @@ static inline bool user_main_is_fn(void) {
 #if defined(__AMD64) && defined(__WINDOWS)
 #define CALLER_RET_ADDR() ((addr_t) __builtin_return_address(0))
 #elif defined(__AMD64)
-#define CALLER_RET_ADDR()                                  \
+#define CALLER_RET_ADDR()                                     \
     ({                                                        \
         uint64_t _rbp_value;                                  \
         __asm__ volatile("mov %%rbp, %0" : "=r"(_rbp_value)); \
         fetch_addr_value(_rbp_value + POINTER_SIZE);          \
     });
 #elif defined(__ARM64)
-#define CALLER_RET_ADDR()                                          \
+#define CALLER_RET_ADDR()                                             \
     ({                                                                \
         addr_t _fp_value;                                             \
         __asm__ volatile("mov %0, x29" : "=r"(_fp_value));            \
@@ -64,7 +64,7 @@ static inline bool user_main_is_fn(void) {
         _value;                                                       \
     });
 #elif defined(__RISCV64)
-#define CALLER_RET_ADDR()                                          \
+#define CALLER_RET_ADDR()                                             \
     ({                                                                \
         addr_t _fp_value;                                             \
         __asm__ volatile("mv %0, s0" : "=r"(_fp_value));              \
@@ -374,7 +374,8 @@ struct linkco_t {
 typedef struct n_future_t {
     int64_t size;
     void *result;
-    n_union_t error; // 类似 result 一样可选的 error
+    n_error_t error;
+    bool has_error;
     void *await_co;
 } n_future_t;
 
@@ -442,8 +443,8 @@ struct coroutine_t {
     //    uint64_t scan_ret_addr;
 
     bool has_error;
-    n_interface_t error; // throwable
-    n_vec_t traces; // element is n_trace_t
+    n_error_t error; // native operations and coroutine completion only
+    const char *panic_message;
 
     ATOMIC int32_t select_done;
     linkco_t *waiting; // 当前 co 等待的 linkco, 如果存在多个 linkco 时，通过 linkco.waitlink 链接
@@ -498,9 +499,9 @@ struct n_processor_t {
     struct n_processor_t *next; // processor 链表支持
 };
 
-void rti_throw(char *msg, bool panic);
+void rti_throw(n_error_t error, const char *panic_message);
 
-void rti_co_throw(coroutine_t *co, char *msg, bool panic);
+void rti_co_throw(coroutine_t *co, n_error_t error, const char *panic_message);
 
 void coroutine_dump_error(coroutine_t *co);
 

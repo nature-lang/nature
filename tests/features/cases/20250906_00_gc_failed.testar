@@ -11,6 +11,16 @@ import libc
 import co
 import runtime
 
+type test_error_t:errort = enum {
+    INVALID_JWT_FORMAT,
+    INVALID_ALGORITHM,
+    INVALID_SIGNATURE,
+    TOKEN_EXPIRED,
+    TOKEN_NOT_YET_VALID,
+    INVALID_AUTHORIZATION_HEADER_FORMAT,
+}
+
+
 // JWT configuration constants
 const JWT_ALGORITHM = "HS256"
 const JWT_DEFAULT_EXPIRY = 3600 // 1 hour in seconds
@@ -116,7 +126,7 @@ fn generate(string sub, {string:any} custom_data, int expiry_seconds):string! {
 fn verify(string token):jwt_token_t! {
     var parts = token.split(".")
     if parts.len() != 3 {
-        throw errorf("Invalid JWT format")
+        throw test_error_t.INVALID_JWT_FORMAT
     }
 
     println('verify 1')
@@ -137,7 +147,7 @@ fn verify(string token):jwt_token_t! {
 
     // Verify algorithm
     if header.alg != jwt_config.algorithm {
-        throw errorf("Invalid algorithm")
+        throw test_error_t.INVALID_ALGORITHM
     }
     println('verify 5')
 
@@ -150,17 +160,17 @@ fn verify(string token):jwt_token_t! {
     println('verify 6')
 
     if expected_signature as string != actual_signature {
-        throw errorf("Invalid signature")
+        throw test_error_t.INVALID_SIGNATURE
     }
 
     // Verify time
     var now = time.unix()
     if payload.exp < now {
-        throw errorf("Token expired")
+        throw test_error_t.TOKEN_EXPIRED
     }
 
     if payload.nbf > now {
-        throw errorf("Token not yet valid")
+        throw test_error_t.TOKEN_NOT_YET_VALID
     }
 
     return jwt_token_t{
@@ -188,7 +198,7 @@ fn refresh_token(string token, int new_expiry):string! {
 fn is_token_expired(string token):bool! {
     var parts = token.split(".")
     if parts.len() != 3 {
-        throw errorf("Invalid JWT format")
+        throw test_error_t.INVALID_JWT_FORMAT
     }
 
     var encoded_payload = parts[1]
@@ -203,7 +213,7 @@ fn is_token_expired(string token):bool! {
 fn remaining_time(string token):int! {
     var parts = token.split(".")
     if parts.len() != 3 {
-        throw errorf("Invalid JWT format")
+        throw test_error_t.INVALID_JWT_FORMAT
     }
 
     var encoded_payload = parts[1]
@@ -222,7 +232,7 @@ fn remaining_time(string token):int! {
 // Extract token from Authorization header
 fn extract_token_from_header(string auth_header):string! {
     if !auth_header.starts_with("Bearer ") {
-        throw errorf("Invalid Authorization header format")
+        throw test_error_t.INVALID_AUTHORIZATION_HEADER_FORMAT
     }
     return auth_header[7..] // Remove "Bearer " prefix
 }

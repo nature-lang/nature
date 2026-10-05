@@ -197,7 +197,7 @@ fn send():void! {
     conn.close()
 
     conn.read(buf) catch e {
-        panic(e.msg())
+        panic(describe_error(e))
         0
     }
 }
@@ -214,9 +214,21 @@ fn main() {
     assert(end - start < 5000)
 }
 
+
+// Render diagnostics explicitly after catch; throw only carries enum values.
+fn describe_error(errort e):string {
+    if e == runtime_error_t.END_OF_FILE { return 'EOF' }
+    if e == runtime_error_t.TIMEOUT { return 'tcp read timeout' }
+    if e == runtime_error_t.CLOSED { return 'conn closed' }
+    if e == runtime_error_t.INDEX_OUT_OF_RANGE { return 'index out of range' }
+    if e == runtime_error_t.TYPE_MISMATCH { return 'type assert failed' }
+    if e == runtime_error_t.NULL_POINTER { return 'invalid memory address or nil pointer dereference' }
+    if e == runtime_error_t.KEY_NOT_FOUND { return 'key not found in map' }
+    return 'operation failed'
+}
 --- output.txt
 send success, recv msg hello world!!
-panic: 'socket closed' at nature-test/main.n:29:15
+panic: 'conn closed' at nature-test/main.n:29:30
 
 === test_dns[exclude_os=windows]
 --- main.n
@@ -226,12 +238,15 @@ import net.dns
 
 
 fn main() {
-    var ips = dns.lookup('www.baidu.com')
+    var ips = dns.lookup('localhost')
+    assert(ips.len() > 0)
     for ip in ips {
-        println(ip)
-        assert(ip.len() > 10)
+        assert(ip == '127.0.0.1' || ip == '::1')
     }
+    println('localhost resolved')
 }
+--- output.txt
+localhost resolved
 
 === test_dns_failed[exclude_os=windows]
 --- main.n
@@ -240,18 +255,18 @@ import runtime
 import net.dns
 
 fn main() {
-    var ips = dns.lookup('www.notfoundanything.com') catch e {
-        panic(e.msg())
+    var caught = false
+    var ips = dns.lookup('invalid host name') catch e {
+        assert(e is system_error_t)
+        assert((e as system_error_t).code != 0)
+        caught = true
         []
     }
-    for ip in ips {
-        println(ip)
-        assert(ip.len() > 10)
-    }
+    assert(caught && ips.len() == 0)
+    println('DNS error verified')
 }
-
 --- output.txt
-panic: 'unknown node or service' at nature-test/main.n:7:15
+DNS error verified
 
 === test_sendto_speed[exclude_os=windows]
 --- main.n

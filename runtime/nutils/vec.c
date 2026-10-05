@@ -1,4 +1,5 @@
 #include "vec.h"
+#include "errort.h"
 
 #include "array.h"
 #include "runtime/runtime.h"
@@ -77,8 +78,8 @@ n_vec_t rt_vec_new(int64_t hash, int64_t element_hash, int64_t length, void *val
     assertf(element_hash > 0, "element_hash must be a valid hash");
 
     if (length < 0) {
-        char *msg = tlsprintf("len must be greater than 0");
-        rti_throw(msg, true);
+        const char *msg = "len must be greater than 0";
+        rti_throw(native_error(N_ERROR_INVALID_ARGUMENT), msg);
         n_vec_t empty = {0};
         return empty;
     }
@@ -121,8 +122,8 @@ n_vec_t rt_vec_new(int64_t hash, int64_t element_hash, int64_t length, void *val
 
 n_vec_t rt_vec_cap(int64_t hash, int64_t element_hash, int64_t capacity) {
     if (capacity < 0) {
-        char *msg = tlsprintf("cap must be greater than 0");
-        rti_throw(msg, true);
+        const char *msg = "cap must be greater than 0";
+        rti_throw(native_error(N_ERROR_INVALID_ARGUMENT), msg);
         n_vec_t empty = {0};
         return empty;
     }
@@ -178,9 +179,9 @@ void rt_vec_new_out(n_vec_t *out, int64_t hash, int64_t element_hash, int64_t ca
  */
 void rti_vec_access(n_vec_t *l, uint64_t index, void *value_ref) {
     if (index >= l->length) {
-        char *msg = tlsprintf("index out of range [%d] with length %d", index, l->length);
+        const char *msg = "index out of range";
         DEBUGF("[runtime.rti_vec_access] has err %s", msg);
-        rti_throw(msg, true);
+        rti_throw(native_error(N_ERROR_INDEX_OUT_OF_RANGE), msg);
 
         return;
     }
@@ -301,17 +302,17 @@ n_vec_t rt_vec_slice(n_vec_t *l, int64_t start, int64_t end) {
 
     // start end 检测
     if (start > l->length || end > l->length || start < 0 || end < 0) {
-        char *msg = tlsprintf("slice [%d:%d] out of vec with length %d", start, end, l->length);
+        const char *msg = "index out of range";
         DEBUGF("[runtime.vec_slice] has err %s", msg);
-        rti_throw(msg, true);
+        rti_throw(native_error(N_ERROR_INDEX_OUT_OF_RANGE), msg);
         n_vec_t empty = {0};
         return empty;
     }
 
     if (start > end) {
-        char *msg = tlsprintf("invalid index values, must be low %d <= high %d", start, end);
+        const char *msg = "index out of range";
         DEBUGF("[runtime.vec_slice] has err %s", msg);
-        rti_throw(msg, true);
+        rti_throw(native_error(N_ERROR_INDEX_OUT_OF_RANGE), msg);
         n_vec_t empty = {0};
         return empty;
     }
@@ -379,9 +380,9 @@ n_anyptr_t rt_vec_element_addr(n_vec_t *l, uint64_t index) {
            l->length);
 
     if (index >= l->length) {
-        char *msg = tlsprintf("index out of vec [%d] with length %d", index, l->length);
+        const char *msg = "index out of range";
         DEBUGF("[runtime.rt_vec_element_addr] has err %s", msg);
-        rti_throw(msg, true);
+        rti_throw(native_error(N_ERROR_INDEX_OUT_OF_RANGE), msg);
         return 0;
     }
 

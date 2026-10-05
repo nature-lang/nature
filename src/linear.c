@@ -1,4 +1,5 @@
 #include "linear.h"
+#include "semantic/infer.h"
 
 #include <stddef.h>
 #include <stdio.h>
@@ -7,6 +8,60 @@
 #include "src/debug/debug.h"
 #include "src/error.h"
 #include "utils/linked.h"
+
+static void linear_builtin_error(module_t *m, native_error_code_t code);
+
+static lir_operand_t *linear_super_move(module_t *m, type_t t, lir_operand_t *dst, lir_operand_t *src);
+static lir_operand_t *linear_cast(module_t *m, type_t source_type, type_t target_type, lir_operand_t *src_operand, lir_operand_t *target);
+
+typedef struct {
+    type_t type;
+    lir_operand_t *value;
+    lir_operand_t *occupied;
+} error_slot_t;
+
+static type_t linear_error_type(module_t *m) {
+    return reduction_type(m, type_ident_new("errort", TYPE_IDENT_INTERFACE));
+}
+
+static lir_operand_t *native_pointer(module_t *m, lir_operand_t *value) {
+    lir_operand_t *ptr = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
+    OP_PUSH(lir_op_move(ptr, value));
+    return ptr;
+}
+
+static void linear_zero(module_t *m, type_t type, lir_operand_t *target) {
+    if (type.storage_kind != STORAGE_KIND_IND) {
+        OP_PUSH(lir_op_move(target, is_float(type.kind) ? float_operand(0) : type.kind == TYPE_BOOL ? bool_operand(false)
+                                                                                                    : int_operand(0)));
+        return;
+    }
+    int64_t offset = 0;
+    for (int64_t size = type.storage_size; size > 0;) {
+        type_kind kind = size >= 8 ? TYPE_UINT64 : size >= 4 ? TYPE_UINT32
+                                           : size >= 2       ? TYPE_UINT16
+                                                             : TYPE_UINT8;
+        type_t word = type_kind_new(kind);
+        OP_PUSH(lir_op_move(indirect_addr_operand(m, word, target, offset), int_operand(0)));
+        size -= word.storage_size;
+        offset += word.storage_size;
+    }
+}
+
+// The Result lives in the function's stack frame. Materialize its address at
+// each use, rather than keeping a hidden pointer live across every call/branch.
+static lir_operand_t *linear_result_address(module_t *m) {
+    closure_t *c = m->current_closure;
+    if (!c->result_storage) return NULL;
+    lir_operand_t *address = temp_var_operand(m, c->fndef->return_type);
+    OP_PUSH(lir_op_lea(address, c->result_storage));
+    return address;
+}
+
+static void linear_store_error(module_t *m, type_t source_type, lir_operand_t *value);
+static void linear_native_has_error(module_t *m);
+static void linear_take_native_error(module_t *m);
+
 
 lir_opcode_t ast_op_convert[] = {
     [AST_OP_ADD] = LIR_OPCODE_ADD,
@@ -239,7 +294,21 @@ linear_inline_arr_element_addr(module_t *m, lir_operand_t *arr_target, lir_opera
         error_label_ident = stack_top(m->current_closure->catch_error_labels);
     }
 
-    push_rt_call(m, RT_CALL_THROW_INDEX_OUT_ERROR, NULL, 3, index_target, length_target, bool_operand(be_catch));
+    if (m->is_x && be_catch) {
+        // Caught checks carry a runtime_error_t enum without formatting a message.
+        linear_builtin_error(m, N_ERROR_INDEX_OUT_OF_RANGE);
+    } else if (m->is_x) {
+        // uncaught in .x: same message and exit, but through a path that never reads the
+        // coroutine tls key, which x mode does not create
+        char *panic_path = m->current_closure->fndef->rel_path ? m->current_closure->fndef->rel_path : m->rel_path;
+        push_rt_call(m, RT_CALL_X_INDEX_PANIC, NULL, 5, index_target, length_target,
+                     string_operand(panic_path, strlen(panic_path)),
+                     int_operand(m->current_line), int_operand(m->current_column));
+    } else {
+        push_rt_call(m, RT_CALL_THROW_INDEX_OUT_ERROR, NULL, 3, index_target, length_target,
+                     bool_operand(be_catch));
+        if (be_catch) linear_take_native_error(m);
+    }
     // bal catch or end label
     linear_bal_error(m, error_label_ident, catch_depth);
     OP_PUSH(lir_op_label(end_label_ident, true));
@@ -344,7 +413,21 @@ linear_inline_vec_element_addr(module_t *m, lir_operand_t *vec_target, lir_opera
         error_label_ident = stack_top(m->current_closure->catch_error_labels);
     }
 
-    push_rt_call(m, RT_CALL_THROW_INDEX_OUT_ERROR, NULL, 3, index_target, length_target, bool_operand(be_catch));
+    if (m->is_x && be_catch) {
+        // Caught checks carry a runtime_error_t enum without formatting a message.
+        linear_builtin_error(m, N_ERROR_INDEX_OUT_OF_RANGE);
+    } else if (m->is_x) {
+        // uncaught in .x: same message and exit, but through a path that never reads the
+        // coroutine tls key, which x mode does not create
+        char *panic_path = m->current_closure->fndef->rel_path ? m->current_closure->fndef->rel_path : m->rel_path;
+        push_rt_call(m, RT_CALL_X_INDEX_PANIC, NULL, 5, index_target, length_target,
+                     string_operand(panic_path, strlen(panic_path)),
+                     int_operand(m->current_line), int_operand(m->current_column));
+    } else {
+        push_rt_call(m, RT_CALL_THROW_INDEX_OUT_ERROR, NULL, 3, index_target, length_target,
+                     bool_operand(be_catch));
+        if (be_catch) linear_take_native_error(m);
+    }
     // bal catch or end label
     linear_bal_error(m, error_label_ident, catch_depth);
     OP_PUSH(lir_op_label(end_label_ident, true));
@@ -807,6 +890,10 @@ static inline bool has_default_operand(module_t *m, type_t t) {
  * raw ptr 无法赋默认值
  */
 static lir_operand_t *linear_default_operand(module_t *m, type_t t, lir_operand_t *target) {
+    if (t.is_error) {
+        linear_zero(m, t, target);
+        return target;
+    }
     if (is_clv_default_type(t)) {
         OP_PUSH(lir_op_new(LIR_OPCODE_CLV, NULL, NULL, target));
         return target;
@@ -886,17 +973,16 @@ static void linear_has_panic(module_t *m) {
 
     char *error_path = m->current_closure->fndef->rel_path ? m->current_closure->fndef->rel_path : m->rel_path;
     lir_operand_t *path_operand = string_operand(error_path, strlen(error_path));
-    lir_operand_t *fn_name_operand = string_operand(m->current_closure->fndef->fn_name_with_pkg,
-                                                    strlen(m->current_closure->fndef->fn_name_with_pkg));
     lir_operand_t *line_operand = int_operand(m->current_line);
     lir_operand_t *column_operand = int_operand(m->current_column);
 
-    // 不可抢占，也不 yield，所以不需要添加任何勾子。
-    // 如果没有被 catch, hash_error 直接 panic 并退出程序执行, 从而提醒 coder 及时处理错误
+    // Uncaught native panics exit here; caught ones are moved into the active error slot.
     lir_operand_t *has_error = temp_var_operand(m, type_kind_new(TYPE_BOOL));
-    push_rt_call(m, RT_CALL_CO_HAS_PANIC, has_error, 5, bool_operand(be_catch), path_operand, fn_name_operand,
+    push_rt_call(m, RT_CALL_CO_HAS_PANIC, has_error, 4, bool_operand(be_catch), path_operand,
                  line_operand,
                  column_operand);
+
+    if (!be_catch) return; // An uncaught panic terminates inside co_has_panic.
 
     char *panic_ident = label_ident_with_unique(".panic");
     char *panic_end_ident = str_connect(panic_ident, LABEL_END_SUFFIX);
@@ -904,43 +990,80 @@ static void linear_has_panic(module_t *m) {
     OP_PUSH(lir_op_new(LIR_OPCODE_BEE, bool_operand(true), has_error, lir_label_operand(panic_ident, true)));
     OP_PUSH(lir_op_bal(lir_label_operand(panic_end_ident, true)));
     OP_PUSH(lir_op_label(panic_ident, true));
+    linear_take_native_error(m);
     linear_bal_error(m, error_target_label, catch_depth);
     OP_PUSH(lir_op_label(panic_end_ident, true));
 }
 
 
-static void linear_has_error(module_t *m) {
-    char *error_target_label = m->current_closure->error_label;
-    assertf(m->current_line < 1000000, "line '%d' exception", m->current_line);
-    assertf(m->current_column < 1000000, "column '%d' exception", m->current_line);
-
-    // 存在 catch error
-    uint16_t catch_depth = m->current_closure->catch_error_labels->count;
-    if (catch_depth > 0) {
-        error_target_label = stack_top(m->current_closure->catch_error_labels);
-    }
-
-    lir_operand_t *has_error = temp_var_operand(m, type_kind_new(TYPE_BOOL));
-
-    char *error_path = m->current_closure->fndef->rel_path ? m->current_closure->fndef->rel_path : m->rel_path;
-    lir_operand_t *path_operand = string_operand(error_path, strlen(error_path));
-    lir_operand_t *fn_name_operand = string_operand(m->current_closure->fndef->fn_name_with_pkg,
-                                                    strlen(m->current_closure->fndef->fn_name_with_pkg));
-    lir_operand_t *line_operand = int_operand(m->current_line);
-    lir_operand_t *column_operand = int_operand(m->current_column);
-
-    // 不可抢占，也不 yield，所以不需要添加任何勾子。
-    push_rt_call(m, RT_CALL_CO_HAS_ERROR, has_error, 4, path_operand, fn_name_operand, line_operand,
-                 column_operand);
-
-    char *error_ident = label_ident_with_unique(".error");
-    char *error_end_ident = str_connect(error_ident, LABEL_END_SUFFIX);
-    OP_PUSH(lir_op_new(LIR_OPCODE_BEE, bool_operand(true), has_error, lir_label_operand(error_ident, true)));
-    OP_PUSH(lir_op_bal(lir_label_operand(error_end_ident, true)));
-    OP_PUSH(lir_op_label(error_ident, true));
-    linear_bal_error(m, error_target_label, catch_depth);
-    OP_PUSH(lir_op_label(error_end_ident, true));
+static void linear_builtin_error(module_t *m, native_error_code_t code) {
+    type_t type = linear_error_type(m);
+    lir_operand_t *error = temp_var_operand_with_alloc(m, type);
+    linear_zero(m, type, error);
+    OP_PUSH(lir_op_move(indirect_addr_operand(m, type_kind_new(TYPE_UINT64), error, 0), int_operand(RUNTIME_ERROR_TYPE_ID)));
+    OP_PUSH(lir_op_move(indirect_addr_operand(m, type_kind_new(TYPE_INT32), error, POINTER_SIZE), int_operand(code)));
+    linear_store_error(m, type, error);
 }
+
+static void linear_store_error(module_t *m, type_t source_type, lir_operand_t *value) {
+    closure_t *c = m->current_closure;
+    char *end = label_ident_with_unique(".error.store.end");
+    if (!stack_empty(c->catch_error_slots)) {
+        error_slot_t *slot = stack_top(c->catch_error_slots);
+        OP_PUSH(lir_op_new(LIR_OPCODE_BEE, bool_operand(true), slot->occupied, lir_label_operand(end, true)));
+        value = linear_cast(m, source_type, slot->type, value, NULL);
+        linear_super_move(m, slot->type, slot->value, value);
+        OP_PUSH(lir_op_move(slot->occupied, bool_operand(true)));
+    } else {
+        assert(c->result_storage);
+        lir_operand_t *result = linear_result_address(m);
+        lir_operand_t *tag = indirect_addr_operand(m, type_kind_new(TYPE_UINT64), result, 0);
+        OP_PUSH(lir_op_new(LIR_OPCODE_BEE, int_operand(hash_string(ERRABLE_ERROR_TAG)), tag, lir_label_operand(end, true)));
+        type_t target_type = c->fndef->errable_error_type;
+        value = linear_cast(m, source_type, target_type, value, NULL);
+        lir_operand_t *dst = indirect_addr_operand(m, target_type, result, POINTER_SIZE);
+        if (target_type.storage_kind == STORAGE_KIND_IND) dst = lea_operand_pointer(m, dst);
+        linear_super_move(m, target_type, dst, value);
+        OP_PUSH(lir_op_move(tag, int_operand(hash_string(ERRABLE_ERROR_TAG))));
+    }
+    OP_PUSH(lir_op_label(end, true));
+}
+
+static void linear_result_has_error(module_t *m, type_t error_type, lir_operand_t *result) {
+    closure_t *c = m->current_closure;
+    uint16_t depth = c->catch_error_labels->count;
+    char *label = depth ? stack_top(c->catch_error_labels) : c->error_label;
+    char *end = label_ident_with_unique(".result.value");
+    OP_PUSH(lir_op_new(LIR_OPCODE_BNE, int_operand(hash_string(ERRABLE_ERROR_TAG)),
+                       indirect_addr_operand(m, type_kind_new(TYPE_UINT64), result, 0), lir_label_operand(end, true)));
+    lir_operand_t *error = indirect_addr_operand(m, error_type, result, POINTER_SIZE);
+    if (error_type.storage_kind == STORAGE_KIND_IND) error = lea_operand_pointer(m, error);
+    linear_store_error(m, error_type, error);
+    linear_bal_error(m, label, depth);
+    OP_PUSH(lir_op_label(end, true));
+}
+
+static void linear_take_native_error(module_t *m) {
+    type_t type = linear_error_type(m);
+    lir_operand_t *error = temp_var_operand_with_alloc(m, type);
+    linear_zero(m, type, error);
+    push_rt_call(m, RT_CALL_CO_REMOVE_ERROR, NULL, 1, native_pointer(m, error));
+    linear_store_error(m, type, error);
+}
+
+static void linear_native_has_error(module_t *m) {
+    closure_t *c = m->current_closure;
+    uint16_t depth = c->catch_error_labels->count;
+    char *label = depth ? stack_top(c->catch_error_labels) : c->error_label;
+    char *end = label_ident_with_unique(".native.value");
+    lir_operand_t *has_error = temp_var_operand(m, type_kind_new(TYPE_BOOL));
+    push_rt_call(m, RT_CALL_CO_HAS_ERROR, has_error, 0);
+    OP_PUSH(lir_op_new(LIR_OPCODE_BEE, bool_operand(false), has_error, lir_label_operand(end, true)));
+    linear_take_native_error(m);
+    linear_bal_error(m, label, depth);
+    OP_PUSH(lir_op_label(end, true));
+}
+
 
 /**
  * 当 local var 被 child fn 引用时, 需要将原本在栈中分配的 var 改成堆分配, 并对 ast_var_decl 中的 heap_ident 赋值
@@ -1564,7 +1687,7 @@ static void linear_cmp_neg(module_t *m, ast_expr_t *cond, lir_operand_t *cmp_tar
     bool binary_optimize = false;
     if (cond->assert_type == AST_EXPR_BINARY) {
         ast_binary_expr_t *binary_expr = cond->value;
-        if (ast_op_is_cmp(binary_expr->op) && binary_expr->left.type.kind != TYPE_STRING) {
+        if (ast_op_is_cmp(binary_expr->op) && binary_expr->left.type.kind != TYPE_STRING && !binary_expr->left.type.is_error) {
             binary_optimize = true;
         }
     }
@@ -1809,12 +1932,28 @@ static void linear_ret(module_t *m, ast_ret_stmt_t *stmt) {
 }
 
 static void linear_return(module_t *m, ast_return_stmt_t *ast) {
+    closure_t *c = m->current_closure;
     lir_operand_t *src = NULL;
     if (ast->expr != NULL) {
         src = linear_expr(m, *ast->expr, NULL);
     }
 
+    // Surface `return T` constructs value(T) in the function's errable<T,E> result.
+    if (c->result_storage) {
+        lir_operand_t *result = linear_result_address(m);
+        if (src && type_compare(ast->expr->type, c->fndef->return_type)) {
+            linear_super_move(m, c->fndef->return_type, result, src);
+        } else if (src) {
+            type_t value_type = c->fndef->errable_value_type;
+            lir_operand_t *dst = indirect_addr_operand(m, value_type, result, POINTER_SIZE);
+            if (value_type.storage_kind == STORAGE_KIND_IND) dst = lea_operand_pointer(m, dst);
+            linear_super_move(m, value_type, dst, src);
+        }
+        src = result;
+    }
+
     linear_unwind_all(m);
+    if (c->result_storage) src = linear_result_address(m);
     OP_PUSH(lir_op_new(LIR_OPCODE_RETURN, src, NULL, NULL));
     OP_PUSH(lir_op_bal(lir_label_operand(m->current_closure->end_label, false)));
 }
@@ -1889,7 +2028,11 @@ static void linear_select(module_t *m, ast_select_stmt_t *select_stmt) {
         lir_operand_t *recv_target;
         if (select_case->recv_var) {
             recv_target = linear_var_decl(m, select_case->recv_var);
-            OP_PUSH(lir_op_nop_def(recv_target));
+            // Aggregate variables already contain the address allocated above.
+            // A second SSA definition would discard that address before recv.
+            if (select_case->recv_var->type.storage_kind != STORAGE_KIND_IND) {
+                OP_PUSH(lir_op_nop_def(recv_target));
+            }
         }
 
         // 从 on_call 中提取 chan 参数 mov 到 scase_target 中
@@ -2177,6 +2320,28 @@ static lir_operand_t *linear_call(module_t *m, ast_expr_t expr, lir_operand_t *t
     }
 
     lir_operand_t *temp = NULL;
+
+    if (is_result_fn(type_fn)) {
+        // The callee returns errable<T,E>. Check its tag, then extract the value payload.
+        type_t errable_type = type_fn->return_type;
+        lir_operand_t *errable = temp_var_operand_with_alloc(m, errable_type);
+
+        OP_PUSH(lir_op_new(LIR_OPCODE_CALL, fn_target, operand_new(LIR_OPERAND_ARGS, args), errable));
+        linear_result_has_error(m, type_fn->errable_error_type, errable);
+
+        if (call->return_type.kind != TYPE_VOID) {
+            lir_operand_t *value = indirect_addr_operand(m, call->return_type, errable, POINTER_SIZE);
+            if (call->return_type.storage_kind == STORAGE_KIND_IND) value = lea_operand_pointer(m, value);
+            temp = temp_var_operand_with_alloc(m, call->return_type);
+            linear_super_move(m, call->return_type, temp, value);
+        }
+
+        if (temp) {
+            return linear_super_move(m, expr.type, target, temp);
+        }
+        return target;
+    }
+
     if (call->return_type.kind != TYPE_VOID) {
         temp = temp_var_operand(m, call->return_type);
     }
@@ -2186,7 +2351,7 @@ static lir_operand_t *linear_call(module_t *m, ast_expr_t expr, lir_operand_t *t
 
     // 目标函数可能会产生错误才需要进行错误判断，并跳转到对应的 error label 或者 continue label
     if (type_fn->is_errable) {
-        linear_has_error(m);
+        linear_native_has_error(m);
     }
 
     if (temp) {
@@ -2259,6 +2424,22 @@ static lir_operand_t *linear_binary(module_t *m, ast_expr_t expr, lir_operand_t 
 
     lir_operand_t *left_target = linear_expr(m, binary_expr->left, NULL);
     lir_operand_t *right_target = linear_expr(m, binary_expr->right, NULL);
+    if (binary_expr->left.type.is_error && binary_expr->right.type.is_error) {
+        OP_PUSH(lir_op_move(target, bool_operand(binary_expr->op == AST_OP_EE)));
+        char *different = label_ident_with_unique(".inline.eq.different");
+        char *end = label_ident_with_unique(".inline.eq.end");
+        for (int i = 0; i < 4; ++i) {
+            OP_PUSH(lir_op_new(LIR_OPCODE_BNE,
+                               indirect_addr_operand(m, type_kind_new(TYPE_UINT64), left_target, i * POINTER_SIZE),
+                               indirect_addr_operand(m, type_kind_new(TYPE_UINT64), right_target, i * POINTER_SIZE),
+                               lir_label_operand(different, true)));
+        }
+        OP_PUSH(lir_op_bal(lir_label_operand(end, true)));
+        OP_PUSH(lir_op_label(different, true));
+        OP_PUSH(lir_op_move(target, bool_operand(binary_expr->op != AST_OP_EE)));
+        OP_PUSH(lir_op_label(end, true));
+        return target;
+    }
     lir_opcode_t opcode = ast_op_convert[binary_expr->op];
     if (is_unsigned(binary_expr->left.type.kind)) {
         if (opcode == LIR_OPCODE_SSHR) {
@@ -3131,14 +3312,14 @@ static lir_operand_t *linear_macro_async(module_t *m, ast_expr_t expr, lir_opera
             OP_PUSH(lir_op_lea(fn_addr_operand, symbol_label_operand(m, s->ident)));
 
             // rt_call
-            push_rt_call(m, RT_CALL_COROUTINE_ASYNC2, NULL, 3, fn_addr_operand, flag_operand, bool_operand(true));
+            push_rt_call(m, RT_CALL_COROUTINE_ASYNC2, NULL, 4, fn_addr_operand, flag_operand, bool_operand(true), bool_operand(((ast_fndef_t *) s->ast_value)->is_errable));
         } else {
             lir_operand_t *fn_operand = linear_expr(m, async_expr->origin_call->left, NULL);
-            push_rt_call(m, RT_CALL_COROUTINE_ASYNC2, NULL, 3, fn_operand, flag_operand, bool_operand(false));
+            push_rt_call(m, RT_CALL_COROUTINE_ASYNC2, NULL, 4, fn_operand, flag_operand, bool_operand(false), bool_operand(async_expr->origin_call->left.type.fn->is_errable));
         }
     } else {
         lir_operand_t *fn_operand = linear_expr(m, async_expr->origin_call->left, NULL);
-        push_rt_call(m, RT_CALL_COROUTINE_ASYNC2, NULL, 3, fn_operand, flag_operand, bool_operand(false));
+        push_rt_call(m, RT_CALL_COROUTINE_ASYNC2, NULL, 4, fn_operand, flag_operand, bool_operand(false), bool_operand(async_expr->origin_call->left.type.fn->is_errable));
     }
 
     // is ident and global symbol
@@ -3162,6 +3343,14 @@ static lir_operand_t *linear_reflect_hash_expr(module_t *m, ast_expr_t expr, lir
 
 static lir_operand_t *linear_is_expr(module_t *m, ast_expr_t expr, lir_operand_t *target) {
     ast_is_expr_t *is_expr = expr.value;
+    if (is_expr->src->type.is_error) {
+        if (!target) target = temp_var_operand_with_alloc(m, expr.type);
+        lir_operand_t *src = linear_expr(m, *is_expr->src, NULL);
+        OP_PUSH(lir_op_new(LIR_OPCODE_SEE, indirect_addr_operand(m, type_kind_new(TYPE_UINT64), src, 0),
+                           int_operand(error_type_id(is_expr->target_type)), target));
+        return target;
+    }
+
     assert(is_expr->src->type.kind == TYPE_UNION ||
         is_expr->src->type.kind == TYPE_PTR ||
         is_expr->src->type.kind == TYPE_TAGGED_UNION ||
@@ -3213,6 +3402,48 @@ static lir_operand_t *linear_is_expr(module_t *m, ast_expr_t expr, lir_operand_t
 }
 
 /**
+ * Any and ordinary unions store an rtype pointer in their first word.
+ * Check it inline in .x, which has no coroutine error slot.
+ */
+static void linear_x_type_assert(module_t *m, lir_operand_t *src_operand, uint64_t target_rtype_hash) {
+    lir_operand_t *value_ptr = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
+    OP_PUSH(lir_op_move(value_ptr, src_operand));
+
+    lir_operand_t *rtype_ptr = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
+    OP_PUSH(lir_op_move(rtype_ptr,
+                        indirect_addr_operand(m, type_kind_new(TYPE_ANYPTR), value_ptr,
+                                              offsetof(n_any_t, rtype))));
+
+    lir_operand_t *actual_hash = temp_var_operand(m, type_kind_new(TYPE_INT64));
+    OP_PUSH(lir_op_move(actual_hash,
+                        indirect_addr_operand(m, type_kind_new(TYPE_INT64), rtype_ptr,
+                                              offsetof(rtype_t, hash))));
+
+    char *assert_ident = label_ident_with_unique(".type.assert");
+    char *assert_end_ident = str_connect(assert_ident, LABEL_END_SUFFIX);
+    lir_operand_t *assert_end = lir_label_operand(assert_end_ident, true);
+    OP_PUSH(lir_op_new(LIR_OPCODE_BEE, int_operand(target_rtype_hash), actual_hash, assert_end));
+
+    uint16_t catch_depth = m->current_closure->catch_error_labels->count;
+    char *error_target_label = m->current_closure->error_label;
+    if (catch_depth > 0) {
+        error_target_label = stack_top(m->current_closure->catch_error_labels);
+        linear_builtin_error(m, N_ERROR_TYPE_MISMATCH);
+    } else {
+        char *panic_path = m->current_closure->fndef->rel_path
+                                   ? m->current_closure->fndef->rel_path
+                                   : m->rel_path;
+        push_rt_call(m, RT_CALL_X_PANIC, NULL, 4,
+                     string_operand("type assert failed", strlen("type assert failed")),
+                     string_operand(panic_path, strlen(panic_path)), int_operand(m->current_line),
+                     int_operand(m->current_column));
+    }
+
+    linear_bal_error(m, error_target_label, catch_depth);
+    OP_PUSH(lir_op_label(assert_end_ident, true));
+}
+
+/**
  * @param m
  * @param expr
  * @return
@@ -3220,31 +3451,77 @@ static lir_operand_t *linear_is_expr(module_t *m, ast_expr_t expr, lir_operand_t
 static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t *target) {
     ast_as_expr_t *as_expr = expr.value;
     lir_operand_t *src_operand = linear_expr(m, as_expr->src, NULL);
+    return linear_cast(m, as_expr->src.type, as_expr->target_type, src_operand, target);
+}
 
-    // 如果 src 和 dst 类型一致，则不需要做任何的处理
-    if (type_compare(as_expr->src.type, as_expr->target_type)) {
-        return linear_super_move(m, expr.type, target, src_operand);
+static lir_operand_t *linear_cast(module_t *m, type_t source_type, type_t target_type, lir_operand_t *src_operand, lir_operand_t *target) {
+    if (type_compare(target_type, source_type)) {
+        if (target_type.storage_size > source_type.storage_size) {
+            // Union widening copies the source payload into zeroed larger storage.
+            if (!target) target = temp_var_operand_with_alloc(m, target_type);
+            linear_zero(m, target_type, target);
+            return linear_super_move(m, source_type, target, src_operand);
+        }
+        return linear_super_move(m, target_type, target, src_operand);
     }
 
     if (!target) {
-        if (expr.type.kind != TYPE_UNION) {
-            target = temp_var_operand_with_alloc(m, expr.type);
+        if (target_type.kind != TYPE_UNION) {
+            target = temp_var_operand_with_alloc(m, target_type);
         }
     }
 
-    uint64_t src_rtype_hash = type_hash(as_expr->src.type);
-    uint64_t target_size = as_expr->target_type.storage_size;
-    uint64_t src_size = as_expr->src.type.storage_size;
+    // anyptr conversions reinterpret storage without a type assertion.
+    if (target_type.kind == TYPE_ANYPTR) {
+        if (source_type.storage_kind == STORAGE_KIND_DIR && source_type.storage_size < POINTER_SIZE) {
+            push_rt_call(m, RT_CALL_ANYPTR_CASTING, target, 1, src_operand);
+        } else {
+            OP_PUSH(lir_op_move(target, src_operand));
+        }
+        return target;
+    }
+
+    if (target_type.is_error && source_type.kind != TYPE_TAGGED_UNION &&
+        source_type.kind != TYPE_ANY && source_type.kind != TYPE_UNION) {
+        linear_zero(m, target_type, target);
+        OP_PUSH(lir_op_move(indirect_addr_operand(m, type_kind_new(TYPE_UINT64), target, 0),
+                            int_operand(error_type_id(source_type))));
+        lir_operand_t *payload = indirect_addr_operand(m, source_type, target, POINTER_SIZE);
+        if (source_type.storage_kind == STORAGE_KIND_IND) payload = lea_operand_pointer(m, payload);
+        linear_super_move(m, source_type, payload, src_operand);
+        return target;
+    }
+    if (source_type.is_error && target_type.kind != TYPE_ANY &&
+        target_type.kind != TYPE_ANYPTR && target_type.kind != TYPE_UNION) {
+        char *ok = label_ident_with_unique(".inline.cast.ok");
+        OP_PUSH(lir_op_new(LIR_OPCODE_BEE, int_operand(error_type_id(target_type)),
+                           indirect_addr_operand(m, type_kind_new(TYPE_UINT64), src_operand, 0), lir_label_operand(ok, true)));
+        uint16_t depth = m->current_closure->catch_error_labels->count;
+        if (depth) {
+            linear_builtin_error(m, N_ERROR_TYPE_MISMATCH);
+            linear_bal_error(m, stack_top(m->current_closure->catch_error_labels), depth);
+        } else {
+            push_rt_call(m, RT_CALL_ERROR_BAD_CAST, NULL, 0);
+        }
+        OP_PUSH(lir_op_label(ok, true));
+        lir_operand_t *payload = indirect_addr_operand(m, target_type, src_operand, POINTER_SIZE);
+        if (target_type.storage_kind == STORAGE_KIND_IND) payload = lea_operand_pointer(m, payload);
+        return linear_super_move(m, target_type, target, payload);
+    }
+
+    uint64_t src_rtype_hash = type_hash(source_type);
+    uint64_t target_size = target_type.storage_size;
+    uint64_t src_size = source_type.storage_size;
 
     // 数值类型转换
-    if (is_integer(as_expr->target_type.kind) &&
-        as_expr->src.type.kind == TYPE_BOOL) {
+    if (is_integer(target_type.kind) &&
+        source_type.kind == TYPE_BOOL) {
         OP_PUSH(lir_op_uext(target, src_operand));
         return target;
-    } else if (is_integer(as_expr->target_type.kind) &&
-               is_integer(as_expr->src.type.kind)) {
+    } else if (is_integer(target_type.kind) &&
+               is_integer(source_type.kind)) {
         if (target_size > src_size) {
-            if (is_unsigned(as_expr->src.type.kind)) {
+            if (is_unsigned(source_type.kind)) {
                 OP_PUSH(lir_op_uext(target, src_operand));
             } else {
                 OP_PUSH(lir_op_sext(target, src_operand));
@@ -3256,7 +3533,7 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
         }
 
         return target;
-    } else if (is_float(as_expr->target_type.kind) && is_float(as_expr->src.type.kind)) {
+    } else if (is_float(target_type.kind) && is_float(source_type.kind)) {
         if (target_size > src_size) {
             OP_PUSH(lir_op_new(LIR_OPCODE_FEXT, src_operand, NULL, target));
         } else if (target_size < src_size) {
@@ -3265,26 +3542,26 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
             OP_PUSH(lir_op_move(target, src_operand));
         }
         return target;
-    } else if (is_float(as_expr->target_type.kind) && is_unsigned(as_expr->src.type.kind)) {
+    } else if (is_float(target_type.kind) && is_unsigned(source_type.kind)) {
         OP_PUSH(lir_op_new(LIR_OPCODE_UITOF, src_operand, NULL, target));
         return target;
-    } else if (is_float(as_expr->target_type.kind) && is_integer(as_expr->src.type.kind)) {
+    } else if (is_float(target_type.kind) && is_integer(source_type.kind)) {
         OP_PUSH(lir_op_new(LIR_OPCODE_SITOF, src_operand, NULL, target));
         return target;
-    } else if (is_unsigned(as_expr->target_type.kind) && is_float(as_expr->src.type.kind)) {
+    } else if (is_unsigned(target_type.kind) && is_float(source_type.kind)) {
         OP_PUSH(lir_op_new(LIR_OPCODE_FTOUI, src_operand, NULL, target));
         return target;
-    } else if (is_signed(as_expr->target_type.kind) && is_float(as_expr->src.type.kind)) {
+    } else if (is_signed(target_type.kind) && is_float(source_type.kind)) {
         OP_PUSH(lir_op_new(LIR_OPCODE_FTOSI, src_operand, NULL, target));
         return target;
     }
 
     // single type to any type
-    if (as_expr->target_type.kind == TYPE_ANY) {
+    if (target_type.kind == TYPE_ANY) {
         // union -> any: 直接调用 runtime 处理
-        if (as_expr->src.type.kind == TYPE_UNION) {
+        if (source_type.kind == TYPE_UNION) {
             if (!target) {
-                target = temp_var_operand_with_alloc(m, expr.type);
+                target = temp_var_operand_with_alloc(m, target_type);
             }
 
             lir_operand_t *out_ptr = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
@@ -3304,7 +3581,7 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
         }
 
         lir_operand_t *any_value;
-        if (as_expr->src.type.storage_kind == STORAGE_KIND_IND) {
+        if (source_type.storage_kind == STORAGE_KIND_IND) {
             any_value = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
             OP_PUSH(lir_op_move(any_value, src_operand)); // mov pointer
         } else {
@@ -3312,7 +3589,7 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
         }
 
         if (!target) {
-            target = temp_var_operand_with_alloc(m, expr.type);
+            target = temp_var_operand_with_alloc(m, target_type);
         }
 
         lir_operand_t *out_ptr = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
@@ -3329,10 +3606,10 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
     }
 
     // single type to union type
-    if (as_expr->target_type.kind == TYPE_UNION) {
-        assert(as_expr->src.type.kind != TYPE_UNION && as_expr->src.type.kind != TYPE_ANY); // in infer casting
+    if (target_type.kind == TYPE_UNION) {
+        assert(source_type.kind != TYPE_UNION && source_type.kind != TYPE_ANY); // in infer casting
         lir_operand_t *union_value;
-        if (as_expr->src.type.storage_kind == STORAGE_KIND_IND) {
+        if (source_type.storage_kind == STORAGE_KIND_IND) {
             union_value = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
             OP_PUSH(lir_op_move(union_value, src_operand)); // mov pointer
         } else {
@@ -3340,7 +3617,7 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
         }
 
         if (!target) {
-            target = temp_var_operand_with_alloc(m, expr.type);
+            target = temp_var_operand_with_alloc(m, target_type);
         }
 
         lir_operand_t *out_ptr = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
@@ -3355,14 +3632,25 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
     }
 
     // any assert
-    if (as_expr->src.type.kind == TYPE_ANY) {
-        assert(as_expr->target_type.kind != TYPE_ANY);
-        if (as_expr->target_type.storage_kind != STORAGE_KIND_IND) {
+    if (source_type.kind == TYPE_ANY) {
+        assert(target_type.kind != TYPE_ANY);
+        if (m->is_x) {
+            linear_x_type_assert(m, src_operand, type_hash(target_type));
+            lir_operand_t *payload;
+            if (target_type.storage_kind == STORAGE_KIND_IND) {
+                payload = native_pointer(m, indirect_addr_operand(m, type_kind_new(TYPE_ANYPTR), src_operand, offsetof(n_any_t, value)));
+            } else {
+                payload = indirect_addr_operand(m, target_type, src_operand, offsetof(n_any_t, value));
+            }
+            return linear_super_move(m, target_type, target, payload);
+        }
+
+        if (target_type.storage_kind != STORAGE_KIND_IND) {
             // target 可能总是未 def 导致下面的取值异常, 所以最好使用临时值 assert，然后 mov 到 target
-            lir_operand_t *temp = temp_var_operand(m, as_expr->target_type);
+            lir_operand_t *temp = temp_var_operand(m, target_type);
             OP_PUSH(lir_op_nop_def(temp));
             lir_operand_t *output_ref = lea_operand_pointer(m, temp);
-            uint64_t target_rtype_hash = type_hash(as_expr->target_type);
+            uint64_t target_rtype_hash = type_hash(target_type);
             lir_operand_t *any_ptr = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
             OP_PUSH(lir_op_move(any_ptr, src_operand));
             push_rt_call(m, RT_CALL_ANY_ASSERT, NULL, 3, any_ptr, int_operand(target_rtype_hash), output_ref);
@@ -3378,7 +3666,7 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
                 out_src = lea_operand_pointer(m, target);
             }
             OP_PUSH(lir_op_move(output_ref, out_src));
-            uint64_t target_rtype_hash = type_hash(as_expr->target_type);
+            uint64_t target_rtype_hash = type_hash(target_type);
             lir_operand_t *any_ptr = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
             OP_PUSH(lir_op_move(any_ptr, src_operand));
             push_rt_call(m, RT_CALL_ANY_ASSERT, NULL, 3, any_ptr, int_operand(target_rtype_hash), output_ref);
@@ -3388,14 +3676,25 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
     }
 
     // union assert
-    if (as_expr->src.type.kind == TYPE_UNION) {
-        assert(as_expr->target_type.kind != TYPE_UNION);
-        if (as_expr->target_type.storage_kind != STORAGE_KIND_IND) {
+    if (source_type.kind == TYPE_UNION) {
+        assert(target_type.kind != TYPE_UNION);
+        if (m->is_x) {
+            uint64_t target_rtype_hash = type_hash(target_type);
+            linear_x_type_assert(m, src_operand, target_rtype_hash);
+
+            lir_operand_t *payload = indirect_addr_operand(m, target_type, src_operand, POINTER_SIZE);
+            if (target_type.storage_kind == STORAGE_KIND_IND) {
+                payload = lea_operand_pointer(m, payload);
+            }
+            return linear_super_move(m, target_type, target, payload);
+        }
+
+        if (target_type.storage_kind != STORAGE_KIND_IND) {
             // target 可能总是未 def 导致下面的取值异常, 所以最好使用临时值 assert，然后 mov 到 target
-            lir_operand_t *temp = temp_var_operand(m, as_expr->target_type);
+            lir_operand_t *temp = temp_var_operand(m, target_type);
             OP_PUSH(lir_op_nop_def(temp));
             lir_operand_t *output_ref = lea_operand_pointer(m, temp);
-            uint64_t target_rtype_hash = type_hash(as_expr->target_type);
+            uint64_t target_rtype_hash = type_hash(target_type);
             lir_operand_t *union_ptr = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
             OP_PUSH(lir_op_move(union_ptr, src_operand));
             push_rt_call(m, RT_CALL_UNION_ASSERT, NULL, 3, union_ptr, int_operand(target_rtype_hash), output_ref);
@@ -3410,7 +3709,7 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
                 out_src = lea_operand_pointer(m, target);
             }
             OP_PUSH(lir_op_move(output_ref, out_src));
-            uint64_t target_rtype_hash = type_hash(as_expr->target_type);
+            uint64_t target_rtype_hash = type_hash(target_type);
             lir_operand_t *union_ptr = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
             OP_PUSH(lir_op_move(union_ptr, src_operand));
             push_rt_call(m, RT_CALL_UNION_ASSERT, NULL, 3, union_ptr, int_operand(target_rtype_hash), output_ref);
@@ -3419,20 +3718,20 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
         }
     }
 
-    if (as_expr->src.type.kind == TYPE_TAGGED_UNION) {
-        lir_operand_t *payload = indirect_addr_operand(m, as_expr->target_type, src_operand, POINTER_SIZE);
-        if (as_expr->target_type.storage_kind == STORAGE_KIND_IND) {
+    if (source_type.kind == TYPE_TAGGED_UNION) {
+        lir_operand_t *payload = indirect_addr_operand(m, target_type, src_operand, POINTER_SIZE);
+        if (target_type.storage_kind == STORAGE_KIND_IND) {
             payload = lea_operand_pointer(m, payload);
         }
-        return linear_super_move(m, as_expr->target_type, target, payload);
+        return linear_super_move(m, target_type, target, payload);
     }
 
     // interface as
-    if (as_expr->src.type.kind == TYPE_INTERFACE) {
-        assert(as_expr->target_type.kind != TYPE_INTERFACE);
+    if (source_type.kind == TYPE_INTERFACE) {
+        assert(target_type.kind != TYPE_INTERFACE);
 
         lir_operand_t *output_ref;
-        if (as_expr->target_type.storage_kind != STORAGE_KIND_IND) {
+        if (target_type.storage_kind != STORAGE_KIND_IND) {
             // nop_def marks the variable as written by the runtime
             OP_PUSH(lir_op_nop_def(target));
             output_ref = lea_operand_pointer(m, target);
@@ -3446,7 +3745,7 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
             OP_PUSH(lir_op_move(output_ref, out_src));
         }
 
-        uint64_t target_rtype_hash = type_hash(as_expr->target_type);
+        uint64_t target_rtype_hash = type_hash(target_type);
         lir_operand_t *interface_ptr = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
         OP_PUSH(lir_op_move(interface_ptr, src_operand));
         push_rt_call(m, RT_CALL_INTERFACE_ASSERT, NULL, 3, interface_ptr, int_operand(target_rtype_hash), output_ref);
@@ -3454,18 +3753,18 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
         return target;
     }
 
-    if (as_expr->target_type.kind == TYPE_INTERFACE) {
+    if (target_type.kind == TYPE_INTERFACE) {
         // x mode has no gc, interface_casting aliases the method table and the boxed value instead
         bool is_x = m->is_x;
         lir_operand_t *interface_value;
-        if (as_expr->src.type.storage_kind == STORAGE_KIND_IND) {
+        if (source_type.storage_kind == STORAGE_KIND_IND) {
             interface_value = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
             OP_PUSH(lir_op_move(interface_value, src_operand));
         } else {
             interface_value = lea_operand_pointer(m, src_operand);
         }
 
-        type_interface_t *interface_type = as_expr->target_type.interface;
+        type_interface_t *interface_type = target_type.interface;
         lir_operand_t *out_ptr = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
         lir_operand_t *out_src = target;
         if (target->assert_type == LIR_OPERAND_INDIRECT_ADDR || target->assert_type == LIR_OPERAND_SYMBOL_VAR) {
@@ -3473,7 +3772,7 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
         }
         OP_PUSH(lir_op_move(out_ptr, out_src));
 
-        type_t src_type = as_expr->src.type;
+        type_t src_type = source_type;
         if (src_type.ident_kind != TYPE_IDENT_DEF && (src_type.kind == TYPE_REF || src_type.kind == TYPE_PTR)) {
             src_type = src_type.ptr->value_type;
         }
@@ -3544,22 +3843,16 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
     }
 
     // nullable pointer assert
-    if (as_expr->src.type.kind == TYPE_PTR) {
-        // ptr<T> as anyptr
-        if (as_expr->target_type.kind == TYPE_ANYPTR) {
-            OP_PUSH(lir_op_move(target, src_operand));
-            return target;
-        }
-
+    if (source_type.kind == TYPE_PTR) {
         // ptr<T> as ref<T>
-        assert(as_expr->target_type.kind == TYPE_REF);
+        assert(target_type.kind == TYPE_REF);
         push_rt_call(m, RT_CALL_PTR_ASSERT, target, 1, src_operand);
         linear_has_panic(m);
         return target;
     }
 
     // string -> list u8
-    if (as_expr->src.type.kind == TYPE_STRING && is_vec_u8(as_expr->target_type)) {
+    if (source_type.kind == TYPE_STRING && is_vec_u8(target_type)) {
         // OP_PUSH(lir_op_move(target, src_operand));
         lir_operand_t *out_ptr = linear_lea_builtin_value_struct(m, target);
         src_operand = linear_lea_builtin_value_struct(m, src_operand);
@@ -3568,7 +3861,7 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
     }
 
     // list u8 -> string
-    if (is_vec_u8(as_expr->src.type) && as_expr->target_type.kind == TYPE_STRING) {
+    if (is_vec_u8(source_type) && target_type.kind == TYPE_STRING) {
         //        OP_PUSH(lir_op_move(target, src_operand));
         lir_operand_t *out_ptr = linear_lea_builtin_value_struct(m, target);
         src_operand = linear_lea_builtin_value_struct(m, src_operand);
@@ -3576,28 +3869,17 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
         return target;
     }
 
-    if (as_expr->src.type.kind == TYPE_ENUM && is_integer(as_expr->target_type.kind)) {
+    if (source_type.kind == TYPE_ENUM && is_integer(target_type.kind)) {
         OP_PUSH(lir_op_move(target, src_operand));
         return target;
     }
 
-    // anybody to anyptr
-    if (as_expr->target_type.kind == TYPE_ANYPTR) {
-        // 如果类型长度匹配直接进行 mov 即可, arr/struct 则直接 move point 即可
-        if (as_expr->src.type.storage_kind == STORAGE_KIND_DIR && as_expr->src.type.storage_size < POINTER_SIZE) {
-            push_rt_call(m, RT_CALL_ANYPTR_CASTING, target, 1, src_operand);
-        } else {
-            OP_PUSH(lir_op_move(target, src_operand));
-        }
-        return target;
-    }
-
     // anyptr to anybody without float
-    if (as_expr->src.type.kind == TYPE_ANYPTR) {
-        assertf(as_expr->src.type.kind != TYPE_FLOAT64, "anyptr cannot casting to float");
-        assertf(as_expr->src.type.kind != TYPE_FLOAT32, "anyptr cannot casting to float");
+    if (source_type.kind == TYPE_ANYPTR) {
+        assertf(source_type.kind != TYPE_FLOAT64, "anyptr cannot casting to float");
+        assertf(source_type.kind != TYPE_FLOAT32, "anyptr cannot casting to float");
 
-        if (as_expr->target_type.storage_size < POINTER_SIZE) {
+        if (target_type.storage_size < POINTER_SIZE) {
             push_rt_call(m, RT_CALL_CASTING_TO_ANYPTR, target, 1, src_operand);
         } else {
             OP_PUSH(lir_op_move(target, src_operand));
@@ -3605,8 +3887,8 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
         return target;
     }
 
-    assertf(false, "not support as_expr type %s to type %s", type_kind_str[as_expr->src.type.kind],
-            type_kind_str[as_expr->target_type.kind]);
+    assertf(false, "not support as_expr type %s to type %s", type_kind_str[source_type.kind],
+            type_kind_str[target_type.kind]);
     exit(1);
 }
 
@@ -3763,9 +4045,19 @@ static lir_operand_t *linear_catch_expr(module_t *m, ast_expr_t expr, lir_operan
         target = temp_var_operand_with_alloc(m, expr.type);
     }
 
+    error_slot_t *slot = NEW(error_slot_t);
+    slot->type = catch_expr->catch_err.type;
+    slot->value = temp_var_operand_with_alloc(m, slot->type);
+    linear_zero(m, slot->type, slot->value);
+    slot->occupied = temp_var_operand(m, type_kind_new(TYPE_BOOL));
+    OP_PUSH(lir_op_move(slot->occupied, bool_operand(false)));
+    stack_push(m->current_closure->catch_error_slots, slot);
+
     stack_push(m->current_closure->catch_error_labels, catch_start_label);
     linear_expr(m, catch_expr->try_expr, target);
     stack_pop(m->current_closure->catch_error_labels);
+
+    stack_pop(m->current_closure->catch_error_slots);
 
     // 跳过错误处理部分
     lir_op_t *catch_end_label = lir_op_label(catch_end_ident, true);
@@ -3777,7 +4069,8 @@ static lir_operand_t *linear_catch_expr(module_t *m, ast_expr_t expr, lir_operan
     if (has_ret && has_default_operand(m, expr.type)) {
         linear_default_operand(m, expr.type, target);
         has_ret = false; // 设置了默认值之后可以不进行 break check
-    } else {
+    } else if (has_ret && expr.type.storage_kind != STORAGE_KIND_IND) {
+        // Indirect targets already hold the destination address across the catch.
         OP_PUSH(lir_op_nop_def(target));
     }
 
@@ -3786,7 +4079,7 @@ static lir_operand_t *linear_catch_expr(module_t *m, ast_expr_t expr, lir_operan
     // 从 catch expr 中获取 err 然后为 err 赋值
     lir_operand_t *err_operand = linear_var_decl(m, &catch_expr->catch_err);
 
-    push_rt_call(m, RT_CALL_CO_REMOVE_ERROR, err_operand, 0);
+    linear_super_move(m, slot->type, err_operand, slot->value);
 
     stack_push(m->current_closure->ret_labels, catch_end_label->output);
     stack_push(m->current_closure->ret_targets, target);
@@ -3809,9 +4102,19 @@ static void linear_try_catch_stmt(module_t *m, ast_try_catch_stmt_t *try_stmt) {
     bool has_ret = false;
 
 
+    error_slot_t *slot = NEW(error_slot_t);
+    slot->type = try_stmt->catch_err.type;
+    slot->value = temp_var_operand_with_alloc(m, slot->type);
+    linear_zero(m, slot->type, slot->value);
+    slot->occupied = temp_var_operand(m, type_kind_new(TYPE_BOOL));
+    OP_PUSH(lir_op_move(slot->occupied, bool_operand(false)));
+    stack_push(m->current_closure->catch_error_slots, slot);
+
     stack_push(m->current_closure->catch_error_labels, catch_start_label);
     linear_body(m, try_stmt->try_body);
     stack_pop(m->current_closure->catch_error_labels);
+
+    stack_pop(m->current_closure->catch_error_slots);
 
     // 跳过错误处理部分
     lir_op_t *catch_end_label = lir_op_label(catch_end_ident, true);
@@ -3823,7 +4126,7 @@ static void linear_try_catch_stmt(module_t *m, ast_try_catch_stmt_t *try_stmt) {
 
     // 为 err 赋值
     lir_operand_t *err_operand = linear_var_decl(m, &try_stmt->catch_err);
-    push_rt_call(m, RT_CALL_CO_REMOVE_ERROR, err_operand, 0);
+    linear_super_move(m, slot->type, err_operand, slot->value);
 
     stack_push(m->current_closure->ret_labels, catch_end_label->output);
 
@@ -4049,32 +4352,16 @@ static lir_operand_t *linear_fn_decl(module_t *m, ast_expr_t expr, lir_operand_t
 }
 
 static void linear_throw(module_t *m, ast_throw_stmt_t *stmt) {
-    // msg to errort
-    assert(str_equal(stmt->error.type.ident, THROWABLE_IDENT));
-    lir_operand_t *error_operand = linear_expr(m, stmt->error, NULL);
-    lir_operand_t *error_ptr = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
-    OP_PUSH(lir_op_move(error_ptr, error_operand));
-
-    char *error_path = m->current_closure->fndef->rel_path ? m->current_closure->fndef->rel_path : m->rel_path;
-    lir_operand_t *path_operand = string_operand(error_path, strlen(error_path));
-    assert(m->current_closure->fndef->fn_name_with_pkg);
-    lir_operand_t *fn_name_operand = string_operand(m->current_closure->fndef->fn_name_with_pkg,
-                                                    strlen(m->current_closure->fndef->fn_name_with_pkg));
-    lir_operand_t *line_operand = int_operand(m->current_line);
-    lir_operand_t *column_operand = int_operand(m->current_column);
-
-    // attach errort to processor
-    push_rt_call(m, RT_CALL_CO_THROW_ERROR, NULL, 5, error_ptr, path_operand, fn_name_operand,
-                 line_operand,
-                 column_operand);
-
-    linear_unwind_all(m);
-
-    // 插入 return 标识(用来做 return check 的，check 完会清除的)
-    OP_PUSH(lir_op_new(LIR_OPCODE_RETURN, NULL, NULL, NULL));
-
-    // bal to end label
-    OP_PUSH(lir_op_bal(lir_label_operand(m->current_closure->end_label, false)));
+    closure_t *c = m->current_closure;
+    lir_operand_t *value = linear_expr(m, stmt->error, NULL);
+    linear_store_error(m, stmt->error.type, value);
+    if (!stack_empty(c->catch_error_labels)) {
+        linear_bal_error(m, stack_top(c->catch_error_labels), c->catch_error_labels->count);
+    } else {
+        linear_unwind_all(m);
+        OP_PUSH(lir_op_new(LIR_OPCODE_RETURN, linear_result_address(m), NULL, NULL));
+        OP_PUSH(lir_op_bal(lir_label_operand(c->end_label, false)));
+    }
 }
 
 static void linear_stmt(module_t *m, ast_stmt_t *stmt) {
@@ -4343,6 +4630,17 @@ static closure_t *linear_fndef(module_t *m, ast_fndef_t *fndef) {
         OP_PUSH(lir_op_safepoint());
     }
 
+    // Allocate the Result once. Success keeps value(T); throw stores error(E).
+    if (is_result_fn(fndef->type.fn)) {
+        lir_operand_t *result = temp_var_operand(m, fndef->return_type);
+        lir_op_t *allocation = lir_stack_alloc(c, fndef->return_type, result);
+        c->result_storage = allocation->first;
+        OP_PUSH(allocation);
+        linear_zero(m, fndef->return_type, result);
+        OP_PUSH(lir_op_move(indirect_addr_operand(m, type_kind_new(TYPE_UINT64), result, 0),
+                            int_operand(hash_string(ERRABLE_VALUE_TAG))));
+    }
+
     // 参数 escape rewrite
     for (int i = 0; i < fndef->params->length; ++i) {
         ast_var_decl_t *var_decl = ct_list_value(fndef->params, i);
@@ -4356,10 +4654,16 @@ static closure_t *linear_fndef(module_t *m, ast_fndef_t *fndef) {
     OP_PUSH(lir_op_bal(lir_label_operand(c->end_label, true)));
 
     OP_PUSH(lir_op_label(c->error_label, true));
-    OP_PUSH(lir_op_new(LIR_OPCODE_RETURN, NULL, NULL, NULL)); // 方便 return check
+    // The error variant is already stored; return it directly.
+    OP_PUSH(lir_op_new(LIR_OPCODE_RETURN, linear_result_address(m), NULL, NULL)); // 方便 return check
     OP_PUSH(lir_op_bal(lir_label_operand(c->end_label, true))); // bal end
 
     OP_PUSH(lir_op_label(c->end_label, true));
+
+    // An errable void function falls through with value(void).
+    if (c->result_storage && c->fndef->errable_value_type.kind == TYPE_VOID) {
+        OP_PUSH(lir_op_new(LIR_OPCODE_RETURN, linear_result_address(m), NULL, NULL));
+    }
 
     //    OP_PUSH(lir_op_safepoint());
     // lower 的时候需要进行特殊的处理(return_operand 为了让 ssa use-def 链条完整)

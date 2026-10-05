@@ -200,7 +200,7 @@ static inline void on_tcp_write_end_cb(uv_write_t *write_req, int status) {
     inner_conn_t *conn = write_req->data;
     if (status < 0) {
         // 对端可能已经关闭了连接,导致写入失败等情况
-        char *msg = tlsprintf("uv_write failed: %s", uv_strerror(status));
+        const char *msg = "uv_write failed: %s";
         DEBUGF("[on_tcp_write_end_cb] failed: %s, co=%p", msg, conn->co);
     }
 
@@ -244,7 +244,7 @@ void uv_async_tcp_read(inner_conn_t *conn) {
 int64_t rt_uv_tcp_read(n_tcp_conn_t *n_conn, n_vec_t buf) {
     coroutine_t *co = coroutine_get();
     if (n_conn->closed) {
-        rti_co_throw(co, "conn closed", false);
+        rti_co_throw(co, native_error(N_ERROR_CLOSED), NULL);
         return 0;
     }
 
@@ -267,15 +267,15 @@ int64_t rt_uv_tcp_read(n_tcp_conn_t *n_conn, n_vec_t buf) {
     conn_release(conn);
 
     if (closed) {
-        rti_co_throw(co, "conn closed", false);
+        rti_co_throw(co, native_error(N_ERROR_CLOSED), NULL);
         return 0;
     }
     if (read_len == UV_ETIMEDOUT) {
-        rti_co_throw(co, "tcp read timeout", false);
+        rti_co_throw(co, native_error(N_ERROR_TIMEOUT), NULL);
         return 0;
     }
     if (read_len < 0) {
-        rti_co_throw(co, uv_strerror(read_len), false);
+        rti_co_throw(co, native_uv_error(read_len), NULL);
         return 0;
     }
 
@@ -291,7 +291,7 @@ static void uv_async_tcp_write(inner_conn_t *conn) {
 
     int result = uv_write(&conn->write_req, (uv_stream_t *) &conn->handle, &write_buf, 1, on_tcp_write_end_cb);
     if (result < 0) {
-        rti_co_throw(conn->co, tlsprintf("tcp write failed: %s", uv_strerror(result)), false);
+        rti_co_throw(conn->co, native_uv_error(result), NULL);
         DEBUGF("[rt_uv_tcp_write] co=%p, tcp write failed: %s", conn->co, uv_strerror(result));
         co_ready(conn->co);
     }
@@ -300,7 +300,7 @@ static void uv_async_tcp_write(inner_conn_t *conn) {
 int64_t rt_uv_tcp_write(n_tcp_conn_t *n_conn, n_vec_t buf) {
     coroutine_t *co = coroutine_get();
     if (n_conn->closed) {
-        rti_co_throw(co, "conn closed", false);
+        rti_co_throw(co, native_error(N_ERROR_CLOSED), NULL);
         return 0;
     }
 
@@ -332,7 +332,7 @@ static inline void on_tcp_connect_cb(uv_connect_t *conn_req, int status) {
 
     if (status < 0) {
         DEBUGF("[on_tcp_connect_cb] connection failed: %s", uv_strerror(status));
-        rti_co_throw(conn->co, tlsprintf("connection failed: %s", uv_strerror(status)), false);
+        rti_co_throw(conn->co, native_uv_error(status), NULL);
     }
 
     co_ready(conn->co);
@@ -347,7 +347,7 @@ static inline void on_tcp_timeout_cb(uv_timer_t *handle) {
     uv_timer_stop(handle);
     uv_close((uv_handle_t *) handle, on_conn_close_timer_cb);
 
-    rti_co_throw(conn->co, "connection timeout", 0);
+    rti_co_throw(conn->co, native_error(N_ERROR_TIMEOUT), NULL);
     co_ready(conn->co);
 }
 
@@ -361,7 +361,7 @@ static void uv_async_tcp_connect(inner_conn_t *conn, struct sockaddr_in *dest, n
     free(dest);
 
     if (result < 0) {
-        rti_co_throw(conn->co, tlsprintf("connection failed: %s", uv_strerror(result)), false);
+        rti_co_throw(conn->co, native_uv_error(result), NULL);
         uv_close((uv_handle_t *) &conn->handle, on_conn_close_handle_cb);
         uv_close((uv_handle_t *) &conn->timer, on_conn_close_timer_cb);
         return;
@@ -414,7 +414,7 @@ void rt_uv_tcp_accept(n_tcp_server_t *server, n_tcp_conn_t *n_conn) {
     DEBUGF("[rt_uv_tcp_accept] accept start, co=%p", co)
 
     if (server->closed) {
-        rti_co_throw(co, "server closed", false);
+        rti_co_throw(co, native_error(N_ERROR_CLOSED), NULL);
         return;
     }
     inner_server_t *inner_server = server->inner;
@@ -431,7 +431,7 @@ void rt_uv_tcp_accept(n_tcp_server_t *server, n_tcp_conn_t *n_conn) {
             if (inner_server->accept_waiters == 0) {
                 free_conn(inner_server);
             }
-            rti_co_throw(co, "server closed", false);
+            rti_co_throw(co, native_error(N_ERROR_CLOSED), NULL);
             return;
         }
         if (inner_server->accept_head == NULL) {
@@ -522,7 +522,7 @@ static void uv_async_tcp_listen(n_tcp_server_t *server) {
     int result = uv_listen((uv_stream_t *) &server->inner->handle, DEFAULT_BACKLOG, on_tcp_conn_cb);
     if (result) {
         // 端口占用等错误
-        rti_co_throw(server->inner->listen_co, tlsprintf("listen failed: %s", uv_strerror(result)), false);
+        rti_co_throw(server->inner->listen_co, native_uv_error(result), NULL);
         return;
     }
 

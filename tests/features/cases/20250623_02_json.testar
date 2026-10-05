@@ -23,7 +23,12 @@ import json
 fn main() {
     var s = `-12`
     var b = json.deserialize<bool>(s) catch e {
-        panic(e.msg())
+        assert(e is json.syntax_error_t)
+        var syntax = e as json.syntax_error_t
+        assert(syntax.kind == json.error_t.EXPECTED_BOOLEAN)
+        assert(syntax.position == 0)
+        println('syntax error verified')
+        return
         false
     }
     println(b)
@@ -33,8 +38,9 @@ fn main() {
     println(b)
 }
 
+
 --- output.txt
-panic: 'expected boolean value at position 0' at nature-test/main.n:6:15
+syntax error verified
 
 === test_deserialize_u8_string
 --- main.n
@@ -43,7 +49,7 @@ import json
 fn main() {
     var s = `12`
     var b = json.deserialize<u8>(s) catch e {
-        panic(e.msg())
+        panic(describe_error(e))
         0
     }
     println(b)
@@ -57,6 +63,18 @@ fn main() {
     println(str)
 }
 
+
+// Render diagnostics explicitly after catch; throw only carries enum values.
+fn describe_error(errort e):string {
+    if e == runtime_error_t.END_OF_FILE { return 'EOF' }
+    if e == runtime_error_t.TIMEOUT { return 'tcp read timeout' }
+    if e == runtime_error_t.CLOSED { return 'conn closed' }
+    if e == runtime_error_t.INDEX_OUT_OF_RANGE { return 'index out of range' }
+    if e == runtime_error_t.TYPE_MISMATCH { return 'type assert failed' }
+    if e == runtime_error_t.NULL_POINTER { return 'invalid memory address or nil pointer dereference' }
+    if e == runtime_error_t.KEY_NOT_FOUND { return 'key not found in map' }
+    return 'operation failed'
+}
 --- output.txt
 12
 232
@@ -121,14 +139,20 @@ fn main() {
     }
 
     var f = json.deserialize<foo_t>(s) catch e {
-        panic(e.msg())
+        assert(e is json.syntax_error_t)
+        var syntax = e as json.syntax_error_t
+        assert(syntax.kind == json.error_t.EXPECTED_TOKEN)
+        assert(syntax.position == 27)
+        println('syntax error verified')
+        return
         foo_t{}
     }
     println(f.key1, f.key[0], f.key[1], f.key[2], f.key_1)
 }
 
+
 --- output.txt
-panic: 'expected `"` at position 27' at nature-test/main.n:14:15
+syntax error verified
 
 === test_deserialize_struct
 --- main.n

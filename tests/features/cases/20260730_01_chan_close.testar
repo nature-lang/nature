@@ -4,12 +4,12 @@ import co
 
 type wait_state_t = struct{
     bool done
-    string error
+    bool closed
 }
 
 fn receive(chan<int> input, ref<wait_state_t> state) {
     input.recv() catch e {
-        state.error = e.msg()
+        state.closed = e == runtime_error_t.CLOSED
         0
     }
     state.done = true
@@ -17,7 +17,7 @@ fn receive(chan<int> input, ref<wait_state_t> state) {
 
 fn send(chan<int> output, ref<wait_state_t> state) {
     output.send(1) catch e {
-        state.error = e.msg()
+        state.closed = e == runtime_error_t.CLOSED
     }
     state.done = true
 }
@@ -31,7 +31,7 @@ fn main() {
     for !receive_state.done {
         co.sleep(1)
     }
-    assert(receive_state.error == 'recv on closed channel')
+    assert(receive_state.closed)
 
     var send_channel = chan<int>.new()
     var send_state = new wait_state_t()
@@ -41,5 +41,5 @@ fn main() {
     for !send_state.done {
         co.sleep(1)
     }
-    assert(send_state.error == 'send on closed channel')
+    assert(send_state.closed)
 }

@@ -1,9 +1,15 @@
 import co
 
+type test_error_t:errort = enum {
+    DIVISOR_CANNOT_BE0,
+    IN_CLOSURE_ERR,
+}
+
+
 fn div(i32 dividend, i32 divisor):i32! {
     co.sleep(500)
     if (divisor == 0) {
-        throw errorf('divisor cannot be 0')
+        throw test_error_t.DIVISOR_CANNOT_BE0
     }
 
     return dividend / divisor
@@ -14,17 +20,17 @@ fn main() {
     var fut = @async(fn():void! {
         println('in closure fn')
         co.sleep(1000)
-        throw errorf('in closure err')
+        throw test_error_t.IN_CLOSURE_ERR
     }(), co.SAME)
 
     fut.await_void() catch err {
-        println('fut.await catch err: ' + err.msg())
+        println('fut.await catch err: ' + describe_error(err))
     }
 
     // 2.
     var fut2 = go div(10, 0)
     var result = fut2.await() catch err {
-        println('dive catch err: ' + err.msg())
+        println('dive catch err: ' + describe_error(err))
         10
     }
     println('div result', result)
@@ -35,4 +41,17 @@ fn main() {
 
     co.sleep(1000)
     println('main done')
+}
+// Render diagnostics explicitly after catch; throw only carries enum values.
+fn describe_error(errort e):string {
+    if e == test_error_t.DIVISOR_CANNOT_BE0 { return 'divisor cannot be 0' }
+    if e == test_error_t.IN_CLOSURE_ERR { return 'in closure err' }
+    if e == runtime_error_t.END_OF_FILE { return 'EOF' }
+    if e == runtime_error_t.TIMEOUT { return 'tcp read timeout' }
+    if e == runtime_error_t.CLOSED { return 'conn closed' }
+    if e == runtime_error_t.INDEX_OUT_OF_RANGE { return 'index out of range' }
+    if e == runtime_error_t.TYPE_MISMATCH { return 'type assert failed' }
+    if e == runtime_error_t.NULL_POINTER { return 'invalid memory address or nil pointer dereference' }
+    if e == runtime_error_t.KEY_NOT_FOUND { return 'key not found in map' }
+    return 'operation failed'
 }

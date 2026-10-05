@@ -1,13 +1,19 @@
+
+type test_error_t:errort = enum {
+    ERR_IN_THROW1,
+    ERR_IN_THROW2,
+}
+
 fn throw1():void! {
-    throw errorf('err in throw1')
+    throw test_error_t.ERR_IN_THROW1
 }
 
 fn throw2():void! {
-    throw errorf('err in throw2')
+    throw test_error_t.ERR_IN_THROW2
 }
 
 fn throw3():void! {
-    throw errorf('err in throw2')
+    throw test_error_t.ERR_IN_THROW2
 }
 
 fn main():void! {
@@ -16,12 +22,25 @@ fn main():void! {
         try {
             throw1()
         } catch e {
-            println('nested catch err:', e.msg())
+            println('nested catch err:', describe_error(e))
 
             throw2()
         }
     } catch e {
-        println('catch err', e.msg())
+        println('catch err', describe_error(e))
         throw3()
     }
+}
+// Render diagnostics explicitly after catch; throw only carries enum values.
+fn describe_error(errort e):string {
+    if e == test_error_t.ERR_IN_THROW1 { return 'err in throw1' }
+    if e == test_error_t.ERR_IN_THROW2 { return 'err in throw2' }
+    if e == runtime_error_t.END_OF_FILE { return 'EOF' }
+    if e == runtime_error_t.TIMEOUT { return 'tcp read timeout' }
+    if e == runtime_error_t.CLOSED { return 'conn closed' }
+    if e == runtime_error_t.INDEX_OUT_OF_RANGE { return 'index out of range' }
+    if e == runtime_error_t.TYPE_MISMATCH { return 'type assert failed' }
+    if e == runtime_error_t.NULL_POINTER { return 'invalid memory address or nil pointer dereference' }
+    if e == runtime_error_t.KEY_NOT_FOUND { return 'key not found in map' }
+    return 'operation failed'
 }

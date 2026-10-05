@@ -6,11 +6,23 @@ fn main():void! {
     user.register('xiaoyou', 'nanana456')
 
 	user.register('xiaoyou', 'nanana789') catch err {
-		println(err.msg())
+		println(describe_error(err))
 	}
 
     var foo = user.find('xiaoyou')
     println(foo.username, '-', foo.password)
 
     println('current user count=', user.list.len())
+}
+// Render diagnostics explicitly after catch; throw only carries enum values.
+fn describe_error(errort e):string {
+    if e == user.error_t.ALREADY_REGISTERED { return 'The user xiaoyou has already registered' }
+    if e == runtime_error_t.END_OF_FILE { return 'EOF' }
+    if e == runtime_error_t.TIMEOUT { return 'tcp read timeout' }
+    if e == runtime_error_t.CLOSED { return 'conn closed' }
+    if e == runtime_error_t.INDEX_OUT_OF_RANGE { return 'index out of range' }
+    if e == runtime_error_t.TYPE_MISMATCH { return 'type assert failed' }
+    if e == runtime_error_t.NULL_POINTER { return 'invalid memory address or nil pointer dereference' }
+    if e == runtime_error_t.KEY_NOT_FOUND { return 'key not found in map' }
+    return 'operation failed'
 }

@@ -16,7 +16,8 @@
 #define POINTER_SIZE sizeof(void *)
 #endif
 
-#define THROWABLE_IDENT "throwable"
+#define ERRABLE_IDENT "errable"
+// Shared tagged Result definition in std/builtin/error.n.
 
 #define ALL_T_IDENT "all_t"
 #define FN_T_IDENT "fn_t"
@@ -308,6 +309,7 @@ typedef struct type_t {
         type_interface_t *interface;
     };
 
+    bool is_error; // builtin errort: type identity + inline value, no vtable
     type_kind kind;
     reduction_status_t status;
     // type_alias + args 进行 reduction 还原之前，将其参数缓存下来
@@ -415,6 +417,10 @@ struct type_struct_t {
     list_t *properties; // struct_property_t
 };
 
+#define ERRABLE_ERROR_TAG "error"
+#define ERRABLE_VALUE_TAG "value"
+
+
 typedef struct {
     char *tag;
     type_t type;
@@ -464,6 +470,11 @@ struct type_enum_t {
 struct type_fn_t {
     char *fn_name; // 可选的函数名称，并不是所有的函数类型都能改得到函数名称
     type_t return_type;
+    // For a Result fn, return_type is errable<T,E> and this is the declared T, so a call
+    // expression still types as T. Unset for a non-errable fn.
+    type_t errable_value_type;
+    type_t errable_error_type;
+    bool native_errable; // C linkid keeps its T ABI; compiler bridges the native error slot
     list_t *param_types; // type_t
     bool is_rest;
     bool is_c_variadic;
@@ -472,6 +483,37 @@ struct type_fn_t {
     bool is_tpl;
     int self_kind;
 };
+
+static inline bool is_result_fn(type_fn_t *f) {
+    return f && f->is_errable && !f->native_errable;
+}
+
+#define ERROR_INLINE_BYTES 24
+#define RUNTIME_ERROR_TYPE_ID 1
+#define SYSTEM_ERROR_TYPE_ID 2
+
+typedef enum {
+    N_ERROR_FAILED = 1,
+    N_ERROR_INVALID_ARGUMENT = 2,
+    N_ERROR_INDEX_OUT_OF_RANGE = 3,
+    N_ERROR_TYPE_MISMATCH = 4,
+    N_ERROR_NULL_POINTER = 5,
+    N_ERROR_EOF = 6,
+    N_ERROR_TIMEOUT = 7,
+    N_ERROR_CLOSED = 8,
+    N_ERROR_CANCELLED = 9,
+    N_ERROR_KEY_NOT_FOUND = 10,
+} native_error_code_t;
+
+typedef struct {
+    uint64_t type_id;
+    uint64_t payload[ERROR_INLINE_BYTES / POINTER_SIZE];
+} n_error_t;
+
+typedef struct {
+    uint64_t tag_hash;
+    n_error_t error;
+} n_void_result_t;
 
 // 类型描述信息 end
 
@@ -599,17 +641,6 @@ typedef struct {
     int64_t method_count;
 } n_interface_t;
 
-typedef struct {
-    n_string_t path;
-    n_string_t ident;
-    n_int_t line;
-    n_int_t column;
-} n_trace_t;
-
-typedef struct {
-    n_string_t msg;
-    uint8_t panic;
-} n_errort;
 
 /**
  * 将 ct_rtypes 填入到 ct_rtypes 中并返回索引
@@ -744,10 +775,6 @@ static inline type_t type_array_new(type_kind element_type_kind, uint64_t length
     t->length = length;
     t->element_type = type_kind_new(element_type_kind);
     return type_new(TYPE_ARR, t);
-}
-
-static inline type_t interface_throwable() {
-    return type_ident_new(THROWABLE_IDENT, TYPE_IDENT_INTERFACE);
 }
 
 static inline bool must_assign_value(type_t t) {

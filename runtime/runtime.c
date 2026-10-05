@@ -15,9 +15,9 @@ extern wchar_t **CommandLineToArgvW(const wchar_t *command_line,
 #include "sysmon.h"
 
 #ifdef __DARWIN
-extern void user_main(void) __asm("_main.main");
+extern n_void_result_t user_main(void) __asm("_main.main");
 #else
-extern void user_main(void) __asm("main.main");
+extern n_void_result_t user_main(void) __asm("main.main");
 #endif
 
 static _Atomic bool fn_mode_inited = false;
@@ -71,7 +71,7 @@ int runtime_main(int argc, char *argv[]) {
         fn_depend_init(true);
 
         // - 提取 main 进行 coroutine 创建调度
-        coroutine_t *main_co = rt_coroutine_new((void *) user_main, FLAG(CO_FLAG_MAIN) | FLAG(CO_FLAG_DIRECT), NULL,
+        coroutine_t *main_co = rt_coroutine_new((void *) user_main, FLAG(CO_FLAG_MAIN) | FLAG(CO_FLAG_DIRECT) | FLAG(CO_FLAG_RESULT), NULL,
                                                 NULL);
         rt_coroutine_dispatch(main_co);
         RDEBUGF("[runtime_main] main_co dispatch success");
@@ -81,9 +81,16 @@ int runtime_main(int argc, char *argv[]) {
 
         DEBUGF("[runtime_main] fn mode user code run completed, will exit");
     } else {
-        // x mode: call user_main directly, no GC and no scheduler
+        // x mode: call user_main directly, no GC and no scheduler.
+        // main returns errable<void,errort>, just like .n user functions.
         DEBUGF("[runtime_main] x mode, calling user_main directly");
-        user_main();
+        n_void_result_t result = user_main();
+        if (result.tag_hash == hash_string(ERRABLE_ERROR_TAG)) {
+            int32_t code = 0;
+            memcpy(&code, result.error.payload, sizeof(code));
+            fprintf(stderr, "uncaught error: type=%llu code=%d\n", (unsigned long long) result.error.type_id, code);
+            return 1;
+        }
         DEBUGF("[runtime_main] x mode user code run completed, will exit");
     }
 

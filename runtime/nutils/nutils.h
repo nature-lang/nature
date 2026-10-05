@@ -47,15 +47,15 @@ int64_t iterator_next_value(void *iterator, int64_t hash, int64_t cursor, void *
 
 void iterator_take_value(void *iterator, int64_t hash, int64_t cursor, void *value_ref);
 
-void co_throw_error(n_interface_t *error, char *path, char *fn_name, n_int_t line, n_int_t column);
+void error_bad_cast(void);
 
-void throw_index_out_error(n_int_t *index, n_int_t *len, n_bool_t be_catch);
+void throw_index_out_error(n_int_t index, n_int_t len, n_bool_t be_catch);
 
-n_interface_t co_remove_error();
+void co_remove_error(n_error_t *out);
 
-uint8_t co_has_error(char *path, char *fn_name, n_int_t line, n_int_t column);
+uint8_t co_has_error(void);
 
-uint8_t co_has_panic(bool be_catch, char *path, char *fn_name, n_int_t line, n_int_t column);
+uint8_t co_has_panic(bool be_catch, char *path, n_int_t line, n_int_t column);
 
 n_anyptr_t anyptr_casting(value_casting v);
 
@@ -85,6 +85,12 @@ void rt_assert(n_bool_t cond);
 
 // allocate array data by element rtype hash
 n_anyptr_t rt_array_new(int64_t element_hash, int64_t length);
+
+// Uncaught .x bounds checks report the source site without coroutine state.
+void rt_x_index_panic(n_int_t index, n_int_t len, char *path, n_int_t line, n_int_t column);
+
+// Generic uncaught panic for .x checks that do not need interpolated operands.
+void rt_x_panic(char *msg, char *path, n_int_t line, n_int_t column);
 
 n_vec_t unsafe_vec_new(int64_t hash, int64_t element_hash, int64_t len, void *data_ptr);
 

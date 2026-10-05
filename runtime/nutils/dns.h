@@ -1,6 +1,7 @@
 #ifndef NATURE_RUNTIME_NUTILS_DNS_H_
 #define NATURE_RUNTIME_NUTILS_DNS_H_
 #include "runtime/processor.h"
+#include "runtime/rtype.h"
 #include "runtime/uv_compat.h"
 
 typedef struct {
@@ -13,7 +14,7 @@ static inline void on_dns_resolved_cb(uv_getaddrinfo_t *req, int status, struct 
     DEBUGF("[on_dns_resolved_cb] co: %p, status: %d", co, status);
 
     if (status < 0) {
-        rti_co_throw(co, (char *) uv_strerror(status), false);
+        rti_co_throw(co, native_uv_error(status), NULL);
         co_ready(co);
         return;
     }
@@ -57,7 +58,7 @@ void uv_async_getaddrinfo_register(uv_getaddrinfo_t *req, dns_ctx_t *ctx) {
     int result = uv_getaddrinfo(&global_loop, req, on_dns_resolved_cb, rt_string_ref(&ctx->host), NULL, &hints);
     if (result) {
         DEBUGF("[uv_async_getaddrinfo_register] uv_getaddrinfo failed: %s, co=%p", uv_strerror(result), req->data);
-        rti_co_throw(req->data, tlsprintf("resolve %s failed: %s", rt_string_ref(&ctx->host), uv_strerror(result)), false);
+        rti_co_throw(req->data, native_uv_error(result), NULL);
         co_ready(req->data);
         return;
     }

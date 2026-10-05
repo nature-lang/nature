@@ -493,8 +493,9 @@ static char *_type_format_visited(type_t t, struct sc_map_s64 *visited) {
     } else if (t.kind == TYPE_FN) {
         if (t.fn) {
             char *fn_prefix = t.fn->is_x ? "xfn" : "fn";
-            if (t.fn->is_errable) {
-                result = dsprintf("%s(...):%s!", fn_prefix, type_format_visited(t.fn->return_type, visited));
+            if (t.fn->is_errable && t.fn->errable_error_type.is_error) {
+                type_t value = t.fn->errable_value_type.kind ? t.fn->errable_value_type : t.fn->return_type;
+                result = dsprintf("%s(...):%s!", fn_prefix, type_format_visited(value, visited));
             } else {
                 result = dsprintf("%s(...):%s", fn_prefix, type_format_visited(t.fn->return_type, visited));
             }

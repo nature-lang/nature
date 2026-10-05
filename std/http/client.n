@@ -10,6 +10,11 @@ import io.buf
 import json
 import co
 
+pub type error_t:errort = enum {
+    READ_TIMEOUT,
+}
+
+
 pub type multipart_item_t = struct{
     string name
     string filename 
@@ -325,8 +330,8 @@ pub fn request_t.send(&self):ref<response_t>! {
             }
         }
     } catch e {
-        if e.msg() == 'tcp read timeout' {
-            throw errorf('HTTP response read timeout')
+        if e == runtime_error_t.TIMEOUT {
+            throw error_t.READ_TIMEOUT
         }
         throw e
     }
@@ -376,8 +381,8 @@ pub fn response_t.read(&self, [u8] buf):int! {
     try {
         return self.buf_conn.read(buf)
     } catch e {
-        if e.msg() == 'tcp read timeout' {
-            throw errorf('HTTP response read timeout')
+        if e == runtime_error_t.TIMEOUT {
+            throw error_t.READ_TIMEOUT
         }
         throw e
     }
@@ -515,7 +520,7 @@ fn chunked_reader_t.fill_staging(&self):void! {
             continue
         }
 
-        throw errorf('EOF')
+        throw runtime_error_t.END_OF_FILE
     }
 }
 
@@ -524,7 +529,7 @@ fn chunked_reader_t.read(&self, [u8] dst):int! {
         if self.s_r < self.s_w {
             return 0
         }
-        throw errorf('EOF')
+        throw runtime_error_t.END_OF_FILE
     }
 
     if self.s_r == self.s_w {

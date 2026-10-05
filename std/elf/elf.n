@@ -1,6 +1,11 @@
 mod elf
-
 import syscall
+
+pub type error_t:errort = enum {
+    EMPTY_PATH,
+    INVALID_FILE,
+}
+
 
 int EI_MAG0 = 0
 u8 ELFMAG0 = 0x7f
@@ -39,7 +44,7 @@ type elf64_ehdr_t = struct {
 
 pub fn arch(string path):string! {
     if path == '' {
-        throw errorf('path is empty')
+        throw error_t.EMPTY_PATH
     }
 
     int fd = syscall.open(path, syscall.O_RDONLY, 0)
@@ -53,7 +58,7 @@ pub fn arch(string path):string! {
        elf_header.ident[EI_MAG2] != ELFMAG2 ||
        elf_header.ident[EI_MAG3] != ELFMAG3 {
 
-       throw errorf('not a valid elf file')
+       throw error_t.INVALID_FILE
     }
 
     // 读取常用的 arch 并解析成字符串返回

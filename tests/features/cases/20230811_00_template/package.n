@@ -3,6 +3,11 @@ mod package
 import syscall
 import package.zlib
 
+type test_error_t:errort = enum {
+    WRITE_FAILED,
+}
+
+
 fn main():void! {
     var input = 'mock/input.txt'
     var output = 'output.gz'
@@ -24,7 +29,7 @@ fn main():void! {
             syscall.close(fd)
             zlib.gzclose(gzfile)
 
-            throw errorf('write failed')
+            throw test_error_t.WRITE_FAILED
         }
 
         println('gz write success, len:', write_len)

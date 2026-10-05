@@ -79,10 +79,15 @@ hello nature
 import fs
 import syscall
 
+type test_error_t:errort = enum {
+    WRITE_TO_TEST_TXT_FAILED,
+}
+
+
 fn main():void! {
     var f = fs.open('./test.txt', syscall.O_RDONLY, 0)
     f.write('write data hahaha' as [u8]) catch err {
-        throw errorf('write to test.txt failed:' + err.msg())
+        throw test_error_t.WRITE_TO_TEST_TXT_FAILED
     }
 }
 
@@ -92,7 +97,9 @@ hello world in test.txt
 hello nature in test.txt
 
 --- output.txt
-coroutine 'main' uncaught error: 'write to test.txt failed:bad file descriptor' at nature-test/main.n:7:52
+
+--- status.txt
+1
 
 === test_close
 --- main.n
@@ -108,7 +115,9 @@ fn main():void! {
 hello world
 
 --- output.txt
-coroutine 'main' uncaught error: 'fd already closed' at nature-test/main.n:7:23
+
+--- status.txt
+1
 
 === test_read_at
 --- main.n

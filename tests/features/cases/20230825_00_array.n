@@ -31,7 +31,7 @@ fn main() {
 
     var b = a1[0]
     var b1 = a1[5] catch err {
-        println(err.msg())
+        println(describe_error(err))
         0
     }
     println(b, b1, a1[0])
@@ -55,7 +55,7 @@ fn main() {
     println(a3[0][0], a3[0][1], a3[0][2], a3[1][0], a3[1][1], a3[1][2])
 
     var r1 = a3[0][5] catch err {
-        println(err.msg())
+        println(describe_error(err))
         0
     }
 
@@ -75,4 +75,15 @@ fn main() {
     p.foo[7] = 987
     p.bar = true
     println(p.foo[0], p.foo[7], p.dog.a, p.car.b, p.egg.len(), p.bar)
+}
+// Render diagnostics explicitly after catch; throw only carries enum values.
+fn describe_error(errort e):string {
+    if e == runtime_error_t.END_OF_FILE { return 'EOF' }
+    if e == runtime_error_t.TIMEOUT { return 'tcp read timeout' }
+    if e == runtime_error_t.CLOSED { return 'conn closed' }
+    if e == runtime_error_t.INDEX_OUT_OF_RANGE { return 'index out of range' }
+    if e == runtime_error_t.TYPE_MISMATCH { return 'type assert failed' }
+    if e == runtime_error_t.NULL_POINTER { return 'invalid memory address or nil pointer dereference' }
+    if e == runtime_error_t.KEY_NOT_FOUND { return 'key not found in map' }
+    return 'operation failed'
 }

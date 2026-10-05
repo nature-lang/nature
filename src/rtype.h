@@ -383,6 +383,12 @@ static inline rtype_t rtype_set(type_t t) {
 }
 
 static inline rtype_t rtype_interface(type_t t) {
+    if (t.is_error) {
+        rtype_t r = {.gc_heap_size = sizeof(n_error_t), .hash = type_hash(t), .kind = TYPE_INTERFACE, .last_ptr = sizeof(n_error_t), .hashes_offset = -1, .malloc_gc_bits_offset = data_put(NULL, calc_gc_bits_size(sizeof(n_error_t), POINTER_SIZE))};
+        for (int i = 1; i < 4; ++i) bitmap_set(CTDATA(r.malloc_gc_bits_offset), i);
+        return r;
+    }
+
     rtype_t rtype = {
             .gc_heap_size = POINTER_SIZE * 4, // element_rtype + value(并不知道 value 的类型)
             .hash = type_hash(t),
@@ -656,6 +662,7 @@ static inline int64_t rtype_tagged_union_gc_bits(int64_t gc_bits_offset, int64_t
 }
 
 static inline int64_t rtype_builtin_gc_bits(int64_t gc_bits_offset, int64_t *offset, type_t t) {
+    if (t.is_error) return rtype_tagged_union_gc_bits(gc_bits_offset, offset, sizeof(n_error_t));
     int64_t ptr_slots = 0;
     if (t.kind == TYPE_STRING || t.kind == TYPE_VEC) {
         ptr_slots = 1;

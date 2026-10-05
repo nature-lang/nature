@@ -248,7 +248,7 @@ bool rt_chan_send(n_chan_t *chan, void *msg_ptr, bool try) {
     pthread_mutex_lock(&chan->lock);
 
     if (chan->closed) {
-        rti_throw("send on closed channel", false);
+        rti_throw(native_error(N_ERROR_CLOSED), NULL);
         pthread_mutex_unlock(&chan->lock);
         return false;
     }
@@ -274,7 +274,7 @@ bool rt_chan_send(n_chan_t *chan, void *msg_ptr, bool try) {
     }
 
     if (chan->closed) {
-        rti_throw("send on closed channel", false);
+        rti_throw(native_error(N_ERROR_CLOSED), NULL);
         pthread_mutex_unlock(&chan->lock);
         return false;
     }
@@ -305,7 +305,7 @@ bool rt_chan_send(n_chan_t *chan, void *msg_ptr, bool try) {
 
     // 已经 send 完成，也可能是 chan closed
     if (!success) {
-        rti_throw("send on closed channel", false);
+        rti_throw(native_error(N_ERROR_CLOSED), NULL);
         return false;
     }
 
@@ -379,7 +379,7 @@ bool rt_chan_recv(n_chan_t *chan, void *msg_ptr, bool try) {
 
     DEBUGF("[rt_chan_recv] sendq empty, will yield to waiting")
     if (chan->closed) {
-        rti_throw("recv on closed channel", false);
+        rti_throw(native_error(N_ERROR_CLOSED), NULL);
         pthread_mutex_unlock(&chan->lock);
         return false;
     }
@@ -407,7 +407,7 @@ bool rt_chan_recv(n_chan_t *chan, void *msg_ptr, bool try) {
     rti_release_linkco(linkco);
 
     if (!success) {
-        rti_throw("recv on closed channel", false);
+        rti_throw(native_error(N_ERROR_CLOSED), NULL);
         return false;
     }
 
@@ -421,7 +421,7 @@ void rt_chan_close(n_chan_t *chan) {
     pthread_mutex_lock(&chan->lock);
     if (chan->closed) {
         pthread_mutex_unlock(&chan->lock);
-        rti_throw("chan already closed", false);
+        rti_throw(native_error(N_ERROR_CLOSED), NULL);
         return;
     }
 
