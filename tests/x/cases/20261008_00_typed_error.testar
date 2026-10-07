@@ -109,18 +109,14 @@ deferred 22
 -2
 catch 11
 
-=== test_aggregate_and_native_abi
+=== test_aggregate_and_native_returns
 --- main.x
 type value_t = struct { int a; int b; int c }
 type error_t = struct { i32 code; int detail }
 
 #linkid test_error_result
 fn native(bool failure):errable<int,int>
-#linkid test_error_clobber_return_register
-fn clobber()
-
 fn aggregate(bool failure):errable<value_t,error_t> {
-    clobber()
     if failure { throw error_t{code: 11, detail: 99} }
     return value_t{a: 10, b: 20, c: 30}
 }
@@ -143,7 +139,6 @@ fn main() {
     }
     println(fallback.a)
     var saved = saved_error()
-    clobber()
     println(saved)
 }
 

@@ -478,8 +478,7 @@ struct type_fn_t {
 
 static inline bool is_result_type(type_t type) {
     return type.kind == TYPE_TAGGED_UNION &&
-           ((type.ident && str_equal(type.ident, ERRABLE_IDENT)) ||
-            (type.tagged_union->ident && str_equal(type.tagged_union->ident, ERRABLE_IDENT)));
+           (str_equal(type.ident, ERRABLE_IDENT) || str_equal(type.tagged_union->ident, ERRABLE_IDENT));
 }
 
 static inline bool is_result_fn(type_fn_t *fn) {
