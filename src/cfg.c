@@ -200,6 +200,10 @@ static void ret_check(closure_t *c, table_t *handled, basic_block_t *b, char *ma
  * @return
  */
 static void return_check(closure_t *c, table_t *handled, basic_block_t *b) {
+    if (is_result_fn(c->fndef->type.fn) && result_value_type(c->fndef->return_type).kind == TYPE_VOID) {
+        return;
+    }
+
     if (c->fndef->return_type.kind == TYPE_VOID) {
         return;
     }

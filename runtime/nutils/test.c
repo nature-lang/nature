@@ -6,6 +6,19 @@
 #include <stdatomic.h>
 #include <stdlib.h>
 
+test_error_int_result_t test_error_result(uint8_t failure) {
+    return (test_error_int_result_t) {
+            .tag = hash_string(failure ? ERRABLE_ERROR_TAG : ERRABLE_VALUE_TAG),
+            .payload = failure ? 11 : 42,
+    };
+}
+
+void test_error_clobber_return_register(void) {
+#ifdef __ARM64
+    __asm__ volatile("mov x8, #259" ::: "x8");
+#endif
+}
+
 enum {
     PROCESSOR_TEST_WAITER_RAN = 1,
     PROCESSOR_TEST_OTHER_RAN = 2,

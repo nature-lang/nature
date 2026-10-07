@@ -251,6 +251,7 @@ module_t *module_build_sources(ast_import_t *import, slice_t *source_paths, modu
     m->global_vardef = slice_new(); // ast_vardef_stmt_t
     m->call_init_stmt = NULL;
     m->infer_type_args_stack = stack_new();
+    m->error_handlers = stack_new();
     m->ast_fndefs = slice_new();
     m->ast_typedefs = slice_new();
     m->closures = slice_new();

@@ -207,10 +207,13 @@ fn errort.msg():string
 ## type errable
 
 ```
-type errable<T> = errort|T
+type errable<T,E> = union {
+    T value
+    E error
+}
 ```
 
-用于错误处理的联合类型。
+在 `.x` 中，显式声明返回 `errable<T,E>` 后可使用 `return T`、`throw E`、错误传播和 `catch`。一个 catch 推导单一的错误类型 `E`，传播错误的调用须使用相同的 `E`。`T!` 简写和 `.n` 的错误模型后续单独处理。
 
 ## fn errorf
 

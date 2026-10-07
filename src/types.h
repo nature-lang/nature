@@ -251,7 +251,7 @@ struct module_t {
     // reduction 是递归的，所以需要一个全局变量存储当前 type_param 的具体值
     // stack 的值是 table_t*, key 是 type_param, value 是赋值的具体类型(该类型需要 reduction)
     ct_stack_t *infer_type_args_stack;
-    int64_t be_caught; // 用于判断当前 call 是否则存在 catch 拦截
+    ct_stack_t *error_handlers; // type_t* per active catch, used to infer E in .x
     bool in_fake_stmt;
 
     // compiler
@@ -578,6 +578,8 @@ typedef struct closure_t {
     char *error_label; // 遇到表达式错误时需要调整到的目标 label
 
     ct_stack_t *catch_error_labels;
+    ct_stack_t *catch_error_slots; // Typed value and occupancy flag per .x catch.
+    lir_operand_t *result_storage; // Tagged .x result in the function's stack frame.
 
     ct_stack_t *continue_labels; // 用于 for continue lir_operand*
     ct_stack_t *break_labels; // 用于 for break lir_operand*
