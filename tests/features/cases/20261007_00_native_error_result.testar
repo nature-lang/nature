@@ -132,3 +132,32 @@ fn main() {
 }
 --- output.txt
 http error caught
+
+=== http_close_keeps_pending_response[timeout=5,repeat=5]
+--- main.n
+import co
+import http
+import http.client
+
+fn main() {
+    var server = http.server()
+    var stopped = chan<bool>.new(1)
+    server.get('/close', fn(http.request_t req, ref<http.response_t> res):void! {
+        server.close()
+        // The listener has returned before this connection writes its response.
+        assert(stopped.recv())
+        res.send('closed')
+    })
+    go fn():void! {
+        server.listen(18991)
+        stopped.send(true)
+    }()
+    co.sleep(100)
+    var response = client.new().get('http://127.0.0.1:18991/close').send()
+    assert(response.text() == 'closed')
+    response.close()
+    co.sleep(20)
+    println('http pending response completed')
+}
+--- output.txt
+http pending response completed

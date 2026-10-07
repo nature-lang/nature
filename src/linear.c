@@ -9,7 +9,7 @@
 #include "src/error.h"
 #include "utils/linked.h"
 
-static void linear_builtin_error(module_t *m, native_error_code_t code);
+static void linear_builtin_error(module_t *m, lir_operand_t *code);
 
 static lir_operand_t *linear_super_move(module_t *m, type_t t, lir_operand_t *dst, lir_operand_t *src);
 static lir_operand_t *linear_cast(module_t *m, type_t source_type, type_t target_type, lir_operand_t *src_operand, lir_operand_t *target);
@@ -237,16 +237,14 @@ static void linear_bal_error(module_t *m, char *error_target_label, uint16_t cat
 static void linear_index_error(module_t *m, lir_operand_t *index, lir_operand_t *length) {
     closure_t *c = m->current_closure;
     uint16_t depth = c->catch_error_labels->count;
-    bool be_catch = depth > 0;
-    char *label = be_catch ? stack_top(c->catch_error_labels) : c->error_label;
-    if (be_catch) {
-        linear_builtin_error(m, N_ERROR_INDEX_OUT_OF_RANGE);
+    if (depth) {
+        linear_builtin_error(m, integer_operand(N_ERROR_INDEX_OUT_OF_RANGE, TYPE_INT32));
+        linear_bal_error(m, stack_top(c->catch_error_labels), depth);
     } else {
         char *path = c->fndef->rel_path ? c->fndef->rel_path : m->rel_path;
         push_rt_call(m, RT_CALL_INDEX_PANIC, NULL, 5, index, length,
                      string_operand(path, strlen(path)), int_operand(m->current_line), int_operand(m->current_column));
     }
-    linear_bal_error(m, label, depth);
 }
 
 static lir_operand_t *
@@ -925,37 +923,34 @@ static lir_operand_t *global_fn_symbol(module_t *m, ast_expr_t expr) {
     return lir_label_operand(symbol_ident, s->is_local);
 }
 
-// Private runtime helpers with an out parameter return 0 or a runtime code.
-// The compiler converts a failure into the same Result/catch flow as a Nature call.
-static void linear_check_status(module_t *m, lir_operand_t *status, char *message) {
-    char *end = label_ident_with_unique(".runtime.value");
-    OP_PUSH(lir_op_new(LIR_OPCODE_BEE, integer_operand(0, TYPE_INT32), status, lir_label_operand(end, true)));
+static void linear_builtin_error(module_t *m, lir_operand_t *code) {
+    type_t type = linear_error_type(m);
+    lir_operand_t *error = temp_var_operand_with_alloc(m, type);
+    linear_zero(m, type, error);
+    OP_PUSH(lir_op_move(indirect_addr_operand(m, type_kind_new(TYPE_UINT64), error, 0), int_operand(RUNTIME_ERROR_TYPE_ID)));
+    OP_PUSH(lir_op_move(indirect_addr_operand(m, type_kind_new(TYPE_INT32), error, POINTER_SIZE), code));
+    linear_store_error(m, type, error);
+}
+
+static void linear_runtime_failure(module_t *m, lir_operand_t *code, char *message) {
     closure_t *c = m->current_closure;
     uint16_t depth = c->catch_error_labels->count;
     if (depth) {
-        type_t type = linear_error_type(m);
-        lir_operand_t *error = temp_var_operand_with_alloc(m, type);
-        linear_zero(m, type, error);
-        OP_PUSH(lir_op_move(indirect_addr_operand(m, type_kind_new(TYPE_UINT64), error, 0), int_operand(RUNTIME_ERROR_TYPE_ID)));
-        OP_PUSH(lir_op_move(indirect_addr_operand(m, type_kind_new(TYPE_INT32), error, POINTER_SIZE), status));
-        linear_store_error(m, type, error);
+        linear_builtin_error(m, code);
         linear_bal_error(m, stack_top(c->catch_error_labels), depth);
     } else {
         char *path = c->fndef->rel_path ? c->fndef->rel_path : m->rel_path;
         push_rt_call(m, RT_CALL_PANIC_AT, NULL, 4, string_operand(message, strlen(message)),
                      string_operand(path, strlen(path)), int_operand(m->current_line), int_operand(m->current_column));
     }
-    OP_PUSH(lir_op_label(end, true));
 }
 
-
-static void linear_builtin_error(module_t *m, native_error_code_t code) {
-    type_t type = linear_error_type(m);
-    lir_operand_t *error = temp_var_operand_with_alloc(m, type);
-    linear_zero(m, type, error);
-    OP_PUSH(lir_op_move(indirect_addr_operand(m, type_kind_new(TYPE_UINT64), error, 0), int_operand(RUNTIME_ERROR_TYPE_ID)));
-    OP_PUSH(lir_op_move(indirect_addr_operand(m, type_kind_new(TYPE_INT32), error, POINTER_SIZE), int_operand(code)));
-    linear_store_error(m, type, error);
+// Private out-parameter helpers return 0 or a runtime error code.
+static void linear_check_status(module_t *m, lir_operand_t *status, char *message) {
+    char *end = label_ident_with_unique(".runtime.value");
+    OP_PUSH(lir_op_new(LIR_OPCODE_BEE, integer_operand(0, TYPE_INT32), status, lir_label_operand(end, true)));
+    linear_runtime_failure(m, status, message);
+    OP_PUSH(lir_op_label(end, true));
 }
 
 static void linear_store_error(module_t *m, type_t source_type, lir_operand_t *value) {
@@ -2859,7 +2854,7 @@ static lir_operand_t *linear_map_access(module_t *m, ast_expr_t expr, lir_operan
 
     char *found = label_ident_with_unique(".map.found");
     OP_PUSH(lir_op_new(LIR_OPCODE_BNE, int_operand(0), value_target, lir_label_operand(found, true)));
-    linear_check_status(m, integer_operand(N_ERROR_KEY_NOT_FOUND, TYPE_INT32), "key not found in map");
+    linear_runtime_failure(m, integer_operand(N_ERROR_KEY_NOT_FOUND, TYPE_INT32), "key not found in map");
     OP_PUSH(lir_op_label(found, true));
 
     if (expr.type.storage_kind != STORAGE_KIND_IND) {
@@ -3348,22 +3343,7 @@ static void linear_type_assert(module_t *m, lir_operand_t *src_operand, uint64_t
     lir_operand_t *assert_end = lir_label_operand(assert_end_ident, true);
     OP_PUSH(lir_op_new(LIR_OPCODE_BEE, int_operand(target_rtype_hash), actual_hash, assert_end));
 
-    uint16_t catch_depth = m->current_closure->catch_error_labels->count;
-    char *error_target_label = m->current_closure->error_label;
-    if (catch_depth > 0) {
-        error_target_label = stack_top(m->current_closure->catch_error_labels);
-        linear_builtin_error(m, N_ERROR_TYPE_MISMATCH);
-    } else {
-        char *panic_path = m->current_closure->fndef->rel_path
-                                   ? m->current_closure->fndef->rel_path
-                                   : m->rel_path;
-        push_rt_call(m, RT_CALL_PANIC_AT, NULL, 4,
-                     string_operand("type assert failed", strlen("type assert failed")),
-                     string_operand(panic_path, strlen(panic_path)), int_operand(m->current_line),
-                     int_operand(m->current_column));
-    }
-
-    linear_bal_error(m, error_target_label, catch_depth);
+    linear_runtime_failure(m, integer_operand(N_ERROR_TYPE_MISMATCH, TYPE_INT32), "type assert failed");
     OP_PUSH(lir_op_label(assert_end_ident, true));
 }
 
@@ -3422,7 +3402,7 @@ static lir_operand_t *linear_cast(module_t *m, type_t source_type, type_t target
                            indirect_addr_operand(m, type_kind_new(TYPE_UINT64), src_operand, 0), lir_label_operand(ok, true)));
         uint16_t depth = m->current_closure->catch_error_labels->count;
         if (depth) {
-            linear_builtin_error(m, N_ERROR_TYPE_MISMATCH);
+            linear_builtin_error(m, integer_operand(N_ERROR_TYPE_MISMATCH, TYPE_INT32));
             linear_bal_error(m, stack_top(m->current_closure->catch_error_labels), depth);
         } else {
             push_rt_call(m, RT_CALL_ERROR_BAD_CAST, NULL, 0);
@@ -3714,7 +3694,7 @@ static lir_operand_t *linear_cast(module_t *m, type_t source_type, type_t target
         assert(target_type.kind == TYPE_REF);
         char *valid = label_ident_with_unique(".pointer.valid");
         OP_PUSH(lir_op_new(LIR_OPCODE_BNE, int_operand(0), src_operand, lir_label_operand(valid, true)));
-        linear_check_status(m, integer_operand(N_ERROR_NULL_POINTER, TYPE_INT32), "ptr is null, cannot assert");
+        linear_runtime_failure(m, integer_operand(N_ERROR_NULL_POINTER, TYPE_INT32), "ptr is null, cannot assert");
         OP_PUSH(lir_op_label(valid, true));
         linear_super_move(m, target_type, target, src_operand);
         return target;

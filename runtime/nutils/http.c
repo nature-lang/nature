@@ -54,7 +54,9 @@ static void init_conn(inner_http_server_t *inner) {
     }
 }
 
-static void free_conn(inner_http_server_t *inner) {
+// The listener caller and each connection retain the server state.
+static void release_server(inner_http_server_t *inner) {
+    if (atomic_fetch_sub(&inner->ref_count, 1) != 1) return;
     while (inner->freelist) {
         freenode_t *node = inner->freelist;
         inner->freelist = node->next;
@@ -69,7 +71,7 @@ static inline void on_async_conn_close_cb(uv_handle_t *handle) {
     http_conn_t *conn = CONTAINER_OF(handle, http_conn_t, async_write_handle);
     DEBUGF("[on_async_conn_close_cb] conn: %p", conn);
     assert(conn->n_server);
-    inner_http_server_t *inner = conn->n_server->inner;
+    inner_http_server_t *inner = conn->inner;
 
 
     conn->read_buf_len = 0;
@@ -79,8 +81,9 @@ static inline void on_async_conn_close_cb(uv_handle_t *handle) {
         free(conn->write_buf.base);
     }
 
-    conn->n_server->inner->closed_count += 1;
+    inner->closed_count += 1;
     release_conn(inner, conn);
+    release_server(inner);
 }
 
 static inline void on_conn_close_cb(uv_handle_t *handle) {
@@ -128,7 +131,7 @@ static inline void on_write_end_cb(uv_write_t *write_req, int status) {
 static inline void http_alloc_buffer_cb(uv_handle_t *handle, size_t suggested_size, uv_buf_t *buf) {
     http_conn_t *conn = CONTAINER_OF(handle, http_conn_t, handle);
 
-    conn->n_server->inner->read_alloc_buf_count += 1;
+    conn->inner->read_alloc_buf_count += 1;
 
     DEBUGF("[uv_alloc_buffer] suggested_size: %ld", suggested_size);
     conn->read_buf_cap += HTTP_BUFFER_SIZE;
@@ -154,7 +157,7 @@ static inline void http_alloc_buffer_cb(uv_handle_t *handle, size_t suggested_si
 static inline void async_conn_write_handle_cb(uv_async_t *handle) {
     http_conn_t *conn = CONTAINER_OF(handle, http_conn_t, async_write_handle);
     DEBUGF("[async_conn_write_handle_cb] conn: %p, client_handle: %p", conn, handle);
-    conn->n_server->inner->resp_count += 1;
+    conn->inner->resp_count += 1;
 
     int result = uv_write(&conn->write_req, (uv_stream_t *) &conn->handle, &conn->write_buf, 1, on_write_end_cb);
     if (result) {
@@ -167,10 +170,10 @@ static inline void async_conn_write_handle_cb(uv_async_t *handle) {
 static inline void on_read_cb(uv_stream_t *handle, ssize_t nread, const uv_buf_t *buf) {
     DEBUGF("[on_read_cb] client: %p, nread: %ld", handle, nread);
     http_conn_t *conn = CONTAINER_OF(handle, http_conn_t, handle);
-    conn->n_server->inner->read_cb_count += 1;
+    conn->inner->read_cb_count += 1;
 
     if (nread < 0) {
-        conn->n_server->inner->read_error_count += 1;
+        conn->inner->read_error_count += 1;
 
         if (nread == UV_EOF) {
             // do nothing
@@ -201,7 +204,7 @@ static inline void on_read_cb(uv_stream_t *handle, ssize_t nread, const uv_buf_t
 
     uv_read_stop(handle);
 
-    conn->n_server->inner->coroutine_count += 1;
+    conn->inner->coroutine_count += 1;
     coroutine_t *conn_co = rt_coroutine_new(conn->n_server->handler, FLAG(CO_FLAG_RESULT), NULL, conn);
     rt_coroutine_dispatch(conn_co);
 }
@@ -297,10 +300,12 @@ static void on_http_conn_cb(uv_stream_t *server, int status) {
         return;
     }
 
-    coroutine_t *listen_co = inner->listener->co;
+    coroutine_t *listen_co = inner->listen_co;
 
     // 初始化 client 数据 accept loop 和 listen loop 必须使用同一个 loop
     http_conn_t *conn = acquire_conn(inner);
+    atomic_fetch_add(&inner->ref_count, 1);
+    conn->inner = inner;
 
     conn->create_time = uv_hrtime();
     conn->n_server = inner->server;
@@ -339,11 +344,9 @@ static void on_http_conn_cb(uv_stream_t *server, int status) {
 
 static inline void on_server_close_cb(uv_handle_t *handle) {
     inner_http_server_t *inner = CONTAINER_OF(handle, inner_http_server_t, handle);
-    coroutine_t *listen_co = inner->listener->co;
     n_http_server_t *server = inner->server;
     server->inner = NULL;
-    free_conn(inner);
-    co_ready(listen_co);
+    co_ready(inner->listen_co);
 }
 
 static void uv_async_http_close(n_http_server_t *server) {
@@ -371,7 +374,7 @@ void test_timer_dump_count_cb(uv_timer_t *timer) {
 // 由 libuv 通用 async 触发的回调器
 static void uv_async_http_listen(inner_http_server_t *inner) {
     uv_tcp_init(&global_loop, &inner->handle);
-    inner->handle.data = inner->listener->co;
+    inner->handle.data = inner->listen_co;
     struct sockaddr_in addr;
 
     n_http_server_t *server = inner->server;
@@ -386,7 +389,7 @@ static void uv_async_http_listen(inner_http_server_t *inner) {
     if (!result) result = uv_tcp_bind(&inner->handle, (const struct sockaddr *) &addr, 0);
     if (!result) result = uv_listen((uv_stream_t *) &inner->handle, DEFAULT_BACKLOG, on_http_conn_cb);
     if (result) {
-        inner->listener->status = result;
+        inner->listen_status = result;
         uv_close((uv_handle_t *) &inner->handle, on_server_close_cb);
     }
 }
@@ -403,23 +406,21 @@ n_void_result_t rt_uv_http_listen(n_http_server_t *server) {
     n_processor_t *p = processor_get();
     coroutine_t *co = coroutine_get();
 
-    inner_http_server_t *inner = malloc(sizeof(inner_http_server_t));
-    inner->count = 0;
-    inner->freelist = NULL;
+    inner_http_server_t *inner = mallocz(sizeof(inner_http_server_t));
     inner->max = FREELIST_MAX;
     inner->min = FREELIST_MIN;
     init_conn(inner);
-    http_listen_ctx_t *listener = mallocz(sizeof(http_listen_ctx_t));
-    listener->co = co;
-    inner->listener = listener;
+    atomic_init(&inner->ref_count, 1);
+    inner->listen_co = co;
     inner->server = server;
     server->inner = inner;
 
     global_waiting_send(uv_async_http_listen, inner, 0, 0);
 
     DEBUGF("[rt_uv_http_listen] listen resume, port=%ld, and return, p_index=%d", server->port, p->index);
-    int32_t status = listener->status;
-    free(listener);
+    // Keep the listener state until the native caller consumes its result.
+    int32_t status = inner->listen_status;
+    release_server(inner);
     if (status) return N_RESULT_ERROR(n_void_result_t, native_uv_error(status));
     return N_RESULT_VOID;
 }
