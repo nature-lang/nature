@@ -8,9 +8,6 @@
 #include "src/types.h"
 
 
-uint64_t error_type_id(type_t type);
-void error_type_ids_reset(void);
-
 void pre_infer(module_t *m);
 
 void infer(module_t *m);

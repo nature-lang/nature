@@ -488,8 +488,8 @@ static inline bool is_result_fn(type_fn_t *f) {
 }
 
 #define ERROR_INLINE_BYTES 24
-#define RUNTIME_ERROR_TYPE_ID 1
-#define SYSTEM_ERROR_TYPE_ID 2
+#define RUNTIME_ERROR_RTYPE_HASH hash_string("runtime_error_t")
+#define SYSTEM_ERROR_RTYPE_HASH hash_string("system_error_t")
 
 typedef enum {
     N_ERROR_FAILED = 1,
@@ -505,7 +505,7 @@ typedef enum {
 } native_error_code_t;
 
 typedef struct {
-    uint64_t type_id;
+    uint64_t rtype_hash;
     uint64_t payload[ERROR_INLINE_BYTES / POINTER_SIZE];
 } n_error_t;
 

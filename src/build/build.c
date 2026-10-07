@@ -1254,7 +1254,6 @@ static void build_init(char *build_entry) {
     env_init();
     config_init();
     symbol_init();
-    error_type_ids_reset();
     reg_init();
     package_unit_reset();
     global_var_unique_count = 0;

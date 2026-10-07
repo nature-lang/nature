@@ -970,8 +970,10 @@ static inline void ct_register_rtype(type_t t) {
         rtype_t rtype = reflect_type(t);
         assert(rtype.gc_heap_size >= 0);
         assert(rtype.hash == hash);
-        rtype_t *mem_rtype = rtype_push(rtype);
-        table_set(ct_rtype_table, itoa(rtype.hash), mem_rtype);
+        rtype_push(rtype);
+        type_t *registered_type = NEW(type_t);
+        *registered_type = t;
+        table_set(ct_rtype_table, itoa(rtype.hash), registered_type);
     }
 }
 

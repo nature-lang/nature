@@ -480,35 +480,25 @@ true
 --- main.n
 type error_842109896116_t:errort = enum:u8 { TIMEOUT }
 type error_716211875559_t:errort = enum:u8 { TIMEOUT }
-fn fail(bool first):int! { if first { throw error_842109896116_t.TIMEOUT }; throw error_716211875559_t.TIMEOUT }
-fn main() {
-    for int i = 0; i < 2; i += 1 {
-        var ignored = fail(i == 0) catch e {
-            println(e is error_842109896116_t, e is error_716211875559_t, e == error_842109896116_t.TIMEOUT, e == error_716211875559_t.TIMEOUT)
-            0
-        }
-    }
+fn fail(bool first):int! {
+    if first { throw error_842109896116_t.TIMEOUT }
+    throw error_716211875559_t.TIMEOUT
 }
+fn main() { var ignored = fail(false) catch e { 0 } }
 --- output.txt
-true false true false
-false true false true
+nature-test/main.n:5:31: error type hash collision between 'main.error_842109896116_t(enum:u8)' and 'main.error_716211875559_t(enum:u8)'
 
 === test_hash_collision_x
 --- main.x
 type error_842109896116_t:errort = enum:u8 { TIMEOUT }
 type error_716211875559_t:errort = enum:u8 { TIMEOUT }
-fn fail(bool first):int! { if first { throw error_842109896116_t.TIMEOUT }; throw error_716211875559_t.TIMEOUT }
-fn main() {
-    for int i = 0; i < 2; i += 1 {
-        var ignored = fail(i == 0) catch e {
-            println(e is error_842109896116_t, e is error_716211875559_t, e == error_842109896116_t.TIMEOUT, e == error_716211875559_t.TIMEOUT)
-            0
-        }
-    }
+fn fail(bool first):int! {
+    if first { throw error_842109896116_t.TIMEOUT }
+    throw error_716211875559_t.TIMEOUT
 }
+fn main() { var ignored = fail(false) catch e { 0 } }
 --- output.txt
-true false true false
-false true false true
+nature-test/main.x:5:31: error type hash collision between 'main.error_842109896116_t(enum:u8)' and 'main.error_716211875559_t(enum:u8)'
 
 === test_mixed_n
 --- main.n
@@ -1150,9 +1140,9 @@ fn main() {
     }
 }
 --- io.n
-pub type error_t:errort = enum:i32 { TEST_ERROR = 1 }
+pub type error_t:errort = enum:i32 { TEST_ERROR = 11 }
 --- fmt.n
-pub type error_t:errort = enum:i32 { TEST_ERROR = 1 }
+pub type error_t:errort = enum:i32 { TEST_ERROR = 11 }
 --- output.txt
 true
 io
@@ -1176,9 +1166,9 @@ fn main() {
     }
 }
 --- io.x
-pub type error_t:errort = enum:i32 { TEST_ERROR = 1 }
+pub type error_t:errort = enum:i32 { TEST_ERROR = 11 }
 --- fmt.x
-pub type error_t:errort = enum:i32 { TEST_ERROR = 1 }
+pub type error_t:errort = enum:i32 { TEST_ERROR = 11 }
 --- output.txt
 true
 io

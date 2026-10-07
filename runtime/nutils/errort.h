@@ -7,13 +7,13 @@
 #include "utils/type.h"
 
 static inline n_error_t native_error(int32_t code) {
-    n_error_t error = {.type_id = RUNTIME_ERROR_TYPE_ID};
+    n_error_t error = {.rtype_hash = RUNTIME_ERROR_RTYPE_HASH};
     memcpy(error.payload, &code, sizeof(code));
     return error;
 }
 
 static inline n_error_t native_system_error(int32_t code) {
-    n_error_t error = {.type_id = SYSTEM_ERROR_TYPE_ID};
+    n_error_t error = {.rtype_hash = SYSTEM_ERROR_RTYPE_HASH};
     memcpy(error.payload, &code, sizeof(code));
     return error;
 }

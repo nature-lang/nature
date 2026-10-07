@@ -24,6 +24,18 @@ static type_t linear_error_type(module_t *m) {
     return reduction_type(m, type_ident_new("errort", TYPE_IDENT_INTERFACE));
 }
 
+static uint64_t linear_error_type_hash(module_t *m, type_t type) {
+    uint64_t hash = type_hash(type);
+    type_t *registered = table_get(ct_rtype_table, itoa(hash));
+    assert(registered);
+    // Error comparisons use the existing rtype hash. Reject a collision instead
+    // of silently treating distinct nominal error types as the same type.
+    LINEAR_ASSERTF(str_equal(type_format(*registered), type_format(type)),
+                   "error type hash collision between '%s' and '%s'",
+                   type_format(*registered), type_format(type));
+    return hash;
+}
+
 static lir_operand_t *native_pointer(module_t *m, lir_operand_t *value) {
     lir_operand_t *ptr = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
     OP_PUSH(lir_op_move(ptr, value));
@@ -927,7 +939,7 @@ static void linear_builtin_error(module_t *m, lir_operand_t *code) {
     type_t type = linear_error_type(m);
     lir_operand_t *error = temp_var_operand_with_alloc(m, type);
     linear_zero(m, type, error);
-    OP_PUSH(lir_op_move(indirect_addr_operand(m, type_kind_new(TYPE_UINT64), error, 0), int_operand(RUNTIME_ERROR_TYPE_ID)));
+    OP_PUSH(lir_op_move(indirect_addr_operand(m, type_kind_new(TYPE_UINT64), error, 0), int_operand(RUNTIME_ERROR_RTYPE_HASH)));
     OP_PUSH(lir_op_move(indirect_addr_operand(m, type_kind_new(TYPE_INT32), error, POINTER_SIZE), code));
     linear_store_error(m, type, error);
 }
@@ -3266,7 +3278,7 @@ static lir_operand_t *linear_is_expr(module_t *m, ast_expr_t expr, lir_operand_t
         if (!target) target = temp_var_operand_with_alloc(m, expr.type);
         lir_operand_t *src = linear_expr(m, *is_expr->src, NULL);
         OP_PUSH(lir_op_new(LIR_OPCODE_SEE, indirect_addr_operand(m, type_kind_new(TYPE_UINT64), src, 0),
-                           int_operand(error_type_id(is_expr->target_type)), target));
+                           int_operand(linear_error_type_hash(m, is_expr->target_type)), target));
         return target;
     }
 
@@ -3389,7 +3401,7 @@ static lir_operand_t *linear_cast(module_t *m, type_t source_type, type_t target
         source_type.kind != TYPE_ANY && source_type.kind != TYPE_UNION) {
         linear_zero(m, target_type, target);
         OP_PUSH(lir_op_move(indirect_addr_operand(m, type_kind_new(TYPE_UINT64), target, 0),
-                            int_operand(error_type_id(source_type))));
+                            int_operand(linear_error_type_hash(m, source_type))));
         lir_operand_t *payload = indirect_addr_operand(m, source_type, target, POINTER_SIZE);
         if (source_type.storage_kind == STORAGE_KIND_IND) payload = lea_operand_pointer(m, payload);
         linear_super_move(m, source_type, payload, src_operand);
@@ -3398,7 +3410,7 @@ static lir_operand_t *linear_cast(module_t *m, type_t source_type, type_t target
     if (source_type.is_error && target_type.kind != TYPE_ANY &&
         target_type.kind != TYPE_ANYPTR && target_type.kind != TYPE_UNION) {
         char *ok = label_ident_with_unique(".inline.cast.ok");
-        OP_PUSH(lir_op_new(LIR_OPCODE_BEE, int_operand(error_type_id(target_type)),
+        OP_PUSH(lir_op_new(LIR_OPCODE_BEE, int_operand(linear_error_type_hash(m, target_type)),
                            indirect_addr_operand(m, type_kind_new(TYPE_UINT64), src_operand, 0), lir_label_operand(ok, true)));
         uint16_t depth = m->current_closure->catch_error_labels->count;
         if (depth) {

@@ -189,7 +189,7 @@ pub type errable<value_t, error_t> = union {
 
 `errort` is a compiler-recognized marker interface. Types implementing it can be returned by `T!`, which means `errable<T,errort>`. Both `.n` and `.x` use the same tagged Result return model.
 
-A default error stores an 8-byte type identity and a 24-byte inline payload. Enums, scalar aliases, small structs and pointers are supported; types must explicitly implement `errort`. Packing, throwing, propagating and catching do not allocate an error wrapper or call `msg()`. Constructing the payload itself follows the normal memory rules of its type.
+A default error stores the existing 8-byte `rtype_hash` field and a 24-byte inline payload. Enums, scalar aliases, small structs and pointers are supported; types must explicitly implement `errort`. The compiler rejects collisions between distinct types used as inline errors. Packing, throwing, propagating and catching do not allocate an error wrapper or call `msg()`. Constructing the payload itself follows the normal memory rules of its type.
 
 ### Enum errors
 
@@ -224,7 +224,7 @@ Concrete errors propagate only into compatible E types. Propagation into T! addi
 
 Native `#linkid` interfaces use the same return ABI in `.n` and `.x`: `T!` returns `errable<T,errort>`, and explicit `errable<T,E>` returns the corresponding tagged union. C functions must return a matching tag and value/error layout. Asynchronous callbacks record completion status in their operation context; the resumed native function returns the Result. Coroutines do not store a general error slot.
 
-Type identities are executable-local, not stable serialized or cross-library error numbers. Uncaught errors produce numeric diagnostics and a nonzero exit status. Applications can map errors to readable text explicitly in Nature catch blocks.
+Type hashes are compiler metadata, not a serialization or cross-version ABI contract. Uncaught errors produce numeric diagnostics and a nonzero exit status. Applications can map errors to readable text explicitly in Nature catch blocks.
 
 # [map](https://github.com/nature-lang/nature/blob/master/std/builtin/map.n)
 

@@ -88,7 +88,7 @@ int runtime_main(int argc, char *argv[]) {
         if (result.tag_hash == hash_string(ERRABLE_ERROR_TAG)) {
             int32_t code = 0;
             memcpy(&code, result.error.payload, sizeof(code));
-            fprintf(stderr, "uncaught error: type=%llu code=%d\n", (unsigned long long) result.error.type_id, code);
+            fprintf(stderr, "uncaught error: type=%llu code=%d\n", (unsigned long long) result.error.rtype_hash, code);
             return 1;
         }
         DEBUGF("[runtime_main] x mode user code run completed, will exit");

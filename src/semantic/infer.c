@@ -13,26 +13,6 @@ static type_t reduction_type_visited(module_t *m, type_t t, struct sc_map_s64 *v
 static type_t result_type(module_t *m, type_t value_type, type_t error_type);
 static ast_expr_t as_to_interface(module_t *m, ast_expr_t *expr, type_t interface_type);
 
-static table_t *error_type_ids;
-static uint64_t next_error_type_id = SYSTEM_ERROR_TYPE_ID + 1;
-void error_type_ids_reset(void) {
-    error_type_ids = NULL;
-    next_error_type_id = SYSTEM_ERROR_TYPE_ID + 1;
-}
-uint64_t error_type_id(type_t type) {
-    if (type.ident && str_equal(type.ident, "runtime_error_t")) return RUNTIME_ERROR_TYPE_ID;
-    if (type.ident && str_equal(type.ident, "system_error_t")) return SYSTEM_ERROR_TYPE_ID;
-    if (!error_type_ids) error_type_ids = table_new();
-    char *name = type_format(type);
-    uint64_t *id = table_get(error_type_ids, name);
-    if (!id) {
-        id = NEW(uint64_t);
-        *id = next_error_type_id++;
-        table_set(error_type_ids, name, id);
-    }
-    return *id;
-}
-
 static type_t default_error_type(module_t *m) {
     return reduction_type(m, type_ident_new("errort", TYPE_IDENT_INTERFACE));
 }
@@ -1675,9 +1655,7 @@ static type_t infer_match(module_t *m, ast_match_t *match, type_t target_type) {
 static void infer_try_catch_stmt(module_t *m, ast_try_catch_stmt_t *try_stmt) {
     list_t *errors = ct_list_new(sizeof(type_t));
     stack_push(m->error_handlers, errors);
-    m->be_caught += 1;
     infer_body(m, try_stmt->try_body);
-    m->be_caught -= 1;
 
     stack_pop(m->error_handlers);
     type_t interface_error = infer_handler_type(m, errors);
@@ -1694,9 +1672,7 @@ static void infer_try_catch_stmt(module_t *m, ast_try_catch_stmt_t *try_stmt) {
 static type_t infer_catch(module_t *m, ast_catch_t *catch_expr) {
     list_t *errors = ct_list_new(sizeof(type_t));
     stack_push(m->error_handlers, errors);
-    m->be_caught += 1;
     type_t t = infer_right_expr(m, &catch_expr->try_expr, type_kind_new(TYPE_UNKNOWN));
-    m->be_caught -= 1;
 
     stack_pop(m->error_handlers);
     type_t interface_error = infer_handler_type(m, errors);
@@ -3054,7 +3030,7 @@ static type_t infer_call(module_t *m, ast_call_t *call, type_t target_type, bool
 
     // catch 语句中可以包含多条 call 语句, 都统一处理了
     if (type_fn->is_errable && check_errable) {
-        INFER_ASSERTF(m->current_fn->is_errable || m->be_caught > 0,
+        INFER_ASSERTF(m->current_fn->is_errable || !stack_empty(m->error_handlers),
                       "calling an errable! fn `%s` requires the current `fn %s` errable! as well or be caught.",
                       type_fn->fn_name ? type_fn->fn_name : "lambda",
                       m->current_fn->fn_name);

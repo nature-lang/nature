@@ -251,8 +251,7 @@ struct module_t {
     // reduction 是递归的，所以需要一个全局变量存储当前 type_param 的具体值
     // stack 的值是 table_t*, key 是 type_param, value 是赋值的具体类型(该类型需要 reduction)
     ct_stack_t *infer_type_args_stack;
-    ct_stack_t *error_handlers; // list_t<type_t> for each active catch
-    int64_t be_caught; // 用于判断当前 call 是否则存在 catch 拦截
+    ct_stack_t *error_handlers; // Compile-time list_t<type_t> for each active catch.
     bool in_fake_stmt;
 
     // compiler

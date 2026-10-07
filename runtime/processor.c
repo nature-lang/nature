@@ -626,7 +626,7 @@ void coroutine_dump_error(coroutine_t *co, n_error_t error) {
     int32_t code = 0;
     memcpy(&code, error.payload, sizeof(code));
     fprintf(stderr, "coroutine %s uncaught error: type=%llu code=%d\n", co->main ? "main" : "worker",
-            (unsigned long long) error.type_id, code);
+            (unsigned long long) error.rtype_hash, code);
 }
 
 void mark_ptr_black(void *value) {

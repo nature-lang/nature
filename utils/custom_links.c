@@ -45,4 +45,4 @@ uint64_t ct_rtype_count = 0; // 从 list 中提取而来
 uint8_t *ct_rtype_data = NULL;
 uint64_t ct_rtype_size = 0; // rtype + gc_bits + element_kinds 的总数据量大小, sh_size 预申请需要该值，已经在 reflect_type 时计算完毕
 list_t *ct_rtype_list = NULL;
-table_t *ct_rtype_table = NULL; // 避免 rtype_vec 重复写入
+table_t *ct_rtype_table = NULL; // type_hash -> type_t; avoids duplicate rtype entries.
