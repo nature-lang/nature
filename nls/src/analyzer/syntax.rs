@@ -2855,12 +2855,7 @@ impl<'a> Syntax {
                     None
                 };
 
-                items.push(ImportSelectItem {
-                    ident,
-                    alias,
-                    start: item_start,
-                    end: item_end,
-                });
+                items.push(ImportSelectItem { ident, alias, start: item_start, end: item_end });
 
                 if !self.consume(TokenType::Comma) {
                     break;
@@ -3667,12 +3662,20 @@ impl<'a> Syntax {
         fndef.is_pub = is_pub;
 
         if fndef.pending_where_params.is_some() && !self.is(TokenType::Fn) {
-            return Err(SyntaxError(self.peek().start, self.peek().end, "#where can only be applied to fn".to_string()));
+            return Err(SyntaxError(
+                self.peek().start,
+                self.peek().end,
+                "#where can only be applied to fn".to_string(),
+            ));
         }
 
         if self.is(TokenType::Type) {
             if fndef.pending_where_params.is_some() {
-                return Err(SyntaxError(self.peek().start, self.peek().end, "#where can only be applied to fn".to_string()));
+                return Err(SyntaxError(
+                    self.peek().start,
+                    self.peek().end,
+                    "#where can only be applied to fn".to_string(),
+                ));
             }
             self.parser_typedef_stmt(is_pub)
         } else if self.is(TokenType::Fn) {

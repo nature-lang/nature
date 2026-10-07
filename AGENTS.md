@@ -22,7 +22,6 @@
 - Rust: `cargo fmt`; Go (npkg/scripts): `gofmt -w`.
 - Tests follow `YYYYMMDD_NN_description.c` with matching `tests/features/cases/<name>/` and `.testar` output.
 - Source files and identifiers favor `snake_case`; keep braces/spaces as formatter defines.
-- Nature constants and enum members use `UPPER_SNAKE_CASE`; all other Nature identifiers use `lower_snake_case`.
 
 ## Testing Guidelines
 - Build runtime + main tree before `ctest`; link errors like `_global_safepoint` usually mean rerun the runtime build.

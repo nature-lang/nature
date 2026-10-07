@@ -5,11 +5,11 @@
 #include "src/lir.h"
 #include "src/symbol/symbol.h"
 
-#define INTERFACE_ASSERTF(cond, fmt, ...)                                                           \
-    {                                                                                               \
-        if (!(cond)) {                                                                              \
+#define INTERFACE_ASSERTF(cond, fmt, ...)                                                             \
+    {                                                                                                 \
+        if (!(cond)) {                                                                                \
             dump_errorf(m, CT_STAGE_INFER, m->current_line, m->current_column, fmt, ##__VA_ARGS__); \
-        }                                                                                           \
+        }                                                                                             \
     }
 
 ast_fndef_t *generate_receiver_wrapper(module_t *m, ast_fndef_t *origin_fndef);
@@ -229,8 +229,7 @@ static void interface_generate_receiver_wrappers(module_t *m) {
             continue;
         }
 
-        if (ast_fn->self_kind != PARAM_SELF_T ||
-            ast_fn->impl_type.ident_kind != TYPE_IDENT_DEF) {
+        if (ast_fn->self_kind != PARAM_SELF_T || ast_fn->impl_type.ident_kind != TYPE_IDENT_DEF) {
             continue;
         }
 

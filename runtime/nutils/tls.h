@@ -141,7 +141,7 @@ static inline void on_tls_write_end_cb(uv_write_t *write_req, int status) {
     conn->write_co = NULL;
 
     if (status < 0) {
-        const char *msg = "tls uv_write failed: %s";
+        char *msg = tlsprintf("tls uv_write failed: %s", uv_strerror(status));
         DEBUGF("[on_tls_write_end_cb] failed: %s, co=%p", msg, write_co);
     }
 

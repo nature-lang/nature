@@ -67,8 +67,8 @@ extern rtype_t pointer_slot_rtype;
     if (kind_in_heap(_kind)) _stack_size = POINTER_SIZE;                  \
     uint64_t _hash = ((uint64_t) _kind << 56) | (_size << 32) | _gc_bits; \
     (rtype_t){                                                            \
-            .gc_heap_size = _size,                                        \
-            .storage_size = _stack_size,                                  \
+            .gc_heap_size = _size,                                           \
+            .storage_size = _stack_size,                                    \
             .kind = _kind,                                                \
             .last_ptr = _last_ptr,                                        \
             .malloc_gc_bits_offset = -1,                                  \

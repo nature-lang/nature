@@ -1,8 +1,8 @@
 #ifndef NATURE_RUNTIME_RUNTIME_H
 #define NATURE_RUNTIME_RUNTIME_H
 
-#include "runtime/uv_compat.h"
 #include "utils/helper.h"
+#include "runtime/uv_compat.h"
 #include <pthread.h>
 
 #include "aco/aco.h"
@@ -49,14 +49,14 @@ static inline bool user_main_is_fn(void) {
 #if defined(__AMD64) && defined(__WINDOWS)
 #define CALLER_RET_ADDR() ((addr_t) __builtin_return_address(0))
 #elif defined(__AMD64)
-#define CALLER_RET_ADDR()                                     \
+#define CALLER_RET_ADDR()                                  \
     ({                                                        \
         uint64_t _rbp_value;                                  \
         __asm__ volatile("mov %%rbp, %0" : "=r"(_rbp_value)); \
         fetch_addr_value(_rbp_value + POINTER_SIZE);          \
     });
 #elif defined(__ARM64)
-#define CALLER_RET_ADDR()                                             \
+#define CALLER_RET_ADDR()                                          \
     ({                                                                \
         addr_t _fp_value;                                             \
         __asm__ volatile("mov %0, x29" : "=r"(_fp_value));            \
@@ -64,7 +64,7 @@ static inline bool user_main_is_fn(void) {
         _value;                                                       \
     });
 #elif defined(__RISCV64)
-#define CALLER_RET_ADDR()                                             \
+#define CALLER_RET_ADDR()                                          \
     ({                                                                \
         addr_t _fp_value;                                             \
         __asm__ volatile("mv %0, s0" : "=r"(_fp_value));              \

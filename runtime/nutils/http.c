@@ -114,7 +114,7 @@ static inline void http_conn_close(http_conn_t *conn) {
 static inline void on_write_end_cb(uv_write_t *write_req, int status) {
     if (status < 0) {
         // 对端可能已经关闭了连接,导致写入失败等情况
-        const char *msg = "uv_write failed: %s";
+        char *msg = tlsprintf("uv_write failed: %s", uv_strerror(status));
         DEBUGF("[on_write_end_cb] %s", msg);
     }
 

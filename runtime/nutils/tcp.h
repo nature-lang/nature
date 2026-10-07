@@ -208,7 +208,9 @@ static inline void on_tcp_write_end_cb(uv_write_t *write_req, int status) {
     inner_conn_t *conn = write_req->data;
     coroutine_t *write_co = conn->write_co;
     if (status < 0) {
-        DEBUGF("[on_tcp_write_end_cb] failed: %s, co=%p", uv_strerror(status), write_co);
+        // 对端可能已经关闭了连接,导致写入失败等情况
+        char *msg = tlsprintf("uv_write failed: %s", uv_strerror(status));
+        DEBUGF("[on_tcp_write_end_cb] failed: %s, co=%p", msg, write_co);
     }
 
     conn->write_status = status;

@@ -57,20 +57,10 @@ pub struct AnalyzerError {
 
 impl AnalyzerError {
     pub fn new(start: usize, end: usize, message: String) -> Self {
-        Self {
-            start,
-            end,
-            message,
-            is_warning: false,
-        }
+        Self { start, end, message, is_warning: false }
     }
     pub fn warning(start: usize, end: usize, message: String) -> Self {
-        Self {
-            start,
-            end,
-            message,
-            is_warning: true,
-        }
+        Self { start, end, message, is_warning: true }
     }
 }
 
