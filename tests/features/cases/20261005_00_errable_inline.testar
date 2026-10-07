@@ -1131,3 +1131,55 @@ fn result(bool failed):errable<int,int> {
 fn main() { println(result(true) catch e { e }, result(false) catch e { e }) }
 --- output.txt
 7 42
+
+=== test_cross_module_same_number_n
+--- main.n
+import 'io.n' as io
+import 'fmt.n' as fmt
+fn fail(bool first):void! {
+    if first { throw io.error_t.TEST_ERROR }
+    throw fmt.error_t.TEST_ERROR
+}
+fn main() {
+    println((io.error_t.TEST_ERROR as i32) == (fmt.error_t.TEST_ERROR as i32))
+    fail(true) catch e {
+        if e == io.error_t.TEST_ERROR { println('io') } else if e == fmt.error_t.TEST_ERROR { println('fmt') }
+    }
+    fail(false) catch e {
+        if e == io.error_t.TEST_ERROR { println('io') } else if e == fmt.error_t.TEST_ERROR { println('fmt') }
+    }
+}
+--- io.n
+pub type error_t:errort = enum:i32 { TEST_ERROR = 1 }
+--- fmt.n
+pub type error_t:errort = enum:i32 { TEST_ERROR = 1 }
+--- output.txt
+true
+io
+fmt
+
+=== test_cross_module_same_number_x
+--- main.x
+import 'io.x' as io
+import 'fmt.x' as fmt
+fn fail(bool first):void! {
+    if first { throw io.error_t.TEST_ERROR }
+    throw fmt.error_t.TEST_ERROR
+}
+fn main() {
+    println((io.error_t.TEST_ERROR as i32) == (fmt.error_t.TEST_ERROR as i32))
+    fail(true) catch e {
+        if e == io.error_t.TEST_ERROR { println('io') } else if e == fmt.error_t.TEST_ERROR { println('fmt') }
+    }
+    fail(false) catch e {
+        if e == io.error_t.TEST_ERROR { println('io') } else if e == fmt.error_t.TEST_ERROR { println('fmt') }
+    }
+}
+--- io.x
+pub type error_t:errort = enum:i32 { TEST_ERROR = 1 }
+--- fmt.x
+pub type error_t:errort = enum:i32 { TEST_ERROR = 1 }
+--- output.txt
+true
+io
+fmt
