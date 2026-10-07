@@ -203,24 +203,14 @@ static inline void panic_dump(caller_t *caller, char *msg) {
     exit(EXIT_FAILURE);
 }
 
-n_ptr_t *ptr_assert(n_ptr_t *ptr) {
-    if (ptr == 0) {
-        DEBUGF("[ptr_assert] raw pointer");
-        rti_throw(native_error(N_ERROR_NULL_POINTER), "ptr is null, cannot assert");
-        return 0;
-    }
 
-    return ptr;
-}
-
-void interface_assert(n_interface_t *mu, int64_t target_rtype_hash, void *value_ref) {
+int32_t interface_assert(n_interface_t *mu, int64_t target_rtype_hash, void *value_ref) {
     if (mu->rtype->hash != target_rtype_hash) {
         DEBUGF("[interface_assert] type assert failed, mu->rtype->kind: %s, target_rtype_hash: %ld",
                type_kind_str[mu->rtype->kind],
                target_rtype_hash);
 
-        rti_throw(native_error(N_ERROR_TYPE_MISMATCH), "type assert failed");
-        return;
+        return N_ERROR_TYPE_MISMATCH;
     }
 
     rtype_t *rtype = rt_find_rtype(target_rtype_hash);
@@ -235,58 +225,9 @@ void interface_assert(n_interface_t *mu, int64_t target_rtype_hash, void *value_
         "[interface_assert] success, interface_base: %p, interface_rtype_kind: %s, heap_out_size: %lu, interface_i64_value: %ld, "
         "values_ref: %p",
         mu, type_kind_str[mu->rtype->kind], size, mu->value.i64_value, value_ref);
+    return 0;
 }
 
-
-/**
- * 如果断言异常则在 processor 中附加上错误
- * @param mu
- * @param target_rtype_hash
- * @param value_ref
- */
-void union_assert(n_union_t *mu, int64_t target_rtype_hash, void *value_ref) {
-    if (mu->rtype->hash != target_rtype_hash) {
-        DEBUGF("[union_assert] type assert failed, mu->rtype->kind: %s, target_rtype_hash: %ld",
-               type_kind_str[mu->rtype->kind],
-               target_rtype_hash);
-
-        rti_throw(native_error(N_ERROR_TYPE_MISMATCH), "type assert failed");
-        return;
-    }
-
-    rtype_t *rtype = rt_find_rtype(target_rtype_hash);
-    if (rtype->storage_kind == STORAGE_KIND_IND) {
-        memmove(value_ref, &mu->value.struct_, rtype->storage_size);
-    } else {
-        memmove(value_ref, &mu->value, rtype->storage_size);
-    }
-    DEBUGF(
-        "[union_assert] success, union_base: %p, union_rtype_kind: %s, heap_out_size: %lu, union_i64_value: %ld, "
-        "values_ref: %p",
-        mu, type_kind_str[mu->rtype->kind], rtype->storage_size, mu->value.i64_value, value_ref);
-}
-
-void any_assert(n_any_t *mu, int64_t target_rtype_hash, void *value_ref) {
-    if (mu->rtype->hash != target_rtype_hash) {
-        DEBUGF("[any_assert] type assert failed, mu->rtype->kind: %s, target_rtype_hash: %ld",
-               type_kind_str[mu->rtype->kind],
-               target_rtype_hash);
-
-        rti_throw(native_error(N_ERROR_TYPE_MISMATCH), "type assert failed");
-        return;
-    }
-
-    rtype_t *rtype = rt_find_rtype(target_rtype_hash);
-    if (rtype->storage_kind == STORAGE_KIND_IND) {
-        memmove(value_ref, mu->value.ptr_value, rtype->storage_size);
-    } else {
-        memmove(value_ref, &mu->value, rtype->storage_size);
-    }
-    DEBUGF(
-        "[any_assert] success, any_base: %p, any_rtype_kind: %s, heap_out_size: %lu, any_i64_value: %ld, "
-        "values_ref: %p",
-        mu, type_kind_str[mu->rtype->kind], rtype->storage_size, mu->value.i64_value, value_ref);
-}
 
 bool union_is(n_union_t *mu, int64_t target_rtype_hash) {
     return mu->rtype->hash == target_rtype_hash;
@@ -596,9 +537,8 @@ int64_t iterator_next_value(void *iterator, int64_t hash, int64_t cursor, void *
     if (iterator_rtype->kind == TYPE_CHAN) {
         n_chan_t *ch = iterator;
         // auto recv msg assign to value_ref
-        rt_chan_recv(ch, value_ref, false);
-
-        return 1;
+        n_bool_result_t result = rt_chan_recv(ch, value_ref, false);
+        return result.tag_hash == hash_string(ERRABLE_VALUE_TAG) && result.value ? 1 : -1;
     }
 
     assert(false && "cannot support iterator type");
@@ -656,35 +596,6 @@ void iterator_take_value(void *iterator, int64_t hash, int64_t cursor, void *val
     exit(0);
 }
 
-void throw_index_out_error(n_int_t index, n_int_t len, n_bool_t be_catch) {
-    if (be_catch) {
-        rti_throw(native_error(N_ERROR_INDEX_OUT_OF_RANGE), "index out of range");
-        return;
-    }
-    addr_t ret_addr = CALLER_RET_ADDR();
-    caller_t *caller = caller_from_return_address(ret_addr);
-    assert(caller);
-    panic_dump(caller, tlsprintf("index out of range [%" PRId64 "] with length %" PRId64, index, len));
-}
-
-void co_remove_error(n_error_t *out) {
-    coroutine_t *co = coroutine_get();
-    assert(co->has_error);
-    *out = co->error;
-    co->has_error = false;
-    co->error = (n_error_t) {0};
-    co->panic_message = NULL;
-}
-
-uint8_t co_has_error(void) { return coroutine_get()->has_error; }
-
-uint8_t co_has_panic(bool be_catch, char *path, n_int_t line, n_int_t column) {
-    coroutine_t *co = coroutine_get();
-    if (!co->has_error) return 0;
-    if (be_catch) return 1;
-    fprintf(stdout, "panic: '%s' at %s:%ld:%ld\n", co->panic_message ? co->panic_message : "native operation failed", path, line, column);
-    exit(EXIT_FAILURE);
-}
 
 void error_bad_cast(void) {
     fprintf(stderr, "error type assertion failed\n");
@@ -822,14 +733,6 @@ void rti_write_barrier_rtype(void *dst, void *src, rtype_t *rtype) {
     }
 }
 
-void ptr_valid(void *ptr) {
-    // 修改状态避免抢占
-    DEBUGF("[ptr_valid] ptr=%p", ptr);
-    if (ptr <= 0) {
-        rti_throw(native_error(N_ERROR_NULL_POINTER), "invalid memory address or nil pointer dereference");
-    }
-}
-
 
 void rt_panic(n_string_t msg) {
     addr_t ret_addr = CALLER_RET_ADDR();
@@ -866,17 +769,19 @@ typedef struct {
 
 n_string_t rt_string_new(n_anyptr_t raw_string) {
     if (!raw_string) {
-        rti_throw(native_error(N_ERROR_FAILED), NULL);
-        return (n_string_t) {0};
+        addr_t ret_addr = CALLER_RET_ADDR();
+        panic_dump(caller_from_return_address(ret_addr), "string pointer is null");
     }
 
     char *str = (char *) raw_string;
     return string_new(str, strlen(str));
 }
 
-void rt_string_concat_out(n_string_t *out, n_string_t *a, n_string_t *b) {
+int32_t rt_string_concat_out(n_string_t *out, n_string_t *a, n_string_t *b) {
     assert(out);
+    if (a->length >= INT64_MAX - b->length) return N_ERROR_FAILED;
     *out = string_concat(a, b);
+    return 0;
 }
 
 void rt_string_to_vec_out(n_vec_t *out, n_string_t *src) {
@@ -889,9 +794,11 @@ void rt_vec_to_string_out(n_string_t *out, n_vec_t *src) {
     *out = vec_to_string(src);
 }
 
-void rt_vec_slice_out(n_vec_t *out, n_vec_t *vec, int64_t start, int64_t end) {
-    assert(out);
-    *out = rt_vec_slice(vec, start, end);
+int32_t rt_vec_slice_out(n_vec_t *out, n_vec_t *vec, int64_t start, int64_t end) {
+    n_vec_result_t result = rt_vec_slice(vec, start, end);
+    if (result.tag_hash == hash_string(ERRABLE_ERROR_TAG)) return N_ERROR_INDEX_OUT_OF_RANGE;
+    *out = result.value;
+    return 0;
 }
 
 n_string_t rt_strerror() {
@@ -924,14 +831,14 @@ n_int_t rt_errno() {
 }
 
 
-void rt_x_index_panic(n_int_t index, n_int_t len, char *path, n_int_t line, n_int_t column) {
+void rt_index_panic(n_int_t index, n_int_t len, char *path, n_int_t line, n_int_t column) {
     char *dump = tlsprintf("panic: 'index out of range [%" PRId64 "] with length %" PRId64 "' at %s:%" PRId64 ":%" PRId64 "\n",
                            index, len, path, line, column);
     VOID write(STDOUT_FILENO, dump, strlen(dump));
     exit(EXIT_FAILURE);
 }
 
-void rt_x_panic(char *msg, char *path, n_int_t line, n_int_t column) {
+void rt_panic_at(char *msg, char *path, n_int_t line, n_int_t column) {
     char *dump = tlsprintf("panic: '%s' at %s:%ld:%ld\n", msg, path, line, column);
     VOID write(STDOUT_FILENO, dump, strlen(dump));
     exit(EXIT_FAILURE);
@@ -940,8 +847,8 @@ void rt_x_panic(char *msg, char *path, n_int_t line, n_int_t column) {
 
 n_anyptr_t rt_array_new(int64_t element_hash, int64_t length) {
     if (length < 0) {
-        rti_throw(native_error(N_ERROR_INVALID_ARGUMENT), "array_new length must be non-negative");
-        return 0;
+        addr_t ret_addr = CALLER_RET_ADDR();
+        panic_dump(caller_from_return_address(ret_addr), "array_new length must be non-negative");
     }
 
     rtype_t *element_rtype = rt_find_rtype(element_hash);
@@ -949,9 +856,9 @@ n_anyptr_t rt_array_new(int64_t element_hash, int64_t length) {
     return (n_anyptr_t) rti_array_new(element_rtype, (uint64_t) length);
 }
 
-n_vec_t unsafe_vec_new(int64_t hash, int64_t element_hash, int64_t len, void *data_ptr) {
+n_vec_result_t unsafe_vec_new(int64_t hash, int64_t element_hash, int64_t len, void *data_ptr) {
     DEBUGF("[unsafe_vec_new] hash=%lu, element_hash=%lu, len=%lu, rhash, ele_rhash, length, capacity")
-    assert(len > 0);
+    if (len <= 0) return N_RESULT_ERROR(n_vec_result_t, native_error(N_ERROR_INVALID_ARGUMENT));
 
     int64_t cap = len;
 
@@ -969,14 +876,14 @@ n_vec_t unsafe_vec_new(int64_t hash, int64_t element_hash, int64_t len, void *da
     vec.data = data_ptr;
 
     DEBUGF("[rt_vec_new] success, vec=%p, data=%p, element_size=%lu", &vec, vec.data, vec.element_size);
-    return vec;
+    return N_RESULT_OK(n_vec_result_t, vec);
 }
 
 
 n_string_t rt_string_ref_new(void *raw_string, int64_t length) {
     if (length < 0) {
-        rti_throw(native_error(N_ERROR_INVALID_ARGUMENT), NULL);
-        return (n_string_t) {0};
+        addr_t ret_addr = CALLER_RET_ADDR();
+        panic_dump(caller_from_return_address(ret_addr), "string length must be non-negative and below INT64_MAX");
     }
     n_string_t str = string_new(raw_string, length);
     DEBUGF("[rt_string_ref_new] create, str: %p", raw_string);
@@ -985,8 +892,8 @@ n_string_t rt_string_ref_new(void *raw_string, int64_t length) {
 
 n_string_t rt_string_alloc(int64_t length) {
     if (length < 0 || length == INT64_MAX) {
-        rti_throw(native_error(N_ERROR_INVALID_ARGUMENT), NULL);
-        return (n_string_t) {0};
+        addr_t ret_addr = CALLER_RET_ADDR();
+        panic_dump(caller_from_return_address(ret_addr), "string length must be non-negative and below INT64_MAX");
     }
 
     mutator_safepoint_yield_if_needed();

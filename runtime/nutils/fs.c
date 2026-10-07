@@ -43,6 +43,12 @@ static ssize_t windows_pread(int fd, void *buf, size_t len, int64_t offset) {
 }
 #endif
 
+static void fs_complete(fs_context_t *ctx, coroutine_t *co) {
+    uv_fs_req_cleanup(&ctx->req);
+    ctx->req.data = NULL;
+    co_ready(co);
+}
+
 static void on_write_cb(uv_fs_t *req) {
     fs_context_t *ctx = CONTAINER_OF(req, fs_context_t, req);
     coroutine_t *co = req->data;
@@ -59,17 +65,15 @@ static void on_write_cb(uv_fs_t *req) {
             if (n >= 0) {
                 DEBUGF("[on_write_cb] pwritev not supported, fallback to pwrite(), bytes: %zd", n);
                 ctx->data_len = n;
-                co_ready(co);
-                uv_fs_req_cleanup(&ctx->req);
+                fs_complete(ctx, co);
                 return;
             }
-            rti_co_throw(co, native_system_error(errno), NULL);
+            ctx->status = errno;
         } else {
             // 文件写入异常，设置错误并返回
-            rti_co_throw(co, native_uv_error(req->result), NULL);
+            ctx->status = req->result;
         }
-        co_ready(co);
-        uv_fs_req_cleanup(&ctx->req);
+        fs_complete(ctx, co);
         return;
     }
 
@@ -77,27 +81,21 @@ static void on_write_cb(uv_fs_t *req) {
     DEBUGF("[on_write_cb] write file success, bytes written: %ld", req->result);
     ctx->data_len = req->result;
 
-    co_ready(co);
-    uv_fs_req_cleanup(&ctx->req);
+    fs_complete(ctx, co);
 }
 
 static inline void on_open_cb(uv_fs_t *req) {
     fs_context_t *ctx = CONTAINER_OF(req, fs_context_t, req);
+    coroutine_t *co = req->data;
     if (req->result < 0) {
         DEBUGF("[on_open_cb] open file failed: %s, co: %p", uv_strerror(req->result), req->data);
 
-        rti_co_throw(req->data, native_uv_error(req->result), NULL);
+        ctx->status = req->result;
 
-        co_ready(req->data);
-        uv_fs_req_cleanup(&ctx->req);
-        return;
+    } else {
+        ctx->fd = req->result;
     }
-
-    // 文件打开成功，设置 fd 并返回
-    ctx->fd = req->result;
-    co_ready(req->data);
-
-    uv_fs_req_cleanup(&ctx->req);
+    fs_complete(ctx, co);
 }
 
 static void on_read_cb(uv_fs_t *req) {
@@ -115,17 +113,15 @@ static void on_read_cb(uv_fs_t *req) {
             if (n >= 0) {
                 DEBUGF("[on_read_cb] preadv not supported, fallback to pread(), bytes: %zd", n);
                 ctx->data_len = n;
-                co_ready(co);
-                uv_fs_req_cleanup(&ctx->req);
+                fs_complete(ctx, co);
                 return;
             }
-            rti_co_throw(co, native_system_error(errno), NULL);
+            ctx->status = errno;
         } else {
             // 文件读取异常，设置错误并返回，不需要关闭 fd, fd 由外部控制
-            rti_co_throw(co, native_uv_error(req->result), NULL);
+            ctx->status = req->result;
         }
-        co_ready(co);
-        uv_fs_req_cleanup(&ctx->req);
+        fs_complete(ctx, co);
         return;
     }
 
@@ -133,33 +129,30 @@ static void on_read_cb(uv_fs_t *req) {
     assert(ctx->data_len <= ctx->data_cap);
 
     DEBUGF("[on_read_cb] read file success, data_len: %ld", ctx->data_len);
-    co_ready(co);
-    uv_fs_req_cleanup(&ctx->req);
+    fs_complete(ctx, co);
 }
 
 /**
  * 主要用于 stdio/stdin/stderr 的创建, name 示例 "/dev/stdin"
  */
-fs_context_t *rt_uv_fs_from(n_int_t fd, n_string_t name) {
-    fs_context_t *ctx = rti_gc_malloc(sizeof(fs_context_t), NULL);
+n_ptr_result_t rt_uv_fs_from(n_int_t fd, n_string_t name) {
     if (fd < 0) {
-        coroutine_t *co = coroutine_get();
-        rti_co_throw(co, native_error(N_ERROR_INVALID_ARGUMENT), NULL);
-        return NULL;
+        return N_RESULT_ERROR(n_ptr_result_t, native_error(N_ERROR_INVALID_ARGUMENT));
     }
 
+    fs_context_t *ctx = rti_gc_malloc(sizeof(fs_context_t), NULL);
     ctx->fd = fd;
     DEBUGF("[fs_from] create file context from fd: %ld, name: %s", fd,
            (char *) rt_string_ref(&name));
 
-    return ctx;
+    return N_RESULT_OK(n_ptr_result_t, ctx);
 }
 
 static void uv_async_fs_open(fs_context_t *ctx, char *path) {
 #ifdef __WINDOWS
     int fd = rt_windows_open_utf8(path, (int) ctx->flags, (int) ctx->mode);
     if (fd < 0) {
-        rti_co_throw(ctx->req.data, native_system_error(errno), NULL);
+        ctx->status = errno;
     } else {
         ctx->fd = fd;
     }
@@ -168,48 +161,50 @@ static void uv_async_fs_open(fs_context_t *ctx, char *path) {
     int result = uv_fs_open(&global_loop, &ctx->req, path, (int) ctx->flags,
                             (int) ctx->mode, on_open_cb);
     if (result) {
-        rti_co_throw(ctx->req.data, native_uv_error(result), NULL);
-        co_ready(ctx->req.data);
+        ctx->status = result;
+        fs_complete(ctx, ctx->req.data);
     }
 #endif
 }
 
-fs_context_t *rt_uv_fs_open(n_string_t path, int64_t flags, int64_t mode) {
+n_ptr_result_t rt_uv_fs_open(n_string_t path, int64_t flags, int64_t mode) {
     // 创建 context, 不需要主动销毁，后续由用户端接手该变量，并由 GC 进行销毁
     fs_context_t *ctx = rti_gc_malloc(sizeof(fs_context_t), NULL);
-    n_processor_t *p = processor_get();
     coroutine_t *co = coroutine_get();
     ctx->flags = flags;
     ctx->mode = mode;
+    ctx->status = 0;
     ctx->req.data = co;
 
     global_waiting_send(uv_async_fs_open, ctx, rt_string_ref(&path), 0);
-    if (co->has_error) {
+    if (ctx->status != 0) {
         DEBUGF("native filesystem operation failed");
-        return NULL;
+        return N_RESULT_ERROR(n_ptr_result_t, native_fs_error(ctx->status));
     } else {
         DEBUGF("[fs_open] open file success: %s", (char *) rt_string_ref(&path));
     }
 
-    return ctx;
+    return N_RESULT_OK(n_ptr_result_t, ctx);
 }
 
-n_int_t rt_uv_fs_read(fs_context_t *ctx, n_vec_t buf) {
+n_int_result_t rt_uv_fs_read(fs_context_t *ctx, n_vec_t buf) {
     return rt_uv_fs_read_at(ctx, buf, -1);
 }
 
 static void uv_async_fs_read_at(fs_context_t *ctx, int offset) {
-    uv_fs_read(&global_loop, &ctx->req, ctx->fd, &ctx->buf, 1, offset, on_read_cb);
+    int status = uv_fs_read(&global_loop, &ctx->req, ctx->fd, &ctx->buf, 1, offset, on_read_cb);
+    if (status < 0) {
+        ctx->status = status;
+        fs_complete(ctx, ctx->req.data);
+    }
 }
 
-n_int_t rt_uv_fs_read_at(fs_context_t *ctx, n_vec_t buf, int offset) {
+n_int_result_t rt_uv_fs_read_at(fs_context_t *ctx, n_vec_t buf, int offset) {
     coroutine_t *co = coroutine_get();
-    n_processor_t *p = processor_get();
     DEBUGF("[rt_uv_fs_read] read file: %ld", ctx->fd);
 
     if (ctx->closed) {
-        rti_co_throw(co, native_error(N_ERROR_CLOSED), NULL);
-        return 0;
+        return N_RESULT_ERROR(n_int_result_t, native_error(N_ERROR_CLOSED));
     }
 
     // 配置初始缓冲区，能够读取的最大程度受限于 buf.length
@@ -217,21 +212,21 @@ n_int_t rt_uv_fs_read_at(fs_context_t *ctx, n_vec_t buf, int offset) {
     ctx->data_len = 0; // 记录实际读取的数量
     ctx->data = (char *) buf.data;
     ctx->buf = uv_buf_init(ctx->data, buf.length);
+    ctx->status = 0;
     ctx->req.data = co;
     ctx->offset = offset; // 保存 offset 用于 fallback
 
     // 基于 fd offset 进行读取
-    global_waiting_send(uv_async_fs_read_at, ctx, (void *) offset, 0);
+    global_waiting_send(uv_async_fs_read_at, ctx, (void *) (int64_t) offset, 0);
 
-    if (co->has_error) {
+    if (ctx->status != 0) {
         DEBUGF("native filesystem operation failed");
-        return 0;
+        return N_RESULT_ERROR(n_int_result_t, native_fs_error(ctx->status));
     } else {
         DEBUGF("[rt_uv_fs_read] read file success");
     }
 
-    ctx->req.data = NULL;
-    return ctx->data_len;
+    return N_RESULT_OK(n_int_result_t, ctx->data_len);
 }
 
 static void uv_async_fs_write_at(fs_context_t *ctx, n_vec_t *buf, int offset) {
@@ -240,33 +235,37 @@ static void uv_async_fs_write_at(fs_context_t *ctx, n_vec_t *buf, int offset) {
     ctx->offset = offset; // 保存 offset 用于 fallback
 
     // 发起异步写入请求，指定偏移量
-    uv_fs_write(&global_loop, &ctx->req, ctx->fd, &ctx->buf, 1, offset, on_write_cb);
+    int status = uv_fs_write(&global_loop, &ctx->req, ctx->fd, &ctx->buf, 1, offset, on_write_cb);
+    if (status < 0) {
+        ctx->status = status;
+        fs_complete(ctx, ctx->req.data);
+    }
 }
 
-n_int_t rt_uv_fs_write_at(fs_context_t *ctx, n_vec_t buf, int offset) {
+n_int_result_t rt_uv_fs_write_at(fs_context_t *ctx, n_vec_t buf, int offset) {
     coroutine_t *co = coroutine_get();
-    n_processor_t *p = processor_get();
 
     if (ctx->closed) {
-        rti_co_throw(co, native_error(N_ERROR_CLOSED), NULL);
-        return 0;
+        return N_RESULT_ERROR(n_int_result_t, native_error(N_ERROR_CLOSED));
     }
 
     DEBUGF("[fs_write_at] write file: %ld, offset: %d, data_len: %ld", ctx->fd, offset, buf.length);
+    ctx->status = 0;
     ctx->req.data = co;
 
     global_waiting_send(uv_async_fs_write_at, ctx, &buf, (void *) (int64_t) offset);
 
-    if (co->has_error) {
+    if (ctx->status != 0) {
         DEBUGF("native filesystem operation failed");
     } else {
         DEBUGF("[fs_write_at] write file success");
     }
 
-    return ctx->data_len;
+    if (ctx->status != 0) return N_RESULT_ERROR(n_int_result_t, native_fs_error(ctx->status));
+    return N_RESULT_OK(n_int_result_t, ctx->data_len);
 }
 
-n_int_t rt_uv_fs_write(fs_context_t *ctx, n_vec_t buf) {
+n_int_result_t rt_uv_fs_write(fs_context_t *ctx, n_vec_t buf) {
     DEBUGF("[rt_uv_fs_write] buf len: %ld", buf.length);
     return rt_uv_fs_write_at(ctx, buf, -1);
 }
@@ -305,9 +304,8 @@ static void on_stat_cb(uv_fs_t *req) {
 
     if (req->result < 0) {
         // File stat operation failed, set error and return
-        rti_co_throw(co, native_uv_error(req->result), NULL);
+        ctx->status = req->result;
         co_ready(co);
-        uv_fs_req_cleanup(&ctx->req);
         return;
     }
 
@@ -322,29 +320,29 @@ static void uv_async_fs_stat(fs_context_t *ctx, coroutine_t *co) {
     // Initiate async stat request
     int result = uv_fs_fstat(&global_loop, &ctx->req, ctx->fd, on_stat_cb);
     if (result < 0) {
-        rti_co_throw(co, native_uv_error(result), NULL);
+        ctx->status = result;
         co_ready(co);
     }
 }
 
-uv_stat_t rt_uv_fs_stat(fs_context_t *ctx) {
+n_stat_result_t rt_uv_fs_stat(fs_context_t *ctx) {
     coroutine_t *co = coroutine_get();
     n_processor_t *p = processor_get();
     uv_stat_t stat_result = {0};
 
     if (ctx->closed) {
-        rti_co_throw(co, native_error(N_ERROR_CLOSED), NULL);
-        return stat_result;
+        return N_RESULT_ERROR(n_stat_result_t, native_error(N_ERROR_CLOSED));
     }
 
     DEBUGF("[rt_uv_fs_stat] stat file: %d", ctx->fd);
 
     // Set up coroutine resume point
+    ctx->status = 0;
     ctx->req.data = co;
 
     global_waiting_send(uv_async_fs_stat, ctx, co, 0);
 
-    if (co->has_error) {
+    if (ctx->status != 0) {
         DEBUGF("native filesystem operation failed");
     } else {
         DEBUGF("[rt_uv_fs_stat] stat file success");
@@ -354,6 +352,8 @@ uv_stat_t rt_uv_fs_stat(fs_context_t *ctx) {
 
     // Clean up request
     uv_fs_req_cleanup(&ctx->req);
+    ctx->req.data = NULL;
 
-    return stat_result;
+    if (ctx->status != 0) return N_RESULT_ERROR(n_stat_result_t, native_fs_error(ctx->status));
+    return N_RESULT_OK(n_stat_result_t, stat_result);
 }

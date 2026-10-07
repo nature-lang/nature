@@ -376,13 +376,6 @@ static void scan_stack(n_processor_t *p, coroutine_t *co) {
     }
 
 
-    if (co->has_error) {
-        for (int i = 0; i < ERROR_INLINE_BYTES / POINTER_SIZE; ++i) {
-            void *ptr = (void *) (uintptr_t) co->error.payload[i];
-            if (ptr && span_of((addr_t) ptr)) insert_gc_worklist(worklist, ptr);
-        }
-    }
-
     if (co->flag & FLAG(CO_FLAG_RTFN)) {
         DEBUGF("[runtime_gc.scan_stack] co=%p runtime fn, return", co);
         return;

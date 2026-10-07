@@ -442,9 +442,6 @@ struct coroutine_t {
     //    uint64_t scan_offset;
     //    uint64_t scan_ret_addr;
 
-    bool has_error;
-    n_error_t error; // native operations and coroutine completion only
-    const char *panic_message;
 
     ATOMIC int32_t select_done;
     linkco_t *waiting; // 当前 co 等待的 linkco, 如果存在多个 linkco 时，通过 linkco.waitlink 链接
@@ -499,11 +496,7 @@ struct n_processor_t {
     struct n_processor_t *next; // processor 链表支持
 };
 
-void rti_throw(n_error_t error, const char *panic_message);
-
-void rti_co_throw(coroutine_t *co, n_error_t error, const char *panic_message);
-
-void coroutine_dump_error(coroutine_t *co);
+void coroutine_dump_error(coroutine_t *co, n_error_t error);
 
 /**
  * 正常需要根据线程 id 返回，第一版返回 id 就行了

@@ -63,10 +63,7 @@ n_string_t string_concat(n_string_t *a, n_string_t *b) {
 
     mutator_safepoint_yield_if_needed();
 
-    if (a->length > INT64_MAX - b->length) {
-        rti_throw(native_error(N_ERROR_FAILED), "string concatenation result is too large");
-        return (n_string_t) {0};
-    }
+    assert(a->length < INT64_MAX - b->length);
 
     int64_t length = a->length + b->length;
     n_string_t str = rti_string_alloc(length);

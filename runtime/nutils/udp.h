@@ -37,7 +37,7 @@ typedef struct {
     n_udp_addr_t remote_addr;
 } n_udp_conn_t;
 
-int64_t rt_uv_udp_recvfrom(n_udp_socket_t *s, n_vec_t buf, n_udp_addr_t *addr) {
+n_int_result_t rt_uv_udp_recvfrom(n_udp_socket_t *s, n_vec_t buf, n_udp_addr_t *addr) {
     DEBUGF("[rt_uv_udp_recvfrom] start")
     coroutine_t *co = coroutine_get();
 
@@ -85,7 +85,7 @@ int64_t rt_uv_udp_recvfrom(n_udp_socket_t *s, n_vec_t buf, n_udp_addr_t *addr) {
 
             DEBUGF("[rt_uv_udp_recvfrom] received %ld bytes from %s:%ld",
                    nread, ip_buf, addr->port);
-            return nread;
+            return N_RESULT_OK(n_int_result_t, nread);
         }
 
         // 处理错误
@@ -101,8 +101,7 @@ int64_t rt_uv_udp_recvfrom(n_udp_socket_t *s, n_vec_t buf, n_udp_addr_t *addr) {
             continue;
         }
 
-        rti_co_throw(co, native_uv_error(uv_translate_sys_error(socket_error)), NULL);
-        return 0;
+        return N_RESULT_ERROR(n_int_result_t, native_uv_error(uv_translate_sys_error(socket_error)));
 #else
         if (errno == EINTR) {
             continue; // 被信号中断，重试
@@ -119,19 +118,17 @@ int64_t rt_uv_udp_recvfrom(n_udp_socket_t *s, n_vec_t buf, n_udp_addr_t *addr) {
         }
 
         // 其他错误
-        rti_co_throw(co, native_system_error(errno), NULL);
-        return 0;
+        return N_RESULT_ERROR(n_int_result_t, native_system_error(errno));
 #endif
     }
 }
 
 
-int64_t rt_uv_udp_sendto(n_udp_socket_t *s, n_vec_t buf, n_udp_addr_t udp_addr) {
+n_int_result_t rt_uv_udp_sendto(n_udp_socket_t *s, n_vec_t buf, n_udp_addr_t udp_addr) {
     coroutine_t *co = coroutine_get();
     DEBUGF("[rt_uv_udp_sendto] start")
     if (s->closed) {
-        rti_co_throw(co, native_error(N_ERROR_CLOSED), NULL);
-        return 0;
+        return N_RESULT_ERROR(n_int_result_t, native_error(N_ERROR_CLOSED));
     }
 
     struct sockaddr_in addr = {0};
@@ -154,11 +151,10 @@ int64_t rt_uv_udp_sendto(n_udp_socket_t *s, n_vec_t buf, n_udp_addr_t udp_addr) 
                 continue;
             }
 
-            rti_throw(native_uv_error(length), NULL);
-            return 0;
+            return N_RESULT_ERROR(n_int_result_t, native_uv_error(length));
         }
 
-        return length;
+        return N_RESULT_OK(n_int_result_t, length);
     }
 }
 
@@ -179,13 +175,25 @@ void rt_uv_udp_close(n_udp_socket_t *s) {
         return;
     }
 
+    s->co = coroutine_get();
     global_waiting_send(uv_async_udp_close, s, 0, 0);
 
     s->closed = true;
     DEBUGF("[rt_uv_udp_close] close success, handle_count=%ld", global.async_handle_count)
 }
 
-static void uv_async_udp_bind(n_udp_socket_t *s) {
+typedef struct {
+    n_udp_socket_t *socket;
+    coroutine_t *co;
+    int32_t status;
+} udp_bind_ctx_t;
+
+static void on_udp_bind_failed_close(uv_handle_t *handle) {
+    free(handle);
+}
+
+static void uv_async_udp_bind(udp_bind_ctx_t *ctx) {
+    n_udp_socket_t *s = ctx->socket;
     DEBUGF("[uv_async_udp_bind] start, co %p", s->co)
     uv_udp_init_ex(&global_loop, s->handle, AF_UNSPEC | UV_UDP_RECVMMSG);
     s->handle->data = s;
@@ -203,14 +211,18 @@ static void uv_async_udp_bind(n_udp_socket_t *s) {
     int result = uv_udp_bind(s->handle, (const struct sockaddr *) &addr, 0);
     if (result) {
         DEBUGF("[uv_async_udp_bind] bind failed: %s", uv_strerror(result));
-        rti_co_throw(s->co, native_uv_error(result), NULL);
+        ctx->status = result;
+        uv_close((uv_handle_t *) s->handle, on_udp_bind_failed_close);
+        co_ready(ctx->co);
+        return;
     }
 
     uv_os_fd_t os_fd;
     int fileno_result = uv_fileno((uv_handle_t *) s->handle, &os_fd);
     if (fileno_result < 0) {
-        rti_co_throw(s->co, native_uv_error(fileno_result), NULL);
-        co_ready(s->co);
+        ctx->status = fileno_result;
+        uv_close((uv_handle_t *) s->handle, on_udp_bind_failed_close);
+        co_ready(ctx->co);
         return;
     }
     s->fd = (uintptr_t) os_fd;
@@ -219,10 +231,10 @@ static void uv_async_udp_bind(n_udp_socket_t *s) {
     fcntl((int) s->fd, F_SETFL, flags | O_NONBLOCK);
 #endif
 
-    co_ready(s->co);
+    co_ready(ctx->co);
 }
 
-void rt_uv_udp_bind(n_udp_socket_t *s) {
+n_void_result_t rt_uv_udp_bind(n_udp_socket_t *s) {
     DEBUGF("[rt_uv_udp_bind] start, port %ld", s->addr.port)
 
     coroutine_t *co = coroutine_get();
@@ -230,9 +242,18 @@ void rt_uv_udp_bind(n_udp_socket_t *s) {
     s->co = co;
     s->handle = mallocz(sizeof(uv_udp_t));
 
-    global_waiting_send(uv_async_udp_bind, s, 0, 0);
+    udp_bind_ctx_t *ctx = mallocz(sizeof(udp_bind_ctx_t));
+    ctx->socket = s;
+    ctx->co = co;
+    global_waiting_send(uv_async_udp_bind, ctx, 0, 0);
+    int32_t status = ctx->status;
+    free(ctx);
+    if (status) {
+        s->closed = true;
+        return N_RESULT_ERROR(n_void_result_t, native_uv_error(status));
+    }
 
     DEBUGF("[rt_uv_udp_bind] bind success, will return")
+    return N_RESULT_VOID;
 }
-
 #endif //NATURE_RUNTIME_NUTILS_UDP_H_

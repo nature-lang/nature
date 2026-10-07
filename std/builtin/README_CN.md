@@ -235,7 +235,7 @@ fn main() {
 
 `runtime_error_t:errort` 是内置错误分类 enum；`system_error_t:errort` 包含 `i32 code`，保存 errno 或原生库状态码。标准库也通过各自公开的 `error_t` enum 或小结构体保存分类和必要的上下文。
 
-`.n` 原生 `#linkid` 的 `T!` 声明保留 C 返回 T 的 ABI，编译器在边界读取并清空原生错误槽，然后转换为新版错误返回。Nature 函数之间使用 Result 返回值。`.x` 原生接口需要明确声明 `errable<T,E>`，并由 C 函数返回对应的带标签结构，不能使用依赖协程的原生 `T!` 错误槽。
+`.n` 和 `.x` 的原生 `#linkid` 接口也使用同一返回 ABI：`T!` 返回 `errable<T,errort>`，显式 `errable<T,E>` 返回对应的带标签 union。C 函数必须返回匹配的 tag 和 value/error 布局。错误通过返回值传递；异步回调在各自的操作上下文中记录状态，协程恢复后由原生函数返回结果。coroutine 不保存通用错误槽。
 
 类型标识只在当前可执行程序中有效，不应序列化或用作跨库的稳定错误编号。未捕获的错误输出数值诊断并以非零状态退出；需要可读文本时，由 Nature 调用方在 catch 中自行映射。
 

@@ -16,6 +16,9 @@ typedef struct {
 typedef struct {
     coroutine_t *co;
     coroutine_t *read_co;
+    coroutine_t *write_co;
+    int32_t connect_status;
+    int32_t write_status;
     int64_t read_len;
     void *data;
     void *server;
@@ -27,13 +30,15 @@ typedef struct {
     uv_write_t write_req;
     uv_connect_t conn_req;
     uv_timer_t timer;
-    int ref_count;
+    _Atomic int ref_count;
     n_vec_t buf;
+    n_vec_t write_buf;
 } inner_conn_t;
 
 typedef struct {
     uv_tcp_t handle;
     coroutine_t *listen_co;
+    int32_t listen_status;
     rt_linkco_list_t waiters; // wait accept
 
     coroutine_t *waiters_head;
@@ -115,8 +120,9 @@ static void free_conn(inner_server_t *inner) {
 
 
 static inline void conn_release(inner_conn_t *conn) {
-    conn->ref_count -= 1;
-    if (conn->ref_count == 0) {
+    int ref_count = atomic_fetch_sub(&conn->ref_count, 1) - 1;
+    assert(ref_count >= 0);
+    if (ref_count == 0) {
         if (conn->co) {
             co_ready(conn->co);
         }
@@ -129,7 +135,7 @@ static inline void conn_release(inner_conn_t *conn) {
 
         DEBUGF("[conn_release] ref count = 0, freed")
     } else {
-        DEBUGF("[conn_release] ref count = %d, skip", conn->ref_count);
+        DEBUGF("[conn_release] ref count = %d, skip", ref_count);
     }
 }
 
@@ -142,6 +148,8 @@ static inline void on_conn_close_timer_cb(uv_handle_t *handle) {
     inner_conn_t *conn = CONTAINER_OF(handle, inner_conn_t, timer);
     conn_release(conn);
 }
+
+static void uv_async_conn_close(inner_conn_t *conn);
 
 static inline void on_tcp_close_cb(uv_handle_t *handle) {
     inner_server_t *inner = handle->data;
@@ -198,14 +206,14 @@ static inline void on_tcp_read_timeout_cb(uv_timer_t *timer) {
 
 static inline void on_tcp_write_end_cb(uv_write_t *write_req, int status) {
     inner_conn_t *conn = write_req->data;
+    coroutine_t *write_co = conn->write_co;
     if (status < 0) {
-        // 对端可能已经关闭了连接,导致写入失败等情况
-        const char *msg = "uv_write failed: %s";
-        DEBUGF("[on_tcp_write_end_cb] failed: %s, co=%p", msg, conn->co);
+        DEBUGF("[on_tcp_write_end_cb] failed: %s, co=%p", uv_strerror(status), write_co);
     }
 
-    co_ready(conn->co);
-    DEBUGF("[on_tcp_write_end_cb] co=%p ready, status=%d", conn->co, conn->co->status);
+    conn->write_status = status;
+    co_ready(write_co);
+    DEBUGF("[on_tcp_write_end_cb] co=%p ready", write_co);
 }
 
 static inline void tcp_alloc_buffer_cb(uv_handle_t *handle, size_t suggested_size, uv_buf_t *buf) {
@@ -241,11 +249,10 @@ void uv_async_tcp_read(inner_conn_t *conn) {
 }
 
 // read once
-int64_t rt_uv_tcp_read(n_tcp_conn_t *n_conn, n_vec_t buf) {
+n_int_result_t rt_uv_tcp_read(n_tcp_conn_t *n_conn, n_vec_t buf) {
     coroutine_t *co = coroutine_get();
     if (n_conn->closed) {
-        rti_co_throw(co, native_error(N_ERROR_CLOSED), NULL);
-        return 0;
+        return N_RESULT_ERROR(n_int_result_t, native_error(N_ERROR_CLOSED));
     }
 
     inner_conn_t *conn = n_conn->conn;
@@ -267,54 +274,58 @@ int64_t rt_uv_tcp_read(n_tcp_conn_t *n_conn, n_vec_t buf) {
     conn_release(conn);
 
     if (closed) {
-        rti_co_throw(co, native_error(N_ERROR_CLOSED), NULL);
-        return 0;
+        return N_RESULT_ERROR(n_int_result_t, native_error(N_ERROR_CLOSED));
     }
     if (read_len == UV_ETIMEDOUT) {
-        rti_co_throw(co, native_error(N_ERROR_TIMEOUT), NULL);
-        return 0;
+        return N_RESULT_ERROR(n_int_result_t, native_error(N_ERROR_TIMEOUT));
     }
     if (read_len < 0) {
-        rti_co_throw(co, native_uv_error(read_len), NULL);
-        return 0;
+        return N_RESULT_ERROR(n_int_result_t, native_uv_error(read_len));
     }
 
-    return read_len;
+    return N_RESULT_OK(n_int_result_t, read_len);
 }
 
 static void uv_async_tcp_write(inner_conn_t *conn) {
     uv_buf_t write_buf = {
-            .base = (void *) conn->buf.data,
-            .len = conn->buf.length,
+            .base = (void *) conn->write_buf.data,
+            .len = conn->write_buf.length,
     };
     conn->write_req.data = conn;
 
     int result = uv_write(&conn->write_req, (uv_stream_t *) &conn->handle, &write_buf, 1, on_tcp_write_end_cb);
     if (result < 0) {
-        rti_co_throw(conn->co, native_uv_error(result), NULL);
-        DEBUGF("[rt_uv_tcp_write] co=%p, tcp write failed: %s", conn->co, uv_strerror(result));
-        co_ready(conn->co);
+        conn->write_status = result;
+        DEBUGF("[rt_uv_tcp_write] co=%p, tcp write failed: %s", conn->write_co, uv_strerror(result));
+        co_ready(conn->write_co);
     }
 }
 
-int64_t rt_uv_tcp_write(n_tcp_conn_t *n_conn, n_vec_t buf) {
+n_int_result_t rt_uv_tcp_write(n_tcp_conn_t *n_conn, n_vec_t buf) {
     coroutine_t *co = coroutine_get();
     if (n_conn->closed) {
-        rti_co_throw(co, native_error(N_ERROR_CLOSED), NULL);
-        return 0;
+        return N_RESULT_ERROR(n_int_result_t, native_error(N_ERROR_CLOSED));
     }
 
     inner_conn_t *conn = n_conn->conn;
-    conn->co = co;
+    conn->write_co = co;
+    conn->write_status = 0;
+    conn->ref_count += 1;
     conn->handle.data = conn;
-    conn->buf = buf;
+    conn->write_buf = buf;
 
     global_waiting_send(uv_async_tcp_write, conn, 0, 0);
 
     DEBUGF("[rt_uv_tcp_write] co=%p, waiting resume", co)
 
     // not need yield, return directly
-    return buf.length;
+    int32_t status = conn->write_status;
+    bool closed = n_conn->closed;
+    conn->write_co = NULL;
+    conn_release(conn);
+    if (closed) return N_RESULT_ERROR(n_int_result_t, native_error(N_ERROR_CLOSED));
+    if (status) return N_RESULT_ERROR(n_int_result_t, native_uv_error(status));
+    return N_RESULT_OK(n_int_result_t, buf.length);
 }
 
 static inline void on_tcp_connect_cb(uv_connect_t *conn_req, int status) {
@@ -332,7 +343,8 @@ static inline void on_tcp_connect_cb(uv_connect_t *conn_req, int status) {
 
     if (status < 0) {
         DEBUGF("[on_tcp_connect_cb] connection failed: %s", uv_strerror(status));
-        rti_co_throw(conn->co, native_uv_error(status), NULL);
+        conn->connect_status = status;
+        uv_async_conn_close(conn);
     }
 
     co_ready(conn->co);
@@ -344,10 +356,8 @@ static inline void on_tcp_timeout_cb(uv_timer_t *handle) {
     inner_conn_t *conn = CONTAINER_OF(handle, inner_conn_t, timer);
     conn->timeout = true;
 
-    uv_timer_stop(handle);
-    uv_close((uv_handle_t *) handle, on_conn_close_timer_cb);
-
-    rti_co_throw(conn->co, native_error(N_ERROR_TIMEOUT), NULL);
+    conn->connect_status = UV_ETIMEDOUT;
+    uv_async_conn_close(conn);
     co_ready(conn->co);
 }
 
@@ -361,9 +371,10 @@ static void uv_async_tcp_connect(inner_conn_t *conn, struct sockaddr_in *dest, n
     free(dest);
 
     if (result < 0) {
-        rti_co_throw(conn->co, native_uv_error(result), NULL);
+        conn->connect_status = result;
         uv_close((uv_handle_t *) &conn->handle, on_conn_close_handle_cb);
         uv_close((uv_handle_t *) &conn->timer, on_conn_close_timer_cb);
+        co_ready(conn->co);
         return;
     }
 
@@ -372,28 +383,41 @@ static void uv_async_tcp_connect(inner_conn_t *conn, struct sockaddr_in *dest, n
     }
 }
 
-void rt_uv_tcp_connect(n_tcp_conn_t *n_conn, n_string_t ip, n_int64_t port, n_int64_t timeout_ms) {
+n_void_result_t rt_uv_tcp_connect(n_tcp_conn_t *n_conn, n_string_t ip, n_int64_t port, n_int64_t timeout_ms) {
     DEBUGF("[rt_uv_tcp_connect] start, addr %s, port %ld, co=%p", (char *) rt_string_ref(&ip), port, coroutine_get())
 
     coroutine_t *co = coroutine_get();
 
     struct sockaddr_in *dest = malloc(sizeof(struct sockaddr_in));
-    uv_ip4_addr(rt_string_ref(&ip), (int) port, dest);
+    int status = uv_ip4_addr(rt_string_ref(&ip), (int) port, dest);
+    if (status) {
+        free(dest);
+        return N_RESULT_ERROR(n_void_result_t, native_error(N_ERROR_INVALID_ARGUMENT));
+    }
 
     inner_conn_t *conn = mallocz(sizeof(inner_conn_t));
     conn->timeout = false;
     conn->data = NULL;
-    // One reference belongs to the TCP handle and one keeps the shared timer
-    // alive for both connect and read timeouts. Close callbacks release them.
-    conn->ref_count = 2;
+    // Keep a caller reference until connect returns; each handle owns another
+    // reference until its close callback runs.
+    conn->ref_count = 3;
     n_conn->conn = conn;
     conn->co = co;
 
     global_waiting_send(uv_async_tcp_connect, conn, dest, (void *) timeout_ms);
 
     DEBUGF("[rt_uv_tcp_connect] resume, connect success, will return conn=%p, co=%p", conn, co)
+    status = conn->connect_status;
+    conn->co = NULL;
+    if (status) {
+        n_conn->closed = true;
+        conn_release(conn);
+        n_conn->conn = NULL;
+        return N_RESULT_ERROR(n_void_result_t, native_uv_error(status));
+    }
+    conn_release(conn);
+    return N_RESULT_VOID;
 }
-
 void uv_async_tcp_accept(inner_server_t *inner_server, coroutine_t *co) {
     co->next = NULL;
 
@@ -409,13 +433,12 @@ void uv_async_tcp_accept(inner_server_t *inner_server, coroutine_t *co) {
     inner_server->waiters_count += 1;
 }
 
-void rt_uv_tcp_accept(n_tcp_server_t *server, n_tcp_conn_t *n_conn) {
+n_void_result_t rt_uv_tcp_accept(n_tcp_server_t *server, n_tcp_conn_t *n_conn) {
     coroutine_t *co = coroutine_get();
     DEBUGF("[rt_uv_tcp_accept] accept start, co=%p", co)
 
     if (server->closed) {
-        rti_co_throw(co, native_error(N_ERROR_CLOSED), NULL);
-        return;
+        return N_RESULT_ERROR(n_void_result_t, native_error(N_ERROR_CLOSED));
     }
     inner_server_t *inner_server = server->inner;
     inner_server->accept_waiters += 1;
@@ -431,8 +454,7 @@ void rt_uv_tcp_accept(n_tcp_server_t *server, n_tcp_conn_t *n_conn) {
             if (inner_server->accept_waiters == 0) {
                 free_conn(inner_server);
             }
-            rti_co_throw(co, native_error(N_ERROR_CLOSED), NULL);
-            return;
+            return N_RESULT_ERROR(n_void_result_t, native_error(N_ERROR_CLOSED));
         }
         if (inner_server->accept_head == NULL) {
             rt_coroutine_sleep(1);
@@ -458,8 +480,8 @@ void rt_uv_tcp_accept(n_tcp_server_t *server, n_tcp_conn_t *n_conn) {
     n_conn->conn = conn;
     // accept success, can read
     DEBUGF("[rt_uv_tcp_accept] accept success, inner_conn=%p, co=%p", conn, co);
+    return N_RESULT_VOID;
 }
-
 void on_tcp_conn_cb(uv_stream_t *handle, int status) {
     inner_server_t *inner_server = handle->data;
     inner_conn_t *conn = acquire_conn(inner_server);
@@ -511,42 +533,53 @@ void on_tcp_conn_cb(uv_stream_t *handle, int status) {
     DEBUGF("[on_new_conn_cb] handle completed, co=%p", conn->co);
 }
 
+static void on_tcp_listen_error_close_cb(uv_handle_t *handle) {
+    inner_server_t *inner = handle->data;
+    co_ready(inner->listen_co);
+}
+
 static void uv_async_tcp_listen(n_tcp_server_t *server) {
     uv_tcp_init(&global_loop, &server->inner->handle);
     server->inner->handle.data = server->inner;
 
     struct sockaddr_in addr;
-    uv_ip4_addr(rt_string_ref(&server->ip), (int) server->port, &addr);
-    uv_tcp_bind(&server->inner->handle, (const struct sockaddr *) &addr, 0);
-
-    int result = uv_listen((uv_stream_t *) &server->inner->handle, DEFAULT_BACKLOG, on_tcp_conn_cb);
+    int result = uv_ip4_addr(rt_string_ref(&server->ip), (int) server->port, &addr);
+    if (!result) result = uv_tcp_bind(&server->inner->handle, (const struct sockaddr *) &addr, 0);
+    if (!result) result = uv_listen((uv_stream_t *) &server->inner->handle, DEFAULT_BACKLOG, on_tcp_conn_cb);
     if (result) {
-        // 端口占用等错误
-        rti_co_throw(server->inner->listen_co, native_uv_error(result), NULL);
+        server->inner->listen_status = result;
+        uv_close((uv_handle_t *) &server->inner->handle, on_tcp_listen_error_close_cb);
         return;
     }
 
     co_ready(server->inner->listen_co);
 }
 
-void rt_uv_tcp_listen(n_tcp_server_t *server) {
+n_void_result_t rt_uv_tcp_listen(n_tcp_server_t *server) {
     DEBUGF("[rt_uv_tcp_listen] start, addr %s, port %ld", (char *) rt_string_ref(&server->ip), server->port)
 
-    n_processor_t *p = processor_get();
     coroutine_t *co = coroutine_get();
 
     server->inner = mallocz(sizeof(inner_server_t));
 
     pthread_mutex_init(&server->inner->accept_locker, NULL);
-    co->data = server;
     server->inner->listen_co = co;
 
     global_waiting_send(uv_async_tcp_listen, server, 0, 0);
 
+    int32_t status = server->inner->listen_status;
+    server->inner->listen_co = NULL;
+    if (status) {
+        pthread_mutex_destroy(&server->inner->accept_locker);
+        free(server->inner);
+        server->inner = NULL;
+        server->closed = true;
+        return N_RESULT_ERROR(n_void_result_t, native_uv_error(status));
+    }
     init_conn(server->inner);
     DEBUGF("[rt_uv_tcp_listen] listen success, will return")
+    return N_RESULT_VOID;
 }
-
 void uv_async_server_close(n_tcp_server_t *server) {
     uv_close((uv_handle_t *) &server->inner->handle, on_tcp_close_cb);
 }

@@ -1183,3 +1183,53 @@ pub type error_t:errort = enum:i32 { TEST_ERROR = 1 }
 true
 io
 fmt
+
+=== test_native_default_abi_n
+--- main.n
+#linkid test_error_native_default
+fn native(bool failed):int!
+#linkid test_error_native_void
+fn native_void(bool failed):void!
+fn main() {
+    var call = native
+    println(call(false))
+    var value = native(true) catch e {
+        println(e == runtime_error_t.END_OF_FILE)
+        -1
+    }
+    println(value)
+    var call_void = native_void
+    call_void(false)
+    native_void(true) catch e { println(e == runtime_error_t.CLOSED) }
+    println(native(false))
+}
+--- output.txt
+42
+true
+-1
+true
+42
+
+=== test_native_default_abi_x
+--- main.x
+#linkid test_error_native_default
+fn native(bool failed):int!
+#linkid test_error_native_void
+fn native_void(bool failed):void!
+fn main() {
+    println(native(false))
+    var value = native(true) catch e {
+        println(e == runtime_error_t.END_OF_FILE)
+        -1
+    }
+    println(value)
+    native_void(false)
+    native_void(true) catch e { println(e == runtime_error_t.CLOSED) }
+    println(native(false))
+}
+--- output.txt
+42
+true
+-1
+true
+42

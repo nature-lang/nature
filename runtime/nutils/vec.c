@@ -71,17 +71,14 @@ n_vec_t rt_unsafe_vec_new(int64_t hash, int64_t element_hash, int64_t length) {
  * @param length vec 大小，允许为 0，当 capacity = -1 时，使用 default_capacity
  * @return
  */
-n_vec_t rt_vec_new(int64_t hash, int64_t element_hash, int64_t length, void *value_ref) {
+n_vec_result_t rt_vec_new(int64_t hash, int64_t element_hash, int64_t length, void *value_ref) {
     DEBUGF("[rt_vec_new] hash=%lu, element_hash=%lu, len=%lu, cap=%lu", hash, element_hash, length);
 
     assertf(hash > 0, "hash must be a valid hash");
     assertf(element_hash > 0, "element_hash must be a valid hash");
 
     if (length < 0) {
-        const char *msg = "len must be greater than 0";
-        rti_throw(native_error(N_ERROR_INVALID_ARGUMENT), msg);
-        n_vec_t empty = {0};
-        return empty;
+        return N_RESULT_ERROR(n_vec_result_t, native_error(N_ERROR_INVALID_ARGUMENT));
     }
     int64_t capacity = length;
     if (capacity == 0) {
@@ -117,15 +114,12 @@ n_vec_t rt_vec_new(int64_t hash, int64_t element_hash, int64_t length, void *val
     }
 
     DEBUGF("[rt_vec_new] success, vec=%p, data=%p, element_size=%lu", &vec, vec.data, vec.element_size);
-    return vec;
+    return N_RESULT_OK(n_vec_result_t, vec);
 }
 
-n_vec_t rt_vec_cap(int64_t hash, int64_t element_hash, int64_t capacity) {
+n_vec_result_t rt_vec_cap(int64_t hash, int64_t element_hash, int64_t capacity) {
     if (capacity < 0) {
-        const char *msg = "cap must be greater than 0";
-        rti_throw(native_error(N_ERROR_INVALID_ARGUMENT), msg);
-        n_vec_t empty = {0};
-        return empty;
+        return N_RESULT_ERROR(n_vec_result_t, native_error(N_ERROR_INVALID_ARGUMENT));
     }
 
 
@@ -153,20 +147,23 @@ n_vec_t rt_vec_cap(int64_t hash, int64_t element_hash, int64_t capacity) {
 
     DEBUGF("[rt_vec_cap] success, vec=%p, data=%p, element_size=%lu, cap=%d", &vec, vec.data, vec.element_size,
            capacity);
-    return vec;
+    return N_RESULT_OK(n_vec_result_t, vec);
 }
 
-n_vec_t *rt_vec_alloc(int64_t hash, int64_t element_hash, int64_t capacity) {
-    n_vec_t vec = rt_vec_cap(hash, element_hash, capacity);
+n_ptr_result_t rt_vec_alloc(int64_t hash, int64_t element_hash, int64_t capacity) {
+    n_vec_result_t result = rt_vec_cap(hash, element_hash, capacity);
+    if (result.tag_hash == hash_string(ERRABLE_ERROR_TAG)) return N_RESULT_ERROR(n_ptr_result_t, result.error);
+    n_vec_t vec = result.value;
     n_vec_t *vec_heap = rti_gc_malloc(vec_rtype.gc_heap_size, &vec_rtype);
     *vec_heap = vec;
     DEBUGF("[rt_vec_alloc] success, vec_heap=%p, data=%p, element_size=%lu, cap=%d", vec_heap, vec_heap->data,
            vec_heap->element_size, capacity);
-    return vec_heap;
+    return N_RESULT_OK(n_ptr_result_t, vec_heap);
 }
 
 void rt_vec_new_out(n_vec_t *out, int64_t hash, int64_t element_hash, int64_t capacity) {
-    n_vec_t vec = rt_vec_cap(hash, element_hash, capacity);
+    assert(capacity >= 0);
+    n_vec_t vec = rt_vec_cap(hash, element_hash, capacity).value;
     *out = vec;
     DEBUGF("[rt_vec_new_out] success, out=%p, data=%p, element_size=%lu, cap=%d", out, out->data,
            out->element_size, capacity);
@@ -178,13 +175,7 @@ void rt_vec_new_out(n_vec_t *out, int64_t hash, int64_t element_hash, int64_t ca
  * @param value_ref
  */
 void rti_vec_access(n_vec_t *l, uint64_t index, void *value_ref) {
-    if (index >= l->length) {
-        const char *msg = "index out of range";
-        DEBUGF("[runtime.rti_vec_access] has err %s", msg);
-        rti_throw(native_error(N_ERROR_INDEX_OUT_OF_RANGE), msg);
-
-        return;
-    }
+    assert(index < l->length);
 
     // 计算 offset
     uint64_t offset = l->element_size * index; // (size unit byte) * index
@@ -295,26 +286,18 @@ void rt_vec_push(n_vec_t *vec, int64_t element_hash, void *ref) {
  * @param end 结束 index, end 如果 == -1 则解析为 len()
  * @return
  */
-n_vec_t rt_vec_slice(n_vec_t *l, int64_t start, int64_t end) {
+n_vec_result_t rt_vec_slice(n_vec_t *l, int64_t start, int64_t end) {
     if (end == -1) {
         end = l->length;
     }
 
     // start end 检测
     if (start > l->length || end > l->length || start < 0 || end < 0) {
-        const char *msg = "index out of range";
-        DEBUGF("[runtime.vec_slice] has err %s", msg);
-        rti_throw(native_error(N_ERROR_INDEX_OUT_OF_RANGE), msg);
-        n_vec_t empty = {0};
-        return empty;
+        return N_RESULT_ERROR(n_vec_result_t, native_error(N_ERROR_INDEX_OUT_OF_RANGE));
     }
 
     if (start > end) {
-        const char *msg = "index out of range";
-        DEBUGF("[runtime.vec_slice] has err %s", msg);
-        rti_throw(native_error(N_ERROR_INDEX_OUT_OF_RANGE), msg);
-        n_vec_t empty = {0};
-        return empty;
+        return N_RESULT_ERROR(n_vec_result_t, native_error(N_ERROR_INDEX_OUT_OF_RANGE));
     }
 
     DEBUGF("[vec_slice] rtype_hash=%lu, element_size=%lu, start=%lu, end=%lu", l->hash,
@@ -329,7 +312,7 @@ n_vec_t rt_vec_slice(n_vec_t *l, int64_t start, int64_t end) {
     sliced_vec.data = l->data + start * l->element_size;
 
     DEBUGF("[rt_vec_slice] old %p, new %p", l, &sliced_vec);
-    return sliced_vec;
+    return N_RESULT_OK(n_vec_result_t, sliced_vec);
 }
 
 
@@ -358,7 +341,7 @@ n_vec_t rt_vec_concat(n_vec_t *a, n_vec_t *b, int64_t element_hash) {
     DEBUGF("[vec_concat] rtype_hash=%lu, a=%p, b=%p", a->hash, a, b);
 
     int64_t length = a->length + b->length;
-    n_vec_t merged = rt_vec_cap(a->hash, element_hash, length);
+    n_vec_t merged = rt_vec_cap(a->hash, element_hash, length).value;
     merged.length = length;
     DEBUGF("[vec_concat] a->len=%lu, b->len=%lu", a->length, b->length);
 
@@ -382,7 +365,6 @@ n_anyptr_t rt_vec_element_addr(n_vec_t *l, uint64_t index) {
     if (index >= l->length) {
         const char *msg = "index out of range";
         DEBUGF("[runtime.rt_vec_element_addr] has err %s", msg);
-        rti_throw(native_error(N_ERROR_INDEX_OUT_OF_RANGE), msg);
         return 0;
     }
 

@@ -222,7 +222,7 @@ Concrete errors propagate only into compatible E types. Propagation into T! addi
 
 `runtime_error_t:errort` defines runtime categories. `system_error_t:errort` stores an i32 code for errno or native library status. Standard library modules expose `error_t` enums or small structs containing the required context.
 
-Native `.n` #linkid T! declarations retain the C return-T ABI. At the boundary the compiler drains the native error slot and converts it into the new error representation. Nature-to-Nature calls use Result returns. Native `.x` interfaces must explicitly declare errable<T,E> and return its matching tagged C structure; native T! declarations requiring a coroutine error slot are rejected.
+Native `#linkid` interfaces use the same return ABI in `.n` and `.x`: `T!` returns `errable<T,errort>`, and explicit `errable<T,E>` returns the corresponding tagged union. C functions must return a matching tag and value/error layout. Asynchronous callbacks record completion status in their operation context; the resumed native function returns the Result. Coroutines do not store a general error slot.
 
 Type identities are executable-local, not stable serialized or cross-library error numbers. Uncaught errors produce numeric diagnostics and a nonzero exit status. Applications can map errors to readable text explicitly in Nature catch blocks.
 

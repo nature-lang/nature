@@ -56,16 +56,13 @@ static type_t result_error_type(type_t type) {
 static void infer_result_signature(module_t *m, type_fn_t *f) {
     if (!f->errable_value_type.kind && declared_result(f->return_type)) {
         // An explicit Result declaration uses the tagged ABI, including native C functions.
-        f->native_errable = false;
         f->is_errable = true;
         f->errable_error_type = result_error_type(f->return_type);
         f->errable_value_type = ((tagged_union_element_t *) ct_list_value(f->return_type.tagged_union->elements, 0))->type;
     } else if (f->is_errable && !f->errable_value_type.kind) {
-        INFER_ASSERTF(!f->native_errable || !f->is_x,
-                      "native T! declarations require .n; use an explicit errable<T,E> return type in .x");
         f->errable_value_type = f->return_type;
         f->errable_error_type = default_error_type(m);
-        if (!f->native_errable) f->return_type = result_type(m, f->return_type, f->errable_error_type);
+        f->return_type = result_type(m, f->return_type, f->errable_error_type);
     }
 }
 
@@ -1427,7 +1424,7 @@ static type_t infer_async(module_t *m, ast_expr_t *expr, type_t target_type) {
     co_expr->return_type = fn_type.fn->is_errable ? fn_type.fn->errable_value_type : fn_type.fn->return_type;
 
     // 快速线路: 无参数，无返回值处理，无挟持外部变量，可以作为纯函数进行快速 coroutine 触发
-    if (m->in_fake_stmt && co_expr->return_type.kind == TYPE_VOID && !fn_type.fn->native_errable &&
+    if (m->in_fake_stmt && co_expr->return_type.kind == TYPE_VOID &&
         (!fn_type.fn->is_errable || fn_type.fn->errable_error_type.is_error) &&
         co_expr->origin_call->args->length == 0 && co_expr->closure_fn_void->capture_exprs->length == 0) {
         // 清空两个 fn body, 避免 infer void 异常
@@ -1891,66 +1888,6 @@ static type_t infer_ident(module_t *m, ast_ident *ident) {
 
     INFER_ASSERTF(false, "unable to recognize symbol type");
     exit(1);
-}
-
-static type_t infer_fn_value(module_t *m, ast_expr_t *expr) {
-    ast_ident *ident = expr->value;
-    type_t type = infer_ident(m, ident);
-    if (type.kind != TYPE_FN || !type.fn->native_errable || !type.fn->is_errable) return type;
-
-    ast_fndef_t *origin = symbol_table_get(ident->literal)->ast_value;
-    INFER_ASSERTF(!origin->c_variadic, "C variadic errable functions cannot be used as function values");
-
-    // A function value has the Nature Result ABI. Direct calls keep the native ABI.
-    char *name = dsprintf("%s.errable_adapter", origin->symbol_name);
-    symbol_t *symbol = symbol_table_get(name);
-    if (!symbol) {
-        ast_fndef_t *wrapper = ast_fndef_new(m, origin->line, origin->column);
-        wrapper->symbol_name = name;
-        wrapper->fn_name = name;
-        wrapper->fn_name_with_pkg = name;
-        wrapper->rel_path = origin->rel_path;
-        wrapper->is_x = origin->is_x;
-        wrapper->return_type = type.fn->errable_value_type;
-        wrapper->is_errable = true;
-        wrapper->rest_param = origin->rest_param;
-        wrapper->params = ct_list_new(sizeof(ast_var_decl_t));
-        wrapper->body = slice_new();
-
-        ast_call_t *call = NEW(ast_call_t);
-        call->left = *ast_ident_expr(origin->line, origin->column, origin->symbol_name);
-        call->args = ct_list_new(sizeof(ast_expr_t));
-        call->spread = origin->rest_param;
-        call->inject_self_arg = origin->self_kind != PARAM_SELF_NULL;
-        for (int i = 0; i < origin->params->length; ++i) {
-            ast_var_decl_t *param = COPY_NEW(ast_var_decl_t, ct_list_value(origin->params, i));
-            param->ident = var_unique_ident(m, "arg");
-            symbol_table_set(param->ident, SYMBOL_VAR, param, true);
-            ct_list_push(wrapper->params, param);
-            ast_expr_t arg = *ast_ident_expr(origin->line, origin->column, param->ident);
-            ct_list_push(call->args, &arg);
-        }
-
-        ast_stmt_t *stmt = NEW(ast_stmt_t);
-        stmt->line = origin->line;
-        stmt->column = origin->column;
-        if (wrapper->return_type.kind == TYPE_VOID) {
-            stmt->assert_type = AST_CALL;
-            stmt->value = call;
-        } else {
-            ast_return_stmt_t *ret = NEW(ast_return_stmt_t);
-            ret->expr = NEW(ast_expr_t);
-            *ret->expr = (ast_expr_t) {.assert_type = AST_CALL, .value = call, .line = origin->line, .column = origin->column};
-            stmt->assert_type = AST_STMT_RETURN;
-            stmt->value = ret;
-        }
-        slice_push(wrapper->body, stmt);
-        symbol = symbol_table_set(name, SYMBOL_FN, wrapper, false);
-        infer_fn_decl(m, wrapper, type_kind_new(TYPE_UNKNOWN));
-        linked_push(m->temp_worklist, wrapper);
-    }
-    ident->literal = name;
-    return ((ast_fndef_t *) symbol->ast_value)->type;
 }
 
 /**
@@ -3844,7 +3781,7 @@ static type_t infer_expr(module_t *m, ast_expr_t *expr, type_t target_type, type
             return infer_ternary(m, expr->value, target_type);
         }
         case AST_EXPR_IDENT: {
-            return infer_fn_value(m, expr);
+            return infer_ident(m, expr->value);
         }
         case AST_EXPR_VEC_NEW: {
             // literal casting
@@ -4575,7 +4512,6 @@ static type_t infer_impl_fn_decl(module_t *m, ast_fndef_t *fndef) {
     type_fn_t *f = NEW(type_fn_t);
     f->fn_name = fndef->fn_name;
     f->is_tpl = fndef->is_tpl;
-    f->native_errable = fndef->linkid != NULL && fndef->body == NULL;
     f->is_errable = fndef->is_errable;
     f->is_x = fndef->is_x;
     f->param_types = ct_list_new(sizeof(type_t));
@@ -4641,7 +4577,6 @@ static type_t infer_fn_decl(module_t *m, ast_fndef_t *fndef, type_t target_type)
     type_fn_t *type_fn = NEW(type_fn_t);
     type_fn->fn_name = fndef->fn_name;
     type_fn->is_tpl = fndef->is_tpl;
-    type_fn->native_errable = fndef->linkid != NULL && fndef->body == NULL;
     type_fn->is_errable = fndef->is_errable;
     type_fn->is_x = fndef->is_x;
     type_fn->param_types = ct_list_new(sizeof(type_t));

@@ -1,0 +1,134 @@
+=== filesystem_error_then_success[timeout=5]
+--- main.n
+import fs
+import syscall
+
+fn main() {
+    try {
+        var missing = fs.open('./missing/data.txt', syscall.O_RDONLY, 0)
+        assert(false)
+    } catch e { assert(e is system_error_t) }
+    var file = fs.open('./data.txt', syscall.O_RDONLY, 0)
+    try {
+        file.write('x' as [u8])
+        assert(false)
+    } catch e { assert(e == runtime_error_t.CLOSED || e is system_error_t) }
+    var buffer = vec<u8>.new(0, 3)
+    assert(file.read_at(buffer, 0) == 3)
+    assert(buffer as string == 'abc')
+    assert(file.stat().size == 3)
+    file.close()
+    try { file.read(buffer); assert(false) } catch e { assert(e == runtime_error_t.CLOSED) }
+    println('filesystem recovered')
+}
+--- data.txt
+abc
+--- output.txt
+filesystem recovered
+
+=== process_error_then_success[exclude_os=windows,timeout=5]
+--- main.n
+import process
+
+fn main() {
+    try {
+        var missing = process.run('./missing/program', [])
+        assert(false)
+    } catch e { assert(e is system_error_t) }
+    var result = process.run('/bin/echo', ['recovered'])
+    assert(result.stdout == 'recovered\n')
+    assert(result.exit_code == 0)
+    println('process recovered')
+}
+--- output.txt
+process recovered
+
+=== tcp_listen_error_then_success[timeout=5]
+--- main.n
+import net.tcp
+import co
+
+fn main() {
+    var listener = tcp.listen('127.0.0.1:18986')
+    for int i = 0; i < 10; i += 1 {
+        try { var duplicate = tcp.listen('127.0.0.1:18986'); assert(false) } catch e { assert(e is system_error_t) }
+    }
+    listener.close()
+    co.sleep(20)
+    var recovered = tcp.listen('127.0.0.1:18986')
+    recovered.close()
+    println('tcp listen recovered')
+}
+--- output.txt
+tcp listen recovered
+
+=== tcp_connect_error_then_success[timeout=5]
+--- main.n
+import net.tcp
+import co
+
+fn main() {
+    for int i = 0; i < 10; i += 1 {
+        try { var failed = tcp.connect_timeout('127.0.0.1:18987', 100); assert(false) } catch e { assert(e is system_error_t) }
+    }
+    var listener = tcp.listen('127.0.0.1:18987')
+    var client = tcp.connect_timeout('127.0.0.1:18987', 100)
+    var accepted = listener.accept()
+    assert(client.write('ok' as [u8]) == 2)
+    var buffer = vec<u8>.new(0, 2)
+    assert(accepted.read(buffer) == 2)
+    assert(buffer as string == 'ok')
+    client.close()
+    accepted.close()
+    listener.close()
+    co.sleep(20)
+    println('tcp connect recovered')
+}
+--- output.txt
+tcp connect recovered
+
+=== tls_connect_failure_returns_result[timeout=5]
+--- main.n
+import net.tls
+
+fn main() {
+    for int i = 0; i < 10; i += 1 {
+        try { var failed = tls.connect_timeout('127.0.0.1:18988', 100); assert(false) } catch e { assert(e is system_error_t) }
+    }
+    println('tls errors caught')
+}
+--- output.txt
+tls errors caught
+
+=== udp_bind_error_then_success[timeout=5]
+--- main.n
+import net.udp
+
+fn main() {
+    var socket = udp.bind('127.0.0.1:18989')
+    try { var duplicate = udp.bind('127.0.0.1:18989'); assert(false) } catch e { assert(e is system_error_t) }
+    socket.close()
+    var recovered = udp.bind('127.0.0.1:18989')
+    recovered.close()
+    println('udp bind recovered')
+}
+--- output.txt
+udp bind recovered
+
+=== http_listen_error_then_close[timeout=5]
+--- main.n
+import net.tcp
+import http
+import co
+
+fn main() {
+    var listener = tcp.listen('0.0.0.0:18990')
+    var server = http.server()
+    try { server.listen(18990); assert(false) } catch e { assert(e is system_error_t) }
+    server.close()
+    listener.close()
+    co.sleep(20)
+    println('http error caught')
+}
+--- output.txt
+http error caught

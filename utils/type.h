@@ -474,7 +474,6 @@ struct type_fn_t {
     // expression still types as T. Unset for a non-errable fn.
     type_t errable_value_type;
     type_t errable_error_type;
-    bool native_errable; // C linkid keeps its T ABI; compiler bridges the native error slot
     list_t *param_types; // type_t
     bool is_rest;
     bool is_c_variadic;
@@ -485,7 +484,7 @@ struct type_fn_t {
 };
 
 static inline bool is_result_fn(type_fn_t *f) {
-    return f && f->is_errable && !f->native_errable;
+    return f && f->is_errable;
 }
 
 #define ERROR_INLINE_BYTES 24
@@ -515,6 +514,25 @@ typedef struct {
     n_error_t error;
 } n_void_result_t;
 
+// C layouts for the same errable<T,E> ABI used by Nature functions.
+#define N_RESULT_TYPE(name, value_type) \
+    typedef struct {                    \
+        uint64_t tag_hash;              \
+        union {                         \
+            value_type value;           \
+            n_error_t error;            \
+        };                              \
+    } name
+
+#define N_RESULT_OK(type, v) ((type) {.tag_hash = hash_string(ERRABLE_VALUE_TAG), .value = (v)})
+#define N_RESULT_ERROR(type, code) ((type) {.tag_hash = hash_string(ERRABLE_ERROR_TAG), .error = (code)})
+#define N_RESULT_VOID ((n_void_result_t) {.tag_hash = hash_string(ERRABLE_VALUE_TAG)})
+
+N_RESULT_TYPE(n_int_result_t, int64_t);
+N_RESULT_TYPE(n_u32_result_t, uint32_t);
+N_RESULT_TYPE(n_bool_result_t, uint8_t);
+N_RESULT_TYPE(n_ptr_result_t, void *);
+
 // 类型描述信息 end
 
 // 类型对应的数据在内存中的存储形式 --- start
@@ -527,6 +545,9 @@ typedef struct {
     int64_t hash;
     void *allocator;
 } n_vec_t, n_string_t;
+
+N_RESULT_TYPE(n_vec_result_t, n_vec_t);
+typedef n_vec_result_t n_string_result_t;
 
 // 通过 gc malloc 申请
 typedef struct linkco_t linkco_t;

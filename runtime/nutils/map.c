@@ -132,8 +132,6 @@ void rt_map_new_out(n_map_t *out, uint64_t rtype_hash, uint64_t key_rhash, uint6
  */
 n_anyptr_t rt_map_access(n_map_t *m, void *key_ref) {
     if (m->capacity == 0) {
-        const char *msg = "key not found in map";
-        rti_throw(native_error(N_ERROR_KEY_NOT_FOUND), msg);
         return 0;
     }
 
@@ -146,8 +144,6 @@ n_anyptr_t rt_map_access(n_map_t *m, void *key_ref) {
                hash_value_empty(hash_value),
                hash_value_deleted(hash_value));
 
-        const char *msg = "key not found in map";
-        rti_throw(native_error(N_ERROR_KEY_NOT_FOUND), msg);
         return 0;
     }
 

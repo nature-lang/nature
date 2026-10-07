@@ -297,7 +297,7 @@ static void on_http_conn_cb(uv_stream_t *server, int status) {
         return;
     }
 
-    coroutine_t *listen_co = inner->listen_co;
+    coroutine_t *listen_co = inner->listener->co;
 
     // 初始化 client 数据 accept loop 和 listen loop 必须使用同一个 loop
     http_conn_t *conn = acquire_conn(inner);
@@ -339,13 +339,15 @@ static void on_http_conn_cb(uv_stream_t *server, int status) {
 
 static inline void on_server_close_cb(uv_handle_t *handle) {
     inner_http_server_t *inner = CONTAINER_OF(handle, inner_http_server_t, handle);
-    coroutine_t *listen_co = inner->listen_co;
-
+    coroutine_t *listen_co = inner->listener->co;
+    n_http_server_t *server = inner->server;
+    server->inner = NULL;
     free_conn(inner);
     co_ready(listen_co);
 }
 
 static void uv_async_http_close(n_http_server_t *server) {
+    if (!server->inner || uv_is_closing((uv_handle_t *) &server->inner->handle)) return;
     uv_close((uv_handle_t *) &server->inner->handle, on_server_close_cb);
 }
 
@@ -369,7 +371,7 @@ void test_timer_dump_count_cb(uv_timer_t *timer) {
 // 由 libuv 通用 async 触发的回调器
 static void uv_async_http_listen(inner_http_server_t *inner) {
     uv_tcp_init(&global_loop, &inner->handle);
-    inner->handle.data = inner->listen_co;
+    inner->handle.data = inner->listener->co;
     struct sockaddr_in addr;
 
     n_http_server_t *server = inner->server;
@@ -380,13 +382,12 @@ static void uv_async_http_listen(inner_http_server_t *inner) {
     //    timer->data = inner;
     //    uv_timer_start(timer, test_timer_dump_count_cb, 1000, 1000);
 
-    uv_ip4_addr(rt_string_ref(&server->addr), server->port, &addr);
-    uv_tcp_bind(&inner->handle, (const struct sockaddr *) &addr, 0);
-
-    int result = uv_listen((uv_stream_t *) &inner->handle, DEFAULT_BACKLOG, on_http_conn_cb);
+    int result = uv_ip4_addr(rt_string_ref(&server->addr), server->port, &addr);
+    if (!result) result = uv_tcp_bind(&inner->handle, (const struct sockaddr *) &addr, 0);
+    if (!result) result = uv_listen((uv_stream_t *) &inner->handle, DEFAULT_BACKLOG, on_http_conn_cb);
     if (result) {
-        rti_co_throw(inner->listen_co, native_uv_error(result), NULL);
-        co_ready(inner->listen_co);
+        inner->listener->status = result;
+        uv_close((uv_handle_t *) &inner->handle, on_server_close_cb);
     }
 }
 
@@ -398,7 +399,7 @@ void rt_uv_http_close(n_http_server_t *server) {
 /**
  * @param server
  */
-void rt_uv_http_listen(n_http_server_t *server) {
+n_void_result_t rt_uv_http_listen(n_http_server_t *server) {
     n_processor_t *p = processor_get();
     coroutine_t *co = coroutine_get();
 
@@ -408,11 +409,17 @@ void rt_uv_http_listen(n_http_server_t *server) {
     inner->max = FREELIST_MAX;
     inner->min = FREELIST_MIN;
     init_conn(inner);
-    inner->listen_co = co;
+    http_listen_ctx_t *listener = mallocz(sizeof(http_listen_ctx_t));
+    listener->co = co;
+    inner->listener = listener;
     inner->server = server;
     server->inner = inner;
 
     global_waiting_send(uv_async_http_listen, inner, 0, 0);
 
     DEBUGF("[rt_uv_http_listen] listen resume, port=%ld, and return, p_index=%d", server->port, p->index);
+    int32_t status = listener->status;
+    free(listener);
+    if (status) return N_RESULT_ERROR(n_void_result_t, native_uv_error(status));
+    return N_RESULT_VOID;
 }

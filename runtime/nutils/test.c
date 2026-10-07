@@ -14,20 +14,29 @@ test_error_int_result_t test_error_result(uint8_t failure) {
     };
 }
 
+n_int_result_t test_error_native_default(uint8_t failure) {
+    if (failure) return N_RESULT_ERROR(n_int_result_t, native_error(N_ERROR_EOF));
+    return N_RESULT_OK(n_int_result_t, 42);
+}
+
+n_void_result_t test_error_native_void(uint8_t failure) {
+    if (failure) return N_RESULT_ERROR(n_void_result_t, native_error(N_ERROR_CLOSED));
+    return N_RESULT_VOID;
+}
+
 void test_error_clobber_return_register(void) {
 #ifdef __ARM64
     __asm__ volatile("mov x8, #259" ::: "x8");
 #endif
 }
 
-int64_t test_error_native_read(int64_t *source, n_vec_t buffer) {
+n_int_result_t test_error_native_read(int64_t *source, n_vec_t buffer) {
     if (*source < 0) {
-        rti_throw(native_error(N_ERROR_EOF), NULL);
-        return 0;
+        return N_RESULT_ERROR(n_int_result_t, native_error(N_ERROR_EOF));
     }
-    if (buffer.length == 0) return 0;
+    if (buffer.length == 0) return N_RESULT_OK(n_int_result_t, 0);
     ((uint8_t *) buffer.data)[0] = (uint8_t) *source;
-    return 1;
+    return N_RESULT_OK(n_int_result_t, 1);
 }
 
 enum {

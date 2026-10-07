@@ -104,9 +104,9 @@ static inline void signal_process(int64_t sig) {
     sc_map_foreach(&signal_handlers, key, mask) {
         n_chan_t *ch = (n_chan_t *) key;
         if (mask & (1 << sig)) {
-            bool result = rt_chan_send(ch, &sig, true);
+            n_bool_result_t result = rt_chan_send(ch, &sig, true);
             DEBUGF("[runtime.signal_process] signal %ld mask, will send to channel %p, send result = %d", sig, ch,
-                   result);
+                   result.tag_hash == hash_string(ERRABLE_VALUE_TAG) && result.value);
         }
     }
 }

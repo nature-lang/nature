@@ -59,8 +59,6 @@ static lir_operand_t *linear_result_address(module_t *m) {
 }
 
 static void linear_store_error(module_t *m, type_t source_type, lir_operand_t *value);
-static void linear_native_has_error(module_t *m);
-static void linear_take_native_error(module_t *m);
 
 
 lir_opcode_t ast_op_convert[] = {
@@ -241,15 +239,12 @@ static void linear_index_error(module_t *m, lir_operand_t *index, lir_operand_t 
     uint16_t depth = c->catch_error_labels->count;
     bool be_catch = depth > 0;
     char *label = be_catch ? stack_top(c->catch_error_labels) : c->error_label;
-    if (m->is_x && be_catch) {
+    if (be_catch) {
         linear_builtin_error(m, N_ERROR_INDEX_OUT_OF_RANGE);
-    } else if (m->is_x) {
-        char *path = c->fndef->rel_path ? c->fndef->rel_path : m->rel_path;
-        push_rt_call(m, RT_CALL_X_INDEX_PANIC, NULL, 5, index, length,
-                     string_operand(path, strlen(path)), int_operand(m->current_line), int_operand(m->current_column));
     } else {
-        push_rt_call(m, RT_CALL_THROW_INDEX_OUT_ERROR, NULL, 3, index, length, bool_operand(be_catch));
-        if (be_catch) linear_take_native_error(m);
+        char *path = c->fndef->rel_path ? c->fndef->rel_path : m->rel_path;
+        push_rt_call(m, RT_CALL_INDEX_PANIC, NULL, 5, index, length,
+                     string_operand(path, strlen(path)), int_operand(m->current_line), int_operand(m->current_column));
     }
     linear_bal_error(m, label, depth);
 }
@@ -930,40 +925,27 @@ static lir_operand_t *global_fn_symbol(module_t *m, ast_expr_t expr) {
     return lir_label_operand(symbol_ident, s->is_local);
 }
 
-static void linear_has_panic(module_t *m) {
-    char *error_target_label = m->current_closure->error_label;
-    assertf(m->current_line < 1000000, "line '%d' exception", m->current_line);
-    assertf(m->current_column < 1000000, "column '%d' exception", m->current_line);
-
-    // panic 必须被立刻 catch, 判断当前表达式是否被 catch, 如果被 catch, 则走正常的 error 流程, 也就是有错误跳转到 catch label
-    uint16_t catch_depth = m->current_closure->catch_error_labels->count;
-    bool be_catch = catch_depth > 0;
-    if (be_catch) {
-        error_target_label = stack_top(m->current_closure->catch_error_labels);
+// Private runtime helpers with an out parameter return 0 or a runtime code.
+// The compiler converts a failure into the same Result/catch flow as a Nature call.
+static void linear_check_status(module_t *m, lir_operand_t *status, char *message) {
+    char *end = label_ident_with_unique(".runtime.value");
+    OP_PUSH(lir_op_new(LIR_OPCODE_BEE, integer_operand(0, TYPE_INT32), status, lir_label_operand(end, true)));
+    closure_t *c = m->current_closure;
+    uint16_t depth = c->catch_error_labels->count;
+    if (depth) {
+        type_t type = linear_error_type(m);
+        lir_operand_t *error = temp_var_operand_with_alloc(m, type);
+        linear_zero(m, type, error);
+        OP_PUSH(lir_op_move(indirect_addr_operand(m, type_kind_new(TYPE_UINT64), error, 0), int_operand(RUNTIME_ERROR_TYPE_ID)));
+        OP_PUSH(lir_op_move(indirect_addr_operand(m, type_kind_new(TYPE_INT32), error, POINTER_SIZE), status));
+        linear_store_error(m, type, error);
+        linear_bal_error(m, stack_top(c->catch_error_labels), depth);
+    } else {
+        char *path = c->fndef->rel_path ? c->fndef->rel_path : m->rel_path;
+        push_rt_call(m, RT_CALL_PANIC_AT, NULL, 4, string_operand(message, strlen(message)),
+                     string_operand(path, strlen(path)), int_operand(m->current_line), int_operand(m->current_column));
     }
-
-    char *error_path = m->current_closure->fndef->rel_path ? m->current_closure->fndef->rel_path : m->rel_path;
-    lir_operand_t *path_operand = string_operand(error_path, strlen(error_path));
-    lir_operand_t *line_operand = int_operand(m->current_line);
-    lir_operand_t *column_operand = int_operand(m->current_column);
-
-    // Uncaught native panics exit here; caught ones are moved into the active error slot.
-    lir_operand_t *has_error = temp_var_operand(m, type_kind_new(TYPE_BOOL));
-    push_rt_call(m, RT_CALL_CO_HAS_PANIC, has_error, 4, bool_operand(be_catch), path_operand,
-                 line_operand,
-                 column_operand);
-
-    if (!be_catch) return; // An uncaught panic terminates inside co_has_panic.
-
-    char *panic_ident = label_ident_with_unique(".panic");
-    char *panic_end_ident = str_connect(panic_ident, LABEL_END_SUFFIX);
-
-    OP_PUSH(lir_op_new(LIR_OPCODE_BEE, bool_operand(true), has_error, lir_label_operand(panic_ident, true)));
-    OP_PUSH(lir_op_bal(lir_label_operand(panic_end_ident, true)));
-    OP_PUSH(lir_op_label(panic_ident, true));
-    linear_take_native_error(m);
-    linear_bal_error(m, error_target_label, catch_depth);
-    OP_PUSH(lir_op_label(panic_end_ident, true));
+    OP_PUSH(lir_op_label(end, true));
 }
 
 
@@ -1010,26 +992,6 @@ static void linear_result_has_error(module_t *m, type_t error_type, lir_operand_
     lir_operand_t *error = indirect_addr_operand(m, error_type, result, POINTER_SIZE);
     if (error_type.storage_kind == STORAGE_KIND_IND) error = lea_operand_pointer(m, error);
     linear_store_error(m, error_type, error);
-    linear_bal_error(m, label, depth);
-    OP_PUSH(lir_op_label(end, true));
-}
-
-static void linear_take_native_error(module_t *m) {
-    type_t type = linear_error_type(m);
-    lir_operand_t *error = temp_var_operand_with_alloc(m, type);
-    push_rt_call(m, RT_CALL_CO_REMOVE_ERROR, NULL, 1, native_pointer(m, error));
-    linear_store_error(m, type, error);
-}
-
-static void linear_native_has_error(module_t *m) {
-    closure_t *c = m->current_closure;
-    uint16_t depth = c->catch_error_labels->count;
-    char *label = depth ? stack_top(c->catch_error_labels) : c->error_label;
-    char *end = label_ident_with_unique(".native.value");
-    lir_operand_t *has_error = temp_var_operand(m, type_kind_new(TYPE_BOOL));
-    push_rt_call(m, RT_CALL_CO_HAS_ERROR, has_error, 0);
-    OP_PUSH(lir_op_new(LIR_OPCODE_BEE, bool_operand(false), has_error, lir_label_operand(end, true)));
-    linear_take_native_error(m);
     linear_bal_error(m, label, depth);
     OP_PUSH(lir_op_label(end, true));
 }
@@ -2319,10 +2281,6 @@ static lir_operand_t *linear_call(module_t *m, ast_expr_t expr, lir_operand_t *t
     // call base_target,params -> target
     OP_PUSH(lir_op_new(LIR_OPCODE_CALL, fn_target, operand_new(LIR_OPERAND_ARGS, args), temp));
 
-    // 目标函数可能会产生错误才需要进行错误判断，并跳转到对应的 error label 或者 continue label
-    if (type_fn->is_errable) {
-        linear_native_has_error(m);
-    }
 
     if (temp) {
         return linear_super_move(m, expr.type, target, temp);
@@ -2435,7 +2393,9 @@ static lir_operand_t *linear_binary(module_t *m, ast_expr_t expr, lir_operand_t 
                 lir_operand_t *out_ptr = linear_lea_builtin_value_struct(m, target);
                 left_target = linear_lea_builtin_value_struct(m, left_target);
                 right_target = linear_lea_builtin_value_struct(m, right_target);
-                push_rt_call(m, RT_CALL_STRING_CONCAT, NULL, 3, out_ptr, left_target, right_target);
+                lir_operand_t *status = temp_var_operand(m, type_kind_new(TYPE_INT32));
+                push_rt_call(m, RT_CALL_STRING_CONCAT, status, 3, out_ptr, left_target, right_target);
+                linear_check_status(m, status, "string concatenation result is too large");
                 break;
             }
             case LIR_OPCODE_SEE: {
@@ -2586,12 +2546,6 @@ static lir_operand_t *linear_unary(module_t *m, ast_expr_t expr, lir_operand_t *
     // 所以 target 真的有足够的空间么？target 默认就是 ptr， 无论是不是超过 8byte!
     // first 是个 ptr
     if (unary_expr->op == AST_OP_IA) {
-        // checking TODO 性能问题，暂时不启用
-        //        if (unary_expr->operand.type.kind == TYPE_PTR) {
-        //            push_rt_call(m, RT_CALL_PTR_VALID, NULL, 1, first);
-        //            linear_has_panic(m);
-        //        }
-
         if (!target) {
             target = temp_var_operand_with_alloc(m, expr.type);
         }
@@ -2624,9 +2578,9 @@ static lir_operand_t *linear_vec_slice(module_t *m, ast_expr_t expr, lir_operand
     }
     lir_operand_t *out_ptr = linear_lea_builtin_value_struct(m, target);
     vec_target = linear_lea_builtin_value_struct(m, vec_target);
-    push_rt_call(m, RT_CALL_VEC_SLICE, NULL, 4, out_ptr, vec_target, start_target, end_target);
-
-    linear_has_panic(m);
+    lir_operand_t *status = temp_var_operand(m, type_kind_new(TYPE_INT32));
+    push_rt_call(m, RT_CALL_VEC_SLICE, status, 4, out_ptr, vec_target, start_target, end_target);
+    linear_check_status(m, status, "index out of range");
 
     return target;
 }
@@ -2903,7 +2857,10 @@ static lir_operand_t *linear_map_access(module_t *m, ast_expr_t expr, lir_operan
     lir_operand_t *value_target = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
     push_rt_call(m, RT_CALL_MAP_ACCESS, value_target, 2, map_target, key_ref);
 
-    linear_has_panic(m);
+    char *found = label_ident_with_unique(".map.found");
+    OP_PUSH(lir_op_new(LIR_OPCODE_BNE, int_operand(0), value_target, lir_label_operand(found, true)));
+    linear_check_status(m, integer_operand(N_ERROR_KEY_NOT_FOUND, TYPE_INT32), "key not found in map");
+    OP_PUSH(lir_op_label(found, true));
 
     if (expr.type.storage_kind != STORAGE_KIND_IND) {
         value_target = indirect_addr_operand(m, expr.type, value_target, 0);
@@ -2992,9 +2949,6 @@ static lir_operand_t *linear_struct_select(module_t *m, ast_expr_t expr, lir_ope
         type_struct = type_struct.ptr->value_type;
     } else if (is_struct_ptr(type_struct)) {
         type_struct = type_struct.ptr->value_type;
-        // TODO inline 校验, 校验失败调用 panic
-        //        push_rt_call(m, RT_CALL_PTR_VALID, NULL, 1, struct_target);
-        //        linear_has_panic(m);
     }
 
     assert(type_struct.kind == TYPE_STRUCT);
@@ -3373,9 +3327,9 @@ static lir_operand_t *linear_is_expr(module_t *m, ast_expr_t expr, lir_operand_t
 
 /**
  * Any and ordinary unions store an rtype pointer in their first word.
- * Check it inline in .x, which has no coroutine error slot.
+ * Both modes check it inline without coroutine error state.
  */
-static void linear_x_type_assert(module_t *m, lir_operand_t *src_operand, uint64_t target_rtype_hash) {
+static void linear_type_assert(module_t *m, lir_operand_t *src_operand, uint64_t target_rtype_hash) {
     lir_operand_t *value_ptr = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
     OP_PUSH(lir_op_move(value_ptr, src_operand));
 
@@ -3403,7 +3357,7 @@ static void linear_x_type_assert(module_t *m, lir_operand_t *src_operand, uint64
         char *panic_path = m->current_closure->fndef->rel_path
                                    ? m->current_closure->fndef->rel_path
                                    : m->rel_path;
-        push_rt_call(m, RT_CALL_X_PANIC, NULL, 4,
+        push_rt_call(m, RT_CALL_PANIC_AT, NULL, 4,
                      string_operand("type assert failed", strlen("type assert failed")),
                      string_operand(panic_path, strlen(panic_path)), int_operand(m->current_line),
                      int_operand(m->current_column));
@@ -3604,88 +3558,29 @@ static lir_operand_t *linear_cast(module_t *m, type_t source_type, type_t target
     // any assert
     if (source_type.kind == TYPE_ANY) {
         assert(target_type.kind != TYPE_ANY);
-        if (m->is_x) {
-            linear_x_type_assert(m, src_operand, type_hash(target_type));
-            lir_operand_t *payload;
-            if (target_type.storage_kind == STORAGE_KIND_IND) {
-                payload = native_pointer(m, indirect_addr_operand(m, type_kind_new(TYPE_ANYPTR), src_operand, offsetof(n_any_t, value)));
-            } else {
-                payload = indirect_addr_operand(m, target_type, src_operand, offsetof(n_any_t, value));
-            }
-            return linear_super_move(m, target_type, target, payload);
-        }
 
-        if (target_type.storage_kind != STORAGE_KIND_IND) {
-            // target 可能总是未 def 导致下面的取值异常, 所以最好使用临时值 assert，然后 mov 到 target
-            lir_operand_t *temp = temp_var_operand(m, target_type);
-            OP_PUSH(lir_op_nop_def(temp));
-            lir_operand_t *output_ref = lea_operand_pointer(m, temp);
-            uint64_t target_rtype_hash = type_hash(target_type);
-            lir_operand_t *any_ptr = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
-            OP_PUSH(lir_op_move(any_ptr, src_operand));
-            push_rt_call(m, RT_CALL_ANY_ASSERT, NULL, 3, any_ptr, int_operand(target_rtype_hash), output_ref);
-            linear_has_panic(m);
-            OP_PUSH(lir_op_move(target, temp));
-            return target;
+        linear_type_assert(m, src_operand, type_hash(target_type));
+        lir_operand_t *payload;
+        if (target_type.storage_kind == STORAGE_KIND_IND) {
+            payload = native_pointer(m, indirect_addr_operand(m, type_kind_new(TYPE_ANYPTR), src_operand, offsetof(n_any_t, value)));
         } else {
-            // VAR target's value is the write address: pass it by value, lea only for I_ADDR/SYMBOL_VAR
-            lir_operand_t *output_ref = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
-            lir_operand_t *out_src = target;
-            if (target->assert_type == LIR_OPERAND_INDIRECT_ADDR ||
-                target->assert_type == LIR_OPERAND_SYMBOL_VAR) {
-                out_src = lea_operand_pointer(m, target);
-            }
-            OP_PUSH(lir_op_move(output_ref, out_src));
-            uint64_t target_rtype_hash = type_hash(target_type);
-            lir_operand_t *any_ptr = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
-            OP_PUSH(lir_op_move(any_ptr, src_operand));
-            push_rt_call(m, RT_CALL_ANY_ASSERT, NULL, 3, any_ptr, int_operand(target_rtype_hash), output_ref);
-            linear_has_panic(m);
-            return target;
+            payload = indirect_addr_operand(m, target_type, src_operand, offsetof(n_any_t, value));
         }
+        return linear_super_move(m, target_type, target, payload);
     }
 
     // union assert
     if (source_type.kind == TYPE_UNION) {
         assert(target_type.kind != TYPE_UNION);
-        if (m->is_x) {
-            uint64_t target_rtype_hash = type_hash(target_type);
-            linear_x_type_assert(m, src_operand, target_rtype_hash);
 
-            lir_operand_t *payload = indirect_addr_operand(m, target_type, src_operand, POINTER_SIZE);
-            if (target_type.storage_kind == STORAGE_KIND_IND) {
-                payload = lea_operand_pointer(m, payload);
-            }
-            return linear_super_move(m, target_type, target, payload);
-        }
+        uint64_t target_rtype_hash = type_hash(target_type);
+        linear_type_assert(m, src_operand, target_rtype_hash);
 
-        if (target_type.storage_kind != STORAGE_KIND_IND) {
-            // target 可能总是未 def 导致下面的取值异常, 所以最好使用临时值 assert，然后 mov 到 target
-            lir_operand_t *temp = temp_var_operand(m, target_type);
-            OP_PUSH(lir_op_nop_def(temp));
-            lir_operand_t *output_ref = lea_operand_pointer(m, temp);
-            uint64_t target_rtype_hash = type_hash(target_type);
-            lir_operand_t *union_ptr = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
-            OP_PUSH(lir_op_move(union_ptr, src_operand));
-            push_rt_call(m, RT_CALL_UNION_ASSERT, NULL, 3, union_ptr, int_operand(target_rtype_hash), output_ref);
-            linear_has_panic(m);
-            OP_PUSH(lir_op_move(target, temp));
-            return target;
-        } else {
-            // VAR target's value is the write address: pass it by value, lea only for I_ADDR/SYMBOL_VAR
-            lir_operand_t *output_ref = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
-            lir_operand_t *out_src = target;
-            if (target->assert_type == LIR_OPERAND_INDIRECT_ADDR || target->assert_type == LIR_OPERAND_SYMBOL_VAR) {
-                out_src = lea_operand_pointer(m, target);
-            }
-            OP_PUSH(lir_op_move(output_ref, out_src));
-            uint64_t target_rtype_hash = type_hash(target_type);
-            lir_operand_t *union_ptr = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
-            OP_PUSH(lir_op_move(union_ptr, src_operand));
-            push_rt_call(m, RT_CALL_UNION_ASSERT, NULL, 3, union_ptr, int_operand(target_rtype_hash), output_ref);
-            linear_has_panic(m);
-            return target;
+        lir_operand_t *payload = indirect_addr_operand(m, target_type, src_operand, POINTER_SIZE);
+        if (target_type.storage_kind == STORAGE_KIND_IND) {
+            payload = lea_operand_pointer(m, payload);
         }
+        return linear_super_move(m, target_type, target, payload);
     }
 
     if (source_type.kind == TYPE_TAGGED_UNION) {
@@ -3718,8 +3613,9 @@ static lir_operand_t *linear_cast(module_t *m, type_t source_type, type_t target
         uint64_t target_rtype_hash = type_hash(target_type);
         lir_operand_t *interface_ptr = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
         OP_PUSH(lir_op_move(interface_ptr, src_operand));
-        push_rt_call(m, RT_CALL_INTERFACE_ASSERT, NULL, 3, interface_ptr, int_operand(target_rtype_hash), output_ref);
-        linear_has_panic(m);
+        lir_operand_t *status = temp_var_operand(m, type_kind_new(TYPE_INT32));
+        push_rt_call(m, RT_CALL_INTERFACE_ASSERT, status, 3, interface_ptr, int_operand(target_rtype_hash), output_ref);
+        linear_check_status(m, status, "type assert failed");
         return target;
     }
 
@@ -3816,8 +3712,11 @@ static lir_operand_t *linear_cast(module_t *m, type_t source_type, type_t target
     if (source_type.kind == TYPE_PTR) {
         // ptr<T> as ref<T>
         assert(target_type.kind == TYPE_REF);
-        push_rt_call(m, RT_CALL_PTR_ASSERT, target, 1, src_operand);
-        linear_has_panic(m);
+        char *valid = label_ident_with_unique(".pointer.valid");
+        OP_PUSH(lir_op_new(LIR_OPCODE_BNE, int_operand(0), src_operand, lir_label_operand(valid, true)));
+        linear_check_status(m, integer_operand(N_ERROR_NULL_POINTER, TYPE_INT32), "ptr is null, cannot assert");
+        OP_PUSH(lir_op_label(valid, true));
+        linear_super_move(m, target_type, target, src_operand);
         return target;
     }
 

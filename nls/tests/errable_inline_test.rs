@@ -311,3 +311,29 @@ fn main() { var v = result(true) catch e { e } }
         assert!(diagnostics[0].contains("type inconsistency"), "{ext}: {diagnostics:?}");
     }
 }
+
+#[tokio::test]
+async fn native_default_errors_in_both_modes() {
+    for ext in ["n", "x"] {
+        let diagnostics = errors(
+            r#"
+#linkid test_error_native_default
+fn native(bool failed):int!
+#linkid test_error_native_void
+fn native_void(bool failed):void!
+fn main() {
+    var value = native(true) catch e {
+        var same = e == runtime_error_t.END_OF_FILE
+        -1
+    }
+    native_void(true) catch e {
+        var same = e == runtime_error_t.CLOSED
+    }
+}
+"#,
+            ext,
+        )
+        .await;
+        assert!(diagnostics.is_empty(), "{ext}: {diagnostics:?}");
+    }
+}

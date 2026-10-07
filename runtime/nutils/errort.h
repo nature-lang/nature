@@ -33,4 +33,8 @@ static inline n_error_t native_uv_error(int32_t status) {
     }
 }
 
+static inline n_error_t native_fs_error(int32_t status) {
+    return status > 0 ? native_system_error(status) : native_uv_error(status);
+}
+
 #endif

@@ -61,9 +61,6 @@ static type_t interface_extract_fn_type(module_t *m, ast_fndef_t *fndef) {
     fn->is_tpl = fndef->is_tpl;
     fn->is_errable = fndef->is_errable;
     fn->is_x = fndef->is_x;
-    // Dynamic interface calls use the Nature Result ABI. Native implementations
-    // are installed through a wrapper that drains their native error slot.
-    fn->native_errable = false;
     fn->param_types = ct_list_new(sizeof(type_t));
     fn->return_type = reduction_type(m, type_copy(m, fndef->return_type));
 
@@ -232,8 +229,7 @@ static void interface_generate_receiver_wrappers(module_t *m) {
             continue;
         }
 
-        bool native_error_method = ast_fn->linkid && ast_fn->body == NULL && ast_fn->is_errable;
-        if ((!native_error_method && ast_fn->self_kind != PARAM_SELF_T) ||
+        if (ast_fn->self_kind != PARAM_SELF_T ||
             ast_fn->impl_type.ident_kind != TYPE_IDENT_DEF) {
             continue;
         }
@@ -246,7 +242,7 @@ static void interface_generate_receiver_wrappers(module_t *m) {
         }
 
         type_t impl_type = reduction_type(m, type_copy(m, ast_fn->impl_type));
-        if (!native_error_method && !(ast_fn->self_kind == PARAM_SELF_T && impl_type.storage_kind != STORAGE_KIND_PTR)) {
+        if (impl_type.storage_kind == STORAGE_KIND_PTR) {
             continue;
         }
 

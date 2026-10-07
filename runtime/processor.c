@@ -257,15 +257,12 @@ NO_OPTIMIZE static void coroutine_wrapper() {
         else
             ((env_fn_t) fn->fn_addr)(fn->envs);
     }
-    if (result.tag_hash == hash_string(ERRABLE_ERROR_TAG)) {
-        co->error = result.error;
-        co->has_error = true;
-    }
-    if (co->has_error && co->future) {
-        co->future->error = co->error;
+    bool failed = result.tag_hash == hash_string(ERRABLE_ERROR_TAG);
+    if (failed && co->future) {
+        co->future->error = result.error;
         co->future->has_error = true;
         for (int i = 0; i < ERROR_INLINE_BYTES / POINTER_SIZE; ++i) {
-            rti_write_barrier_ptr((void **) &co->future->error.payload[i], (void *) (uintptr_t) co->error.payload[i], false);
+            rti_write_barrier_ptr((void **) &co->future->error.payload[i], (void *) (uintptr_t) result.error.payload[i], false);
         }
     }
 
@@ -277,8 +274,8 @@ NO_OPTIMIZE static void coroutine_wrapper() {
         co_set_status(p, await_co, CO_STATUS_RUNNABLE);
         rt_linked_fixalloc_push(&await_co->p->runnable_list, await_co);
     } else {
-        if (co->has_error && !co->future) {
-            coroutine_dump_error(co);
+        if (failed && !co->future) {
+            coroutine_dump_error(co, result.error);
             exit(EXIT_FAILURE);
         }
     }
@@ -624,22 +621,12 @@ coroutine_t *coroutine_get() {
     return uv_key_get(&tls_coroutine_key);
 }
 
-void rti_co_throw(coroutine_t *co, n_error_t error, const char *panic_message) {
-    if (co->has_error) return;
-    co->error = error;
-    co->panic_message = panic_message;
-    co->has_error = true;
-}
 
-void rti_throw(n_error_t error, const char *panic_message) {
-    rti_co_throw(coroutine_get(), error, panic_message);
-}
-
-void coroutine_dump_error(coroutine_t *co) {
+void coroutine_dump_error(coroutine_t *co, n_error_t error) {
     int32_t code = 0;
-    memcpy(&code, co->error.payload, sizeof(code));
+    memcpy(&code, error.payload, sizeof(code));
     fprintf(stderr, "coroutine %s uncaught error: type=%llu code=%d\n", co->main ? "main" : "worker",
-            (unsigned long long) co->error.type_id, code);
+            (unsigned long long) error.type_id, code);
 }
 
 void mark_ptr_black(void *value) {
@@ -697,9 +684,6 @@ coroutine_t *rt_coroutine_new(void *fn, int64_t flag, n_future_t *fu, void *arg)
     co->status = CO_STATUS_RUNNABLE;
     co->p = NULL;
     co->next = NULL;
-    co->has_error = false;
-    co->error = (n_error_t) {0};
-    co->panic_message = NULL;
     co->await_co = NULL;
     co->aco.inited = 0; // 标记为为初始化
 

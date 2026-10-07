@@ -17,12 +17,17 @@ typedef struct {
 } freenode_t;
 
 typedef struct {
+    coroutine_t *co;
+    int32_t status;
+} http_listen_ctx_t;
+
+typedef struct {
     uv_tcp_t handle;
     freenode_t *freelist; // 空闲的链接列表？
     int count;
     int max; // 500
     int min; // 50
-    coroutine_t *listen_co;
+    http_listen_ctx_t *listener;
     void *server;
     int64_t conn_count;
     int64_t read_cb_count;
@@ -94,7 +99,7 @@ typedef struct {
 
 void rt_uv_conn_resp(http_conn_t *conn, n_string_t resp_data);
 
-void rt_uv_http_listen(n_http_server_t *server);
+n_void_result_t rt_uv_http_listen(n_http_server_t *server);
 
 void rt_uv_http_close(n_http_server_t *server);
 
