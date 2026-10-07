@@ -200,3 +200,114 @@ fn main() {}
         assert!(diagnostics.iter().any(|e| e.contains("cannot propagate error")), "{ext}: {diagnostics:?}");
     }
 }
+
+#[tokio::test]
+async fn slices_share_marker_error_storage() {
+    let diagnostics = errors(
+        r#"
+type code_t:errort = enum { FAILED }
+fn fail():errable<int,code_t> { throw code_t.FAILED }
+fn main() {
+    var a = [1,2]
+    try { var b = a[0..1]; fail() } catch e {
+        var original = e == code_t.FAILED
+        var bounds = e == runtime_error_t.INDEX_OUT_OF_RANGE
+    }
+}
+"#,
+        "n",
+    )
+    .await;
+    assert!(diagnostics.is_empty(), "{diagnostics:?}");
+
+    let diagnostics = errors(
+        r#"
+fn fail():errable<int,int> { throw 7 }
+fn main() {
+    var a = [1,2]
+    try { var b = a[0..1]; fail() } catch e {}
+}
+"#,
+        "n",
+    )
+    .await;
+    assert!(diagnostics.iter().any(|e| e.contains("cannot casting to interface")), "{diagnostics:?}");
+}
+
+#[tokio::test]
+async fn native_errable_function_values() {
+    let diagnostics = errors(
+        r#"
+#linkid rt_errno
+fn native():int!
+fn run(fn():int! f):int! { return f() }
+fn main() {
+    var f = native
+    var a = run(native)
+    var b = run(f)
+}
+"#,
+        "n",
+    )
+    .await;
+    assert!(diagnostics.is_empty(), "{diagnostics:?}");
+}
+
+#[tokio::test]
+async fn function_error_types_are_compared() {
+    for generic in [false, true] {
+        let runner = if generic {
+            "fn run<value_t>(fn():errable<value_t,int> f) {}"
+        } else {
+            "fn run(fn():errable<int,int> f) {}"
+        };
+        let diagnostics = errors(
+            &format!("fn text():errable<int,string> {{ throw 'typed' }}\n{runner}\nfn main() {{ run(text) }}"),
+            "n",
+        )
+        .await;
+        assert!(!diagnostics.is_empty(), "generic={generic}: incompatible error type accepted");
+        let diagnostics = errors(
+            &format!("fn number():errable<int,int> {{ throw 7 }}\n{runner}\nfn main() {{ run(number) }}"),
+            "n",
+        )
+        .await;
+        assert!(diagnostics.is_empty(), "generic={generic}: {diagnostics:?}");
+    }
+
+    let diagnostics = errors(
+        r#"
+fn fail():errable<int,int> { throw 7 }
+fn run<error_t>(fn():errable<int,error_t> f):errable<int,error_t> { return f() }
+fn main() { var v = run(fail) catch e { e } }
+"#,
+        "n",
+    )
+    .await;
+    assert!(diagnostics.is_empty(), "{diagnostics:?}");
+}
+
+#[tokio::test]
+async fn result_variables_can_be_returned() {
+    for ext in ["n", "x"] {
+        let diagnostics = errors(
+            r#"
+fn result(bool failed):errable<int,int> {
+    var r = errable<int,int>.error(7)
+    if failed { return r }
+    return errable<int,int>.value(42)
+}
+fn wrong():errable<int,int> {
+    var r = errable<int,string>.error('wrong')
+    return r
+}
+fn plain():int! { var v = 42; return v }
+fn main() { var v = result(true) catch e { e } }
+"#,
+            ext,
+        )
+        .await;
+        assert_eq!(diagnostics.len(), 1, "{ext}: {diagnostics:?}");
+        assert!(diagnostics[0].contains("type inconsistency"), "{ext}: {diagnostics:?}");
+    }
+}

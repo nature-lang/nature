@@ -236,6 +236,24 @@ static void linear_bal_error(module_t *m, char *error_target_label, uint16_t cat
     OP_PUSH(lir_op_bal(lir_label_operand(error_target_label, true)));
 }
 
+static void linear_index_error(module_t *m, lir_operand_t *index, lir_operand_t *length) {
+    closure_t *c = m->current_closure;
+    uint16_t depth = c->catch_error_labels->count;
+    bool be_catch = depth > 0;
+    char *label = be_catch ? stack_top(c->catch_error_labels) : c->error_label;
+    if (m->is_x && be_catch) {
+        linear_builtin_error(m, N_ERROR_INDEX_OUT_OF_RANGE);
+    } else if (m->is_x) {
+        char *path = c->fndef->rel_path ? c->fndef->rel_path : m->rel_path;
+        push_rt_call(m, RT_CALL_X_INDEX_PANIC, NULL, 5, index, length,
+                     string_operand(path, strlen(path)), int_operand(m->current_line), int_operand(m->current_column));
+    } else {
+        push_rt_call(m, RT_CALL_THROW_INDEX_OUT_ERROR, NULL, 3, index, length, bool_operand(be_catch));
+        if (be_catch) linear_take_native_error(m);
+    }
+    linear_bal_error(m, label, depth);
+}
+
 static lir_operand_t *
 linear_inline_arr_element_addr_not_check(module_t *m, lir_operand_t *arr_target, lir_operand_t *index_target,
                                          type_t arr_type) {
@@ -286,31 +304,7 @@ linear_inline_arr_element_addr(module_t *m, lir_operand_t *arr_target, lir_opera
 
     OP_PUSH(lir_op_new(LIR_OPCODE_BEE, bool_operand(true), cmp_result, cmp_end_label));
 
-    // TODO 共用 index out error handle label, 也就是有错误直接 goto 到这个地方，而不需要生成成百上千个
-    char *error_label_ident = m->current_closure->error_label;
-    uint16_t catch_depth = m->current_closure->catch_error_labels->count;
-    bool be_catch = catch_depth > 0;
-    if (be_catch) {
-        error_label_ident = stack_top(m->current_closure->catch_error_labels);
-    }
-
-    if (m->is_x && be_catch) {
-        // Caught checks carry a runtime_error_t enum without formatting a message.
-        linear_builtin_error(m, N_ERROR_INDEX_OUT_OF_RANGE);
-    } else if (m->is_x) {
-        // uncaught in .x: same message and exit, but through a path that never reads the
-        // coroutine tls key, which x mode does not create
-        char *panic_path = m->current_closure->fndef->rel_path ? m->current_closure->fndef->rel_path : m->rel_path;
-        push_rt_call(m, RT_CALL_X_INDEX_PANIC, NULL, 5, index_target, length_target,
-                     string_operand(panic_path, strlen(panic_path)),
-                     int_operand(m->current_line), int_operand(m->current_column));
-    } else {
-        push_rt_call(m, RT_CALL_THROW_INDEX_OUT_ERROR, NULL, 3, index_target, length_target,
-                     bool_operand(be_catch));
-        if (be_catch) linear_take_native_error(m);
-    }
-    // bal catch or end label
-    linear_bal_error(m, error_label_ident, catch_depth);
+    linear_index_error(m, index_target, length_target);
     OP_PUSH(lir_op_label(end_label_ident, true));
 
     int64_t element_size = arr_type.array->element_type.storage_size;
@@ -406,30 +400,7 @@ linear_inline_vec_element_addr(module_t *m, lir_operand_t *vec_target, lir_opera
 
     OP_PUSH(lir_op_new(LIR_OPCODE_BEE, bool_operand(true), cmp_result, cmp_end_label));
 
-    char *error_label_ident = m->current_closure->error_label;
-    uint16_t catch_depth = m->current_closure->catch_error_labels->count;
-    bool be_catch = catch_depth > 0;
-    if (be_catch) {
-        error_label_ident = stack_top(m->current_closure->catch_error_labels);
-    }
-
-    if (m->is_x && be_catch) {
-        // Caught checks carry a runtime_error_t enum without formatting a message.
-        linear_builtin_error(m, N_ERROR_INDEX_OUT_OF_RANGE);
-    } else if (m->is_x) {
-        // uncaught in .x: same message and exit, but through a path that never reads the
-        // coroutine tls key, which x mode does not create
-        char *panic_path = m->current_closure->fndef->rel_path ? m->current_closure->fndef->rel_path : m->rel_path;
-        push_rt_call(m, RT_CALL_X_INDEX_PANIC, NULL, 5, index_target, length_target,
-                     string_operand(panic_path, strlen(panic_path)),
-                     int_operand(m->current_line), int_operand(m->current_column));
-    } else {
-        push_rt_call(m, RT_CALL_THROW_INDEX_OUT_ERROR, NULL, 3, index_target, length_target,
-                     bool_operand(be_catch));
-        if (be_catch) linear_take_native_error(m);
-    }
-    // bal catch or end label
-    linear_bal_error(m, error_label_ident, catch_depth);
+    linear_index_error(m, index_target, length_target);
     OP_PUSH(lir_op_label(end_label_ident, true));
 
     int64_t element_size = vec_element_type.storage_size;
@@ -1046,7 +1017,6 @@ static void linear_result_has_error(module_t *m, type_t error_type, lir_operand_
 static void linear_take_native_error(module_t *m) {
     type_t type = linear_error_type(m);
     lir_operand_t *error = temp_var_operand_with_alloc(m, type);
-    linear_zero(m, type, error);
     push_rt_call(m, RT_CALL_CO_REMOVE_ERROR, NULL, 1, native_pointer(m, error));
     linear_store_error(m, type, error);
 }
@@ -4033,6 +4003,18 @@ static lir_operand_t *linear_block_expr(module_t *m, ast_expr_t expr, lir_operan
     return target;
 }
 
+static error_slot_t *linear_begin_catch(module_t *m, type_t type, char *label) {
+    error_slot_t *slot = NEW(error_slot_t);
+    slot->type = type;
+    slot->value = temp_var_operand_with_alloc(m, type);
+    linear_zero(m, type, slot->value);
+    slot->occupied = temp_var_operand(m, type_kind_new(TYPE_BOOL));
+    OP_PUSH(lir_op_move(slot->occupied, bool_operand(false)));
+    stack_push(m->current_closure->catch_error_slots, slot);
+    stack_push(m->current_closure->catch_error_labels, label);
+    return slot;
+}
+
 static lir_operand_t *linear_catch_expr(module_t *m, ast_expr_t expr, lir_operand_t *target) {
     ast_catch_t *catch_expr = expr.value;
     // 编译 expr, 有异常应该直接就跳转到 catch 了。
@@ -4045,15 +4027,7 @@ static lir_operand_t *linear_catch_expr(module_t *m, ast_expr_t expr, lir_operan
         target = temp_var_operand_with_alloc(m, expr.type);
     }
 
-    error_slot_t *slot = NEW(error_slot_t);
-    slot->type = catch_expr->catch_err.type;
-    slot->value = temp_var_operand_with_alloc(m, slot->type);
-    linear_zero(m, slot->type, slot->value);
-    slot->occupied = temp_var_operand(m, type_kind_new(TYPE_BOOL));
-    OP_PUSH(lir_op_move(slot->occupied, bool_operand(false)));
-    stack_push(m->current_closure->catch_error_slots, slot);
-
-    stack_push(m->current_closure->catch_error_labels, catch_start_label);
+    error_slot_t *slot = linear_begin_catch(m, catch_expr->catch_err.type, catch_start_label);
     linear_expr(m, catch_expr->try_expr, target);
     stack_pop(m->current_closure->catch_error_labels);
 
@@ -4102,15 +4076,7 @@ static void linear_try_catch_stmt(module_t *m, ast_try_catch_stmt_t *try_stmt) {
     bool has_ret = false;
 
 
-    error_slot_t *slot = NEW(error_slot_t);
-    slot->type = try_stmt->catch_err.type;
-    slot->value = temp_var_operand_with_alloc(m, slot->type);
-    linear_zero(m, slot->type, slot->value);
-    slot->occupied = temp_var_operand(m, type_kind_new(TYPE_BOOL));
-    OP_PUSH(lir_op_move(slot->occupied, bool_operand(false)));
-    stack_push(m->current_closure->catch_error_slots, slot);
-
-    stack_push(m->current_closure->catch_error_labels, catch_start_label);
+    error_slot_t *slot = linear_begin_catch(m, try_stmt->catch_err.type, catch_start_label);
     linear_body(m, try_stmt->try_body);
     stack_pop(m->current_closure->catch_error_labels);
 

@@ -1893,6 +1893,66 @@ static type_t infer_ident(module_t *m, ast_ident *ident) {
     exit(1);
 }
 
+static type_t infer_fn_value(module_t *m, ast_expr_t *expr) {
+    ast_ident *ident = expr->value;
+    type_t type = infer_ident(m, ident);
+    if (type.kind != TYPE_FN || !type.fn->native_errable || !type.fn->is_errable) return type;
+
+    ast_fndef_t *origin = symbol_table_get(ident->literal)->ast_value;
+    INFER_ASSERTF(!origin->c_variadic, "C variadic errable functions cannot be used as function values");
+
+    // A function value has the Nature Result ABI. Direct calls keep the native ABI.
+    char *name = dsprintf("%s.errable_adapter", origin->symbol_name);
+    symbol_t *symbol = symbol_table_get(name);
+    if (!symbol) {
+        ast_fndef_t *wrapper = ast_fndef_new(m, origin->line, origin->column);
+        wrapper->symbol_name = name;
+        wrapper->fn_name = name;
+        wrapper->fn_name_with_pkg = name;
+        wrapper->rel_path = origin->rel_path;
+        wrapper->is_x = origin->is_x;
+        wrapper->return_type = type.fn->errable_value_type;
+        wrapper->is_errable = true;
+        wrapper->rest_param = origin->rest_param;
+        wrapper->params = ct_list_new(sizeof(ast_var_decl_t));
+        wrapper->body = slice_new();
+
+        ast_call_t *call = NEW(ast_call_t);
+        call->left = *ast_ident_expr(origin->line, origin->column, origin->symbol_name);
+        call->args = ct_list_new(sizeof(ast_expr_t));
+        call->spread = origin->rest_param;
+        call->inject_self_arg = origin->self_kind != PARAM_SELF_NULL;
+        for (int i = 0; i < origin->params->length; ++i) {
+            ast_var_decl_t *param = COPY_NEW(ast_var_decl_t, ct_list_value(origin->params, i));
+            param->ident = var_unique_ident(m, "arg");
+            symbol_table_set(param->ident, SYMBOL_VAR, param, true);
+            ct_list_push(wrapper->params, param);
+            ast_expr_t arg = *ast_ident_expr(origin->line, origin->column, param->ident);
+            ct_list_push(call->args, &arg);
+        }
+
+        ast_stmt_t *stmt = NEW(ast_stmt_t);
+        stmt->line = origin->line;
+        stmt->column = origin->column;
+        if (wrapper->return_type.kind == TYPE_VOID) {
+            stmt->assert_type = AST_CALL;
+            stmt->value = call;
+        } else {
+            ast_return_stmt_t *ret = NEW(ast_return_stmt_t);
+            ret->expr = NEW(ast_expr_t);
+            *ret->expr = (ast_expr_t) {.assert_type = AST_CALL, .value = call, .line = origin->line, .column = origin->column};
+            stmt->assert_type = AST_STMT_RETURN;
+            stmt->value = ret;
+        }
+        slice_push(wrapper->body, stmt);
+        symbol = symbol_table_set(name, SYMBOL_FN, wrapper, false);
+        infer_fn_decl(m, wrapper, type_kind_new(TYPE_UNKNOWN));
+        linked_push(m->temp_worklist, wrapper);
+    }
+    ident->literal = name;
+    return ((ast_fndef_t *) symbol->ast_value)->type;
+}
+
 /**
  * arr or vec repeat new
  */
@@ -1971,6 +2031,8 @@ static type_t infer_vec_slice(module_t *m, ast_vec_slice_t *slice) {
     type_t vec_type = infer_right_expr(m, &slice->left, type_kind_new(TYPE_UNKNOWN));
     type_t start_type = infer_right_expr(m, &slice->start, type_integer_t_new());
     type_t end_type = infer_right_expr(m, &slice->end, type_integer_t_new());
+
+    infer_caught_panic(m);
 
     return vec_type;
 }
@@ -2941,7 +3003,9 @@ static type_fn_t *infer_impl_call_rewrite(module_t *m, ast_call_t *call, type_t 
 
     rewrite_generics_ident(m, call, target_type);
 
-    type_t left_type = infer_right_expr(m, &call->left, type_kind_new(TYPE_UNKNOWN));
+    SET_LINE_COLUMN((&call->left));
+    type_t left_type = infer_ident(m, call->left.value);
+    call->left.type = left_type;
     INFER_ASSERTF(left_type.kind == TYPE_FN, "cannot call non-fn");
     assert(left_type.fn);
 
@@ -3014,7 +3078,14 @@ static type_fn_t *infer_call_left(module_t *m, ast_call_t *call, type_t target_t
     rewrite_generics_ident(m, call, target_type);
 
     // analyzer 阶段已经对 ident 进行了 resolve/module ident with
-    type_t left_type = infer_right_expr(m, &call->left, type_kind_new(TYPE_UNKNOWN));
+    type_t left_type;
+    if (call->left.assert_type == AST_EXPR_IDENT) {
+        SET_LINE_COLUMN((&call->left));
+        left_type = infer_ident(m, call->left.value);
+        call->left.type = left_type;
+    } else {
+        left_type = infer_right_expr(m, &call->left, type_kind_new(TYPE_UNKNOWN));
+    }
     INFER_ASSERTF(left_type.kind == TYPE_FN, "cannot call non-fn");
     return left_type.fn;
 }
@@ -3773,7 +3844,7 @@ static type_t infer_expr(module_t *m, ast_expr_t *expr, type_t target_type, type
             return infer_ternary(m, expr->value, target_type);
         }
         case AST_EXPR_IDENT: {
-            return infer_ident(m, expr->value);
+            return infer_fn_value(m, expr);
         }
         case AST_EXPR_VEC_NEW: {
             // literal casting

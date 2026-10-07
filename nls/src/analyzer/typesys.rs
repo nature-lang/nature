@@ -2685,6 +2685,7 @@ impl<'a> Typesys<'a> {
                 let left_type = self.infer_right_expr(left, Type::default())?;
                 self.infer_right_expr(start, Type::integer_t_new())?;
                 self.infer_right_expr(end, Type::integer_t_new())?;
+                self.record_caught_panic(expr.start, expr.end)?;
 
                 return Ok(left_type.clone());
             }
@@ -4671,6 +4672,11 @@ impl<'a> Typesys<'a> {
                         }
                         if matches!(expr.node, AstNode::TaggedUnionNew(..)) {
                             target_type = result_type;
+                        } else if matches!(expr.node, AstNode::Ident(..)) {
+                            let actual = self.infer_right_expr(expr, Type::default())?;
+                            if self.type_compare(&result_type, &actual) {
+                                target_type = result_type;
+                            }
                         }
                     }
                     if let Err(e) = self.infer_right_expr(expr, target_type) {
@@ -4939,7 +4945,13 @@ impl<'a> Typesys<'a> {
             }
 
             (TypeKind::Fn(left_fn), TypeKind::Fn(right_fn)) => {
-                if !self.type_compare_visited(&left_fn.return_type, &right_fn.return_type, visited)
+                let errors_match = match (&left_fn.error_type, &right_fn.error_type) {
+                    (Some(left), Some(right)) => self.type_compare_visited(left, right, visited),
+                    (None, None) => true,
+                    _ => false,
+                };
+                if !errors_match
+                    || !self.type_compare_visited(&left_fn.return_type, &right_fn.return_type, visited)
                     || left_fn.param_types.len() != right_fn.param_types.len()
                     || left_fn.rest != right_fn.rest
                     || left_fn.errable != right_fn.errable
@@ -5063,7 +5075,13 @@ impl<'a> Typesys<'a> {
             }
 
             (TypeKind::Fn(left_fn), TypeKind::Fn(right_fn)) => {
-                if !self.type_generics(&left_fn.return_type, &right_fn.return_type, generics_param_table)
+                let errors_match = match (&left_fn.error_type, &right_fn.error_type) {
+                    (Some(left), Some(right)) => self.type_generics(left, right, generics_param_table),
+                    (None, None) => true,
+                    _ => false,
+                };
+                if !errors_match
+                    || !self.type_generics(&left_fn.return_type, &right_fn.return_type, generics_param_table)
                     || left_fn.param_types.len() != right_fn.param_types.len()
                     || left_fn.rest != right_fn.rest
                     || left_fn.errable != right_fn.errable
@@ -5250,7 +5268,8 @@ impl<'a> Typesys<'a> {
         let mut result = Type::new(TypeKind::Fn(Box::new(TypeFn {
             return_type: fn_return,
             name: fndef.fn_name.clone(),
-            tpl: fndef.is_tpl,
+            // Native declarations are callable functions, not template signatures.
+            tpl: fndef.is_tpl && fndef.linkid.is_none(),
             errable: fndef.is_errable || fn_type_error.is_some(),
             error_type: fn_type_error.clone(),
             rest: fndef.rest_param,

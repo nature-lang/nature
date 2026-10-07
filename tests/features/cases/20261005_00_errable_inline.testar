@@ -1025,3 +1025,109 @@ fn fail():void! { throw large_t{a:1,b:2,c:3,d:4} }
 fn main() {}
 --- output.txt
 nature-test/main.x:2:47: inline error payload exceeds 24 bytes; use errable<T,E> with a concrete E
+
+=== test_slice_and_concrete_marker_error
+--- main.n
+type code_t:errort = enum { FAILED }
+fn fail():errable<int,code_t> { throw code_t.FAILED }
+fn main() {
+    var a = [1,2]
+    try { var b = a[0..1]; fail() } catch e { println(e == code_t.FAILED) }
+    try { var b = a[0..3]; fail() } catch e { println(e == runtime_error_t.INDEX_OUT_OF_RANGE) }
+    println(a.len())
+}
+--- output.txt
+true
+true
+2
+
+=== test_slice_and_unmarked_error_rejected
+--- main.n
+fn fail():errable<int,int> { throw 7 }
+fn main() {
+    var a = [1,2]
+    try { var b = a[0..1]; fail() } catch e {}
+}
+--- output.txt
+nature-test/main.n:4:31: type 'int(i64)' cannot casting to interface 'errort'
+
+=== test_native_errable_function_values
+--- main.n
+#linkid test_error_native_read
+fn native(ptr<int> source,[u8] buffer):int!
+fn invoke(fn(ptr<int>,[u8]):int! f, ptr<int> source, [u8] buffer):int! { return f(source, buffer) }
+fn main() {
+    int source = 65
+    var buffer = [0 as u8]
+    println(invoke(native, &source, buffer), buffer[0])
+    var f = native
+    println(invoke(f, &source, buffer))
+    source = -1
+    var ignored = invoke(native, &source, buffer) catch e { println(e == runtime_error_t.END_OF_FILE); -1 }
+    ignored = f(&source, buffer) catch e { println(e == runtime_error_t.END_OF_FILE); -1 }
+    source = 66
+    println(f(&source, buffer), buffer[0])
+}
+--- output.txt
+1 65
+1
+true
+true
+1 66
+
+=== test_native_void_errable_function_value
+--- main.n
+#linkid syscall_exec
+fn native(string path,[string] argv,[string] envp):void!
+fn invoke(fn(string,[string],[string]):void! f):void! { f('/nature-pr347-missing-executable', [], []) }
+fn main() {
+    invoke(native) catch e { println(e is system_error_t) }
+    var f = native
+    invoke(f) catch e { println(e is system_error_t) }
+}
+--- output.txt
+true
+true
+
+=== test_native_errable_imported_function_value
+--- main.n
+import 'worker.n' as worker
+import 'proxy.n' as proxy
+fn invoke(fn(ptr<int>,[u8]):int! f, ptr<int> source, [u8] buffer):int! { return f(source, buffer) }
+fn main() {
+    int source = 67
+    var buffer = [0 as u8]
+    println(invoke(worker.native, &source, buffer), buffer[0])
+    println(invoke(proxy.reader(), &source, buffer), buffer[0])
+}
+--- worker.n
+#linkid test_error_native_read
+pub fn native(ptr<int> source,[u8] buffer):int!
+--- proxy.n
+import 'worker.n' as worker
+pub fn reader():fn(ptr<int>,[u8]):int! { return worker.native }
+--- output.txt
+1 67
+1 67
+
+=== test_result_variable_return_n
+--- main.n
+fn result(bool failed):errable<int,int> {
+    var r = errable<int,int>.error(7)
+    if failed { return r }
+    return errable<int,int>.value(42)
+}
+fn main() { println(result(true) catch e { e }, result(false) catch e { e }) }
+--- output.txt
+7 42
+
+=== test_result_variable_return_x
+--- main.x
+fn result(bool failed):errable<int,int> {
+    var r = errable<int,int>.error(7)
+    if failed { return r }
+    return errable<int,int>.value(42)
+}
+fn main() { println(result(true) catch e { e }, result(false) catch e { e }) }
+--- output.txt
+7 42
