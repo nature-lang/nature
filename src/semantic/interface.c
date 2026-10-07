@@ -76,8 +76,8 @@ static type_t interface_extract_fn_type(module_t *m, ast_fndef_t *fndef) {
     fn->is_rest = fndef->rest_param;
 
     type_t result = type_new(TYPE_FN, fn);
-    result.status = REDUCTION_STATUS_DONE;
-    return result;
+    result.status = REDUCTION_STATUS_UNDO;
+    return reduction_type(m, result);
 }
 
 /**
@@ -103,6 +103,7 @@ ast_fndef_t *generate_receiver_wrapper(module_t *m, ast_fndef_t *origin_fndef) {
     // 复制返回类型和其他属性
     wrapper->return_type = origin_fndef->return_type;
     wrapper->is_errable = origin_fndef->is_errable;
+    wrapper->is_x = origin_fndef->is_x;
     wrapper->is_impl = true;
     wrapper->impl_type = impl_type;
     wrapper->self_kind = PARAM_SELF_REF_T; // wrapper 接收指针参数
@@ -110,7 +111,8 @@ ast_fndef_t *generate_receiver_wrapper(module_t *m, ast_fndef_t *origin_fndef) {
     // 复制泛型参数
     wrapper->generics_params = origin_fndef->generics_params;
     wrapper->is_generics = origin_fndef->is_generics;
-    wrapper->is_tpl = origin_fndef->is_tpl;
+    // A native declaration has no body, but its generated adapter does.
+    wrapper->is_tpl = origin_fndef->linkid ? false : origin_fndef->is_tpl;
 
     // 创建参数列表 - 第一个参数是 ref<impl_type>
     wrapper->params = ct_list_new(sizeof(ast_var_decl_t));
@@ -173,6 +175,9 @@ ast_fndef_t *generate_receiver_wrapper(module_t *m, ast_fndef_t *origin_fndef) {
         .line = origin_fndef->line,
         .column = origin_fndef->column,
     };
+    if (origin_fndef->self_kind != PARAM_SELF_T) {
+        deref_arg = deref_expr->operand;
+    }
     ct_list_push(call->args, &deref_arg);
 
     // 添加其他参数
@@ -236,7 +241,7 @@ static void interface_generate_receiver_wrappers(module_t *m) {
         }
 
         type_t impl_type = reduction_type(m, type_copy(m, ast_fn->impl_type));
-        if (!(ast_fn->self_kind == PARAM_SELF_T && impl_type.storage_kind != STORAGE_KIND_PTR)) {
+        if (impl_type.storage_kind == STORAGE_KIND_PTR) {
             continue;
         }
 

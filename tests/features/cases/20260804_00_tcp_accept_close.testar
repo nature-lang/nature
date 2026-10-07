@@ -5,12 +5,12 @@ import co
 
 type state_t = struct{
     bool done
-    string error
+    bool closed
 }
 
 fn wait_accept(ref<tcp.server_t> server, ref<state_t> state) {
     var accepted = server.accept() catch e {
-        state.error = e.msg()
+        state.closed = e == runtime_error_t.CLOSED
         state.done = true
         return
     }
@@ -29,9 +29,10 @@ fn main() {
     for !state_a.done || !state_b.done {
         co.sleep(1)
     }
-    assert(state_a.error == 'server closed')
-    assert(state_b.error == 'server closed')
+    assert(state_a.closed)
+    assert(state_b.closed)
 }
+
 
 === test_close_without_accept
 --- main.n

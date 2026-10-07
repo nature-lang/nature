@@ -9,6 +9,13 @@ import parker.util
 import compress.tgz
 import fs
 
+type test_error_t:errort = enum {
+    ARGS_FAILED,
+    FILE_V_NOTFOUND,
+    RUNNER_FILE_V_NOTFOUND,
+}
+
+
 const version = '0.1.0'
 
 fn main():void! {
@@ -26,7 +33,7 @@ fn main():void! {
 
     // - 读取当前程序所在目录，找到 runner 程序
     if args.len() < 2 {
-        throw errorf('args failed')
+        throw test_error_t.ARGS_FAILED
     }
 
     // 可能是一个绝对路径也可以是一个相对 path
@@ -42,7 +49,7 @@ fn main():void! {
 
     // - 检查文件是否存在
     if !path.exists(target_path) {
-        throw errorf('file=%v notfound', target_path)
+        throw test_error_t.FILE_V_NOTFOUND
     }
 
     logf('target_path: %v found', target_path)
@@ -88,7 +95,7 @@ fn main():void! {
     }
 
     if !path.exists(runner_path) {
-        throw errorf('runner file=%v notfound', runner_path)
+        throw test_error_t.RUNNER_FILE_V_NOTFOUND
     }
 
     logf('runner_path=%v found', runner_path)

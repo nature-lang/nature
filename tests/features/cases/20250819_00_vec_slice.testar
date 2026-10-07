@@ -18,7 +18,7 @@ fn main() {
 }
 
 --- output.txt
-panic: 'slice [0:6] out of vec with length 5' at nature-test/main.n:3:24
+panic: 'index out of range' at nature-test/main.n:3:24
 
 
 === test_slice_2
@@ -37,12 +37,24 @@ len -> 1 , data -> 3
 fn main() {
     var list = [1, 2, 3, 4, 5]
     var temp = list[2..9] catch e {
-        println(e.msg())
+        println(describe_error(e))
         []
     }
     println('len ->', temp.len())
 }
 
+
+// Render diagnostics explicitly after catch; throw only carries enum values.
+fn describe_error(errort e):string {
+    if e == runtime_error_t.END_OF_FILE { return 'EOF' }
+    if e == runtime_error_t.TIMEOUT { return 'tcp read timeout' }
+    if e == runtime_error_t.CLOSED { return 'conn closed' }
+    if e == runtime_error_t.INDEX_OUT_OF_RANGE { return 'index out of range' }
+    if e == runtime_error_t.TYPE_MISMATCH { return 'type assert failed' }
+    if e == runtime_error_t.NULL_POINTER { return 'invalid memory address or nil pointer dereference' }
+    if e == runtime_error_t.KEY_NOT_FOUND { return 'key not found in map' }
+    return 'operation failed'
+}
 --- output.txt
-slice [2:9] out of vec with length 5
+index out of range
 len -> 0

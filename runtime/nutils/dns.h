@@ -1,25 +1,28 @@
 #ifndef NATURE_RUNTIME_NUTILS_DNS_H_
 #define NATURE_RUNTIME_NUTILS_DNS_H_
 #include "runtime/processor.h"
+#include "runtime/rtype.h"
 #include "runtime/uv_compat.h"
 
 typedef struct {
     n_string_t host;
     n_vec_t ips;
+    uv_getaddrinfo_t req;
+    coroutine_t *co;
+    int32_t status;
 } dns_ctx_t;
 
 static inline void on_dns_resolved_cb(uv_getaddrinfo_t *req, int status, struct addrinfo *res) {
-    coroutine_t *co = req->data;
+    dns_ctx_t *ctx = req->data;
+    coroutine_t *co = ctx->co;
     DEBUGF("[on_dns_resolved_cb] co: %p, status: %d", co, status);
 
     if (status < 0) {
-        rti_co_throw(co, (char *) uv_strerror(status), false);
+        ctx->status = status;
         co_ready(co);
         return;
     }
 
-    // co->data = res; // addr info need use uv_freeaddrinfo free
-    dns_ctx_t *ctx = co->data;
     n_vec_t *ips = &ctx->ips;
     struct addrinfo *current = res;
     while (current != NULL) {
@@ -57,30 +60,28 @@ void uv_async_getaddrinfo_register(uv_getaddrinfo_t *req, dns_ctx_t *ctx) {
     int result = uv_getaddrinfo(&global_loop, req, on_dns_resolved_cb, rt_string_ref(&ctx->host), NULL, &hints);
     if (result) {
         DEBUGF("[uv_async_getaddrinfo_register] uv_getaddrinfo failed: %s, co=%p", uv_strerror(result), req->data);
-        rti_co_throw(req->data, tlsprintf("resolve %s failed: %s", rt_string_ref(&ctx->host), uv_strerror(result)), false);
-        co_ready(req->data);
+        ctx->status = result;
+        co_ready(ctx->co);
         return;
     }
 }
 
-n_vec_t rt_uv_dns_lookup(n_string_t host) {
+n_vec_result_t rt_uv_dns_lookup(n_string_t host) {
     n_processor_t *p = processor_get();
     coroutine_t *co = coroutine_get();
 
     DEBUGF("[rt_uv_dns_lookup] start, host is %s, co=%p", (char *) rt_string_ref(&host), co);
 
-    dns_ctx_t *ctx = malloc(sizeof(dns_ctx_t));
+    dns_ctx_t *ctx = mallocz(sizeof(dns_ctx_t));
     ctx->host = host;
-    ctx->ips = rt_vec_cap(vec_rtype.hash, string_rtype.hash, 0);
+    ctx->ips = rt_vec_cap(vec_rtype.hash, string_rtype.hash, 0).value;
 
-    uv_getaddrinfo_t *req = malloc(sizeof(uv_getaddrinfo_t));
-    req->data = co;
-    co->data = ctx;
+    ctx->co = co;
+    ctx->req.data = ctx;
 
-    global_waiting_send(uv_async_getaddrinfo_register, req, ctx, 0);
-    free(req);
+    global_waiting_send(uv_async_getaddrinfo_register, &ctx->req, ctx, 0);
 
-    n_vec_t result = ctx->ips;
+    n_vec_result_t result = ctx->status ? N_RESULT_ERROR(n_vec_result_t, native_uv_error(ctx->status)) : N_RESULT_OK(n_vec_result_t, ctx->ips);
     free(ctx);
     return result;
 }

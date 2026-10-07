@@ -1,7 +1,11 @@
 mod fs
-
 import syscall
 import io
+
+pub type error_t:errort = enum {
+    INCOMPLETE_READ,
+}
+
 
 type timespec_t = struct {
     u64 sec 
@@ -50,7 +54,7 @@ pub fn file_t.content(&self):string! {
     var buf = vec<u8>.new(0, file_size as int)
     int n = self.read_at(buf, 0)
     if n != file_size as int {
-        throw errorf('incomplete reading')
+        throw error_t.INCOMPLETE_READ
     }
     return buf as string
 }

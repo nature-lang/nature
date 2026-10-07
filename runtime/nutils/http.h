@@ -23,6 +23,8 @@ typedef struct {
     int max; // 500
     int min; // 50
     coroutine_t *listen_co;
+    int32_t listen_status;
+    _Atomic int ref_count;
     void *server;
     int64_t conn_count;
     int64_t read_cb_count;
@@ -77,6 +79,7 @@ typedef struct {
     uint8_t method; // llhttp_method
     // ---- other fields
 
+    inner_http_server_t *inner;
     char default_buf[HTTP_BUFFER_SIZE];
 
     uint8_t parser_completed;
@@ -94,7 +97,7 @@ typedef struct {
 
 void rt_uv_conn_resp(http_conn_t *conn, n_string_t resp_data);
 
-void rt_uv_http_listen(n_http_server_t *server);
+n_void_result_t rt_uv_http_listen(n_http_server_t *server);
 
 void rt_uv_http_close(n_http_server_t *server);
 

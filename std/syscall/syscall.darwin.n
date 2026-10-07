@@ -789,7 +789,7 @@ pub fn wait(int pid, int option):(int, int)! {
     var status = 0
     int result = call6(SYS_WAIT4, pid as anyptr, &status as anyptr, option as anyptr, 0, 0, 0)
     if result == -1 {
-        throw errorf(libc.error_string())
+        throw system_error_t{code: libc.errno() as i32}
     }
     return (result, status)
 }
@@ -903,13 +903,13 @@ pub fn get_env(string key):string {
 pub fn set_env(string key, string value):void! {
     var result = setenv(key.ref(), value.ref(), 1)
     if result != 0 {
-        throw errorf('setenv error')
+        throw runtime_error_t.INVALID_ARGUMENT
     }
 }
 
 // Darwin 不支持 unshare，这里提供一个错误提示
 fn unshare(int flags):void! {
-    throw errorf('unshare is not supported on Darwin')
+    throw runtime_error_t.INVALID_ARGUMENT
 }
 
 fn mount(string source, string target, string fs_type, u32 flags, string data):void! {

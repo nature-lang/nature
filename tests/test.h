@@ -595,6 +595,7 @@ static inline void feature_testar_test(char *custom_target) {
         assertf(test_case->files->count > 0, "test case '%s' must have main.n or main.x", test_case->name);
 
         testar_case_file_t *output_file = NULL;
+        testar_case_file_t *status_file = NULL;
         // the entry is main.n, or main.x for an x mode case
         char *entry = NULL;
 
@@ -603,6 +604,9 @@ static inline void feature_testar_test(char *custom_target) {
 
             if (str_equal(file->name, "output.txt")) {
                 output_file = file;
+            }
+            if (str_equal(file->name, "status.txt")) {
+                status_file = file;
             }
 
             if (str_equal(file->name, "main.n") || str_equal(file->name, "main.x")) {
@@ -648,7 +652,17 @@ static inline void feature_testar_test(char *custom_target) {
 
                 // 执行并测试
                 if (output_file) {
-                    char *output = exec_output();
+                    int32_t status = 0;
+                    char *output = exec_output_status(&status);
+                    if (status_file) {
+                        int expected_status = atoi((char *) status_file->content);
+#ifdef __WINDOWS
+                        assertf(status == expected_status, "%s exit status %d, expected %d", test_case->name, status, expected_status);
+#else
+                        assertf(WIFEXITED(status) && WEXITSTATUS(status) == expected_status,
+                                "%s exit status 0x%x, expected %d", test_case->name, status, expected_status);
+#endif
+                    }
                     char *expected = unescape_string((char *) output_file->content);
                     assertf(str_equal(output, expected), "n %s failed\nexpect: %s\nactual: %s",
                             test_case->name, output_file->content, output);

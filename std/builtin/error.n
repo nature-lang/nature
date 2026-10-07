@@ -1,29 +1,26 @@
-import fmt
+// A compiler intrinsic: nominal type identity and a fixed inline payload.
+pub type errort = interface {}
 
-pub type throwable = interface{
-	fn msg():string
+pub type errable<value_t, error_t> = union {
+    value_t value
+    error_t error
 }
 
-pub type trace_t = struct{
-    string path
-    string ident
-    int line
-    int column
+// Recoverable runtime categories, shared with C utils/type.h.
+pub type runtime_error_t:errort = enum:i32 {
+    FAILED = 1,
+    INVALID_ARGUMENT = 2,
+    INDEX_OUT_OF_RANGE = 3,
+    TYPE_MISMATCH = 4,
+    NULL_POINTER = 5,
+    END_OF_FILE = 6,
+    TIMEOUT = 7,
+    CLOSED = 8,
+    CANCELLED = 9,
+    KEY_NOT_FOUND = 10,
 }
 
-pub type errort:throwable = struct{
-	string message
-	bool is_panic
+// errno, libuv or platform status. No diagnostic string is allocated.
+pub type system_error_t:errort = struct {
+    i32 code
 }
-
-pub fn errort.msg(&self):string {
-	return self.message
-}
-
-pub fn errorf(string format, ...[any] args):ref<errort> {
-	var msg = fmt.sprintf(format, ...args)
-	return new errort(message = msg)
-}
-
-
-pub type errable<T> = errort|T

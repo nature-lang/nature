@@ -147,26 +147,50 @@ fn main():void! {
     try {
         list[8] = 12
     } catch e {
-        println('catch vec error:', e.msg())
+        println('catch vec error:', describe_error(e))
     }
 }
 
+
+// Render diagnostics explicitly after catch; throw only carries enum values.
+fn describe_error(errort e):string {
+    if e == runtime_error_t.END_OF_FILE { return 'EOF' }
+    if e == runtime_error_t.TIMEOUT { return 'tcp read timeout' }
+    if e == runtime_error_t.CLOSED { return 'conn closed' }
+    if e == runtime_error_t.INDEX_OUT_OF_RANGE { return 'index out of range' }
+    if e == runtime_error_t.TYPE_MISMATCH { return 'type assert failed' }
+    if e == runtime_error_t.NULL_POINTER { return 'invalid memory address or nil pointer dereference' }
+    if e == runtime_error_t.KEY_NOT_FOUND { return 'key not found in map' }
+    return 'operation failed'
+}
 --- output.txt
-catch vec error: index out of range [8] with length 4
+catch vec error: index out of range
 
 === test_catch_vec_access
 --- main.n
 fn main():void! {
     var list = [1, 2, 3, 4]
     var a = list[8] catch e {
-        println('catch vec error:', e.msg())
+        println('catch vec error:', describe_error(e))
         12
     }
     println(a)
 }
 
+
+// Render diagnostics explicitly after catch; throw only carries enum values.
+fn describe_error(errort e):string {
+    if e == runtime_error_t.END_OF_FILE { return 'EOF' }
+    if e == runtime_error_t.TIMEOUT { return 'tcp read timeout' }
+    if e == runtime_error_t.CLOSED { return 'conn closed' }
+    if e == runtime_error_t.INDEX_OUT_OF_RANGE { return 'index out of range' }
+    if e == runtime_error_t.TYPE_MISMATCH { return 'type assert failed' }
+    if e == runtime_error_t.NULL_POINTER { return 'invalid memory address or nil pointer dereference' }
+    if e == runtime_error_t.KEY_NOT_FOUND { return 'key not found in map' }
+    return 'operation failed'
+}
 --- output.txt
-catch vec error: index out of range [8] with length 4
+catch vec error: index out of range
 12
 
 === test_global_vec

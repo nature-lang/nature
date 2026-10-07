@@ -42,7 +42,7 @@ pub fn buffer.read(&self, [u8] buf):int! {
             return 0
         }
 
-        throw errorf('EOF')
+        throw runtime_error_t.END_OF_FILE
     }
 
     int n = buf.copy(self.buf.slice(self.offset, self.buf.len()))

@@ -16,16 +16,16 @@
  */
 n_vec_t rti_vec_new(rtype_t *element_rtype, int64_t length, int64_t capacity);
 
-n_vec_t rt_vec_new(int64_t hash, int64_t element_hash, int64_t length, void *value_ref);
+n_vec_result_t rt_vec_new(int64_t hash, int64_t element_hash, int64_t length, void *value_ref);
 
 /**
  * 不进行 vec element 初始化
  */
 n_vec_t rt_unsafe_vec_new(int64_t hash, int64_t element_hash, int64_t length);
 
-n_vec_t rt_vec_cap(int64_t hash, int64_t element_hash, int64_t capacity);
+n_vec_result_t rt_vec_cap(int64_t hash, int64_t element_hash, int64_t capacity);
 
-n_vec_t *rt_vec_alloc(int64_t hash, int64_t element_hash, int64_t capacity);
+n_ptr_result_t rt_vec_alloc(int64_t hash, int64_t element_hash, int64_t capacity);
 
 void rt_vec_new_out(n_vec_t *out, int64_t hash, int64_t element_hash, int64_t capacity);
 
@@ -73,7 +73,7 @@ n_anyptr_t rt_vec_iterator(n_vec_t *l, int64_t element_hash);
  * @param end
  * @return 返回切片后的数据
  */
-n_vec_t rt_vec_slice(n_vec_t *l, int64_t start, int64_t end);
+n_vec_result_t rt_vec_slice(n_vec_t *l, int64_t start, int64_t end);
 
 /**
  * 合并 a 和 b 两个 vec 到一个新的 vec 中

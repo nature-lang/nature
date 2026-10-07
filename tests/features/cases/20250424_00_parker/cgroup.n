@@ -7,6 +7,14 @@ import strings
 import parker.log as *
 import fs
 
+type test_error_t:errort = enum {
+    OPEN_PROCS_PATH_S_FAILED_S,
+    PID_STR_S_TO_INT_FAILED,
+    CGROUP_NEW_ERR,
+    CANNOT_DETECT_CGROUP_VERSION,
+}
+
+
 u8 version1 = 1
 u8 version2 = 2
 const v1_default_system = 'freezer'
@@ -38,7 +46,7 @@ fn cgroup_t.clear(*self):void! {
     logf('s.procs_path is "%s"', self.procs_path)
 
     var f = fs.open(self.procs_path, syscall.O_RDONLY, 0) catch e {
-        throw errorf('open procs path="%s" failed: %s', self.procs_path, e.msg())
+        throw test_error_t.OPEN_PROCS_PATH_S_FAILED_S
     }
 
     var pids_str = f.content()
@@ -52,12 +60,12 @@ fn cgroup_t.clear(*self):void! {
             // str to int
             var pid = pid_str.to_int()
             if pid == 0 {
-                throw errorf('pid str %s to int failed', pid_str)
+                throw test_error_t.PID_STR_S_TO_INT_FAILED
             }
             
             // kill by pid
             syscall.kill(pid, syscall.SIGKILL) catch e {
-                logf('kill pid %d failed %s', pid, e.msg())
+                logf('kill pid %d failed %s', pid, describe_error(e))
             }
         }
     }
@@ -68,7 +76,7 @@ fn cgroup_t.clear(*self):void! {
 
 pub fn init():cgroup_t! {
     if !path.exists('/sys/fs/cgroup') {
-        throw errorf('cgroup new err=' + 'path /sys/fs/cgroup not found')
+        throw test_error_t.CGROUP_NEW_ERR
     }
     
     u8 version = 0
@@ -78,7 +86,7 @@ pub fn init():cgroup_t! {
     }  else if path.exists(path.join("/sys/fs/cgroup", v1_default_system)) {
         version = version1
     } else {
-        throw errorf('cannot detect cgroup version')
+        throw test_error_t.CANNOT_DETECT_CGROUP_VERSION
     }
 
     var id = util.rand_letter(32)
@@ -101,4 +109,23 @@ pub fn init():cgroup_t! {
         path: cgroup_path,
         procs_path: procs_path,
     }
+}
+
+// Render diagnostics explicitly after catch; throw only carries enum values.
+fn describe_error(errort e):string {
+    if e == test_error_t.OPEN_PROCS_PATH_S_FAILED_S { return 'open procs path="%s" failed: %s' }
+    if e == test_error_t.PID_STR_S_TO_INT_FAILED { return 'pid str %s to int failed' }
+    if e == test_error_t.CGROUP_NEW_ERR { return 'cgroup new err=' }
+    if e == test_error_t.CANNOT_DETECT_CGROUP_VERSION { return 'cannot detect cgroup version' }
+    if e == runtime_error_t.END_OF_FILE { return 'EOF' }
+    if e == runtime_error_t.TIMEOUT { return 'tcp read timeout' }
+    if e == runtime_error_t.CLOSED { return 'conn closed' }
+    if e == strings.error_t.INVALID_DIGIT { return 'invalid character in number' }
+    if e == strings.error_t.INVALID_NUMBER { return 'invalid number format' }
+    if e == strings.error_t.OVERFLOW { return 'number too large' }
+    if e == runtime_error_t.INDEX_OUT_OF_RANGE { return 'index out of range' }
+    if e == runtime_error_t.TYPE_MISMATCH { return 'type assert failed' }
+    if e == runtime_error_t.NULL_POINTER { return 'invalid memory address or nil pointer dereference' }
+    if e == runtime_error_t.KEY_NOT_FOUND { return 'key not found in map' }
+    return 'operation failed'
 }

@@ -244,19 +244,18 @@ static void rt_send(n_chan_t *chan, linkco_t *linkco, void *msg_ptr, scase *case
  * @param chan
  * @param msg_ptr
  */
-bool rt_chan_send(n_chan_t *chan, void *msg_ptr, bool try) {
+n_bool_result_t rt_chan_send(n_chan_t *chan, void *msg_ptr, bool try) {
     pthread_mutex_lock(&chan->lock);
 
     if (chan->closed) {
-        rti_throw("send on closed channel", false);
         pthread_mutex_unlock(&chan->lock);
-        return false;
+        return N_RESULT_ERROR(n_bool_result_t, native_error(N_ERROR_CLOSED));
     }
 
     linkco_t *linkco = waitq_pop(&chan->recvq);
     if (linkco) {
         rt_send(chan, linkco, msg_ptr, NULL, NULL, 0);
-        return true;
+        return N_RESULT_OK(n_bool_result_t, true);
     }
 
     if (!buf_full(chan)) {
@@ -266,17 +265,16 @@ bool rt_chan_send(n_chan_t *chan, void *msg_ptr, bool try) {
         chan_buf_copy(chan, dst_ptr, msg_ptr);
 
         pthread_mutex_unlock(&chan->lock);
-        return true;
+        return N_RESULT_OK(n_bool_result_t, true);
     }
     if (try) {
         pthread_mutex_unlock(&chan->lock);
-        return false;
+        return N_RESULT_OK(n_bool_result_t, false);
     }
 
     if (chan->closed) {
-        rti_throw("send on closed channel", false);
         pthread_mutex_unlock(&chan->lock);
-        return false;
+        return N_RESULT_ERROR(n_bool_result_t, native_error(N_ERROR_CLOSED));
     }
 
     // 直接将自身 yield 并等待 recv 唤醒
@@ -305,14 +303,13 @@ bool rt_chan_send(n_chan_t *chan, void *msg_ptr, bool try) {
 
     // 已经 send 完成，也可能是 chan closed
     if (!success) {
-        rti_throw("send on closed channel", false);
-        return false;
+        return N_RESULT_ERROR(n_bool_result_t, native_error(N_ERROR_CLOSED));
     }
 
     // 数据已经取走，直接返回即可, coroutine_resume 后会将上面的 yield_lock 进行解锁
     DEBUGF("[rt_chan_send] co wakeup, will return, msg(int)=%ld",
            fetch_int_value((addr_t) msg_ptr, chan->msg_size))
-    return true;
+    return N_RESULT_OK(n_bool_result_t, true);
 }
 
 static void rt_recv(n_chan_t *chan, linkco_t *linkco, void *msg_ptr, scase *cases, int16_t *lockorder, int16_t norder) {
@@ -354,13 +351,13 @@ static void rt_recv(n_chan_t *chan, linkco_t *linkco, void *msg_ptr, scase *case
  * @param msg_ptr
  * @param try
  */
-bool rt_chan_recv(n_chan_t *chan, void *msg_ptr, bool try) {
+n_bool_result_t rt_chan_recv(n_chan_t *chan, void *msg_ptr, bool try) {
     pthread_mutex_lock(&chan->lock);
 
     linkco_t *linkco = waitq_pop(&chan->sendq);
     if (linkco) {
         rt_recv(chan, linkco, msg_ptr, NULL, NULL, 0);
-        return true;
+        return N_RESULT_OK(n_bool_result_t, true);
     }
 
     if (!buf_empty(chan)) {
@@ -368,20 +365,19 @@ bool rt_chan_recv(n_chan_t *chan, void *msg_ptr, bool try) {
         buf_pop(chan, msg_ptr);
 
         pthread_mutex_unlock(&chan->lock);
-        return true;
+        return N_RESULT_OK(n_bool_result_t, true);
     }
 
     // no buf no sendq
     if (try) {
         pthread_mutex_unlock(&chan->lock);
-        return false;
+        return N_RESULT_OK(n_bool_result_t, false);
     }
 
     DEBUGF("[rt_chan_recv] sendq empty, will yield to waiting")
     if (chan->closed) {
-        rti_throw("recv on closed channel", false);
         pthread_mutex_unlock(&chan->lock);
-        return false;
+        return N_RESULT_ERROR(n_bool_result_t, native_error(N_ERROR_CLOSED));
     }
     coroutine_t *co = coroutine_get();
 
@@ -407,22 +403,20 @@ bool rt_chan_recv(n_chan_t *chan, void *msg_ptr, bool try) {
     rti_release_linkco(linkco);
 
     if (!success) {
-        rti_throw("recv on closed channel", false);
-        return false;
+        return N_RESULT_ERROR(n_bool_result_t, native_error(N_ERROR_CLOSED));
     }
 
     // 数据已经收到，直接返回即可, coroutine_resume 后会将上面的 yield_lock 进行解锁
     DEBUGF("[rt_chan_recv] co wakeup, will return, msg(int)=%ld",
            fetch_int_value((addr_t) msg_ptr, chan->msg_size))
-    return true;
+    return N_RESULT_OK(n_bool_result_t, true);
 }
 
-void rt_chan_close(n_chan_t *chan) {
+n_void_result_t rt_chan_close(n_chan_t *chan) {
     pthread_mutex_lock(&chan->lock);
     if (chan->closed) {
         pthread_mutex_unlock(&chan->lock);
-        rti_throw("chan already closed", false);
-        return;
+        return N_RESULT_ERROR(n_void_result_t, native_error(N_ERROR_CLOSED));
     }
 
     chan->closed = true;
@@ -440,6 +434,7 @@ void rt_chan_close(n_chan_t *chan) {
         co_ready(linkco->co);
     }
     pthread_mutex_unlock(&chan->lock);
+    return N_RESULT_VOID;
 }
 
 bool rt_chan_is_closed(n_chan_t *chan) {

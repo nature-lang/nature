@@ -1,5 +1,6 @@
 #include "map.h"
 #include "array.h"
+#include "errort.h"
 #include "hash.h"
 
 
@@ -131,21 +132,10 @@ void rt_map_new_out(n_map_t *out, uint64_t rtype_hash, uint64_t key_rhash, uint6
  */
 n_anyptr_t rt_map_access(n_map_t *m, void *key_ref) {
     if (m->capacity == 0) {
-        rtype_t *key_rtype = rt_find_rtype(m->key_rtype_hash);
-        assert(key_rtype);
-        char *key_str = rtype_value_to_str(key_rtype, key_ref);
-        char *msg = tlsprintf("key '%s' not found in map", key_str);
-        rti_throw(msg, true);
-        free((void *) key_str);
         return 0;
     }
 
     uint64_t hash_index = find_hash_slot(m->hash_table, m->capacity, m->key_data, m->key_rtype_hash, key_ref);
-
-    rtype_t *key_rtype = rt_find_rtype(m->key_rtype_hash);
-    char *key_str = rtype_value_to_str(key_rtype, key_ref);
-    DEBUGF("[runtime.rt_map_access] key_rtype_kind: %d, key_str: %s, hash_index=%lu,", key_rtype->kind, key_str,
-           hash_index);
 
     uint64_t hash_value = m->hash_table[hash_index];
     if (hash_value_empty(hash_value) || hash_value_deleted(hash_value)) {
@@ -154,12 +144,9 @@ n_anyptr_t rt_map_access(n_map_t *m, void *key_ref) {
                hash_value_empty(hash_value),
                hash_value_deleted(hash_value));
 
-        char *msg = tlsprintf("key '%s' not found in map", key_str);
-        rti_throw(msg, true);
         return 0;
     }
 
-    free((void *) key_str);
     uint64_t data_index = get_data_index(m, hash_index);
 
     // 找到值所在中数组位置起始点并返回

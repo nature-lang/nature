@@ -130,6 +130,7 @@ fn interface_extract_fn_type(typesys: &mut Typesys, fndef: &AstFnDef) -> Result<
         name: fndef.fn_name.clone(),
         tpl: fndef.is_tpl,
         errable: fndef.is_errable,
+        error_type: None,
         rest: fndef.rest_param,
         x: fndef.is_x,
         param_types: Vec::new(),
@@ -150,6 +151,7 @@ fn interface_extract_fn_type(typesys: &mut Typesys, fndef: &AstFnDef) -> Result<
         type_fn.param_types.push(param_type);
     }
 
+    typesys.result_signature(&mut type_fn);
     let mut result = Type::new(TypeKind::Fn(Box::new(type_fn)));
     result.status = ReductionStatus::Done;
     Ok(result)

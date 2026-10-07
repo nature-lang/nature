@@ -60,6 +60,8 @@ static type_fn_t *type_fn_copy(module_t *m, type_fn_t *temp) {
 
     fn->param_types = ct_list_type_copy(m, temp->param_types);
     fn->return_type = type_copy(m, temp->return_type);
+    if (temp->errable_value_type.kind) fn->errable_value_type = type_copy(m, temp->errable_value_type);
+    if (temp->errable_error_type.kind) fn->errable_error_type = type_copy(m, temp->errable_error_type);
     return fn;
 }
 
@@ -940,6 +942,8 @@ ast_fndef_t *ast_fndef_copy(module_t *m, ast_fndef_t *temp) {
     fndef->linkid = temp->linkid;
     fndef->jit_closure_name = temp->jit_closure_name;
     fndef->return_type = type_copy(m, temp->return_type);
+    fndef->errable_value_type = temp->errable_value_type;
+    fndef->errable_error_type = temp->errable_error_type;
     fndef->params = ast_fn_formals_copy(m, temp->params);
     fndef->type = type_copy(m, temp->type);
     fndef->capture_exprs = temp->capture_exprs;

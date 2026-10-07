@@ -1,9 +1,38 @@
 mod json
-
 import reflect
 import fmt
 import unsafe
 import runtime
+
+pub type error_t:errort = enum {
+    UNSUPPORTED_TYPE,
+    INPUT_TOO_LARGE,
+    TRAILING_DATA,
+    INVALID_PARSER,
+    UNEXPECTED_END,
+    EXPECTED_BOOLEAN,
+    INVALID_NUMBER,
+    LEADING_ZERO,
+    EXPECTED_DIGIT,
+    EXPECTED_EXPONENT,
+    NUMBER_OVERFLOW,
+    INVALID_ESCAPE,
+    INVALID_CHARACTER,
+    UNTERMINATED_STRING,
+    EXPECTED_TOKEN,
+    NESTING_LIMIT,
+    INVALID_UNICODE,
+    INVALID_DEPTH,
+    UNEXPECTED_DELIMITER,
+    MISMATCHED_DELIMITER,
+    INCOMPLETE_VALUE,
+}
+
+pub type syntax_error_t:errort = struct {
+    error_t kind
+    int position
+}
+
 
 var null_hash = @reflect_hash(null) 
 
@@ -102,7 +131,7 @@ fn serialize_value(anyptr p, ref<reflect.type_t> t):[u8]! {
         reflect.VEC -> serialize_vec(p, t)
         reflect.MAP -> serialize_map(p, t)
         _ -> {
-            throw errorf('unsupported type `%s`', t.to_string())
+            throw error_t.UNSUPPORTED_TYPE
             return []
         }
     }
@@ -258,7 +287,7 @@ type deserialize_t = struct{
 // Convert json string to object
 pub fn deserialize<T>(string s):T! {
     if s.len() > DEFAULT_MAX_BYTES {
-        throw errorf('JSON input exceeds %d bytes', DEFAULT_MAX_BYTES)
+        throw error_t.INPUT_TOO_LARGE
     }
     var val = @default(T)
     var t = reflect.typeof(val)
@@ -267,7 +296,7 @@ pub fn deserialize<T>(string s):T! {
     d.parser(&val as anyptr, t)
     d.skip_whitespace()
     if d.cursor != d.data.len() {
-        throw errorf('unexpected trailing data at position %d', d.cursor)
+        throw syntax_error_t{kind: error_t.TRAILING_DATA, position: d.cursor}
     }
 
     return val
@@ -275,7 +304,7 @@ pub fn deserialize<T>(string s):T! {
 
 fn deserialize_t.parser(&self, anyptr p, ref<reflect.type_t> t):void! {
     if p == 0 {
-        throw errorf('parser p is zero')
+        throw error_t.INVALID_PARSER
     }
 
     self.skip_whitespace()
@@ -347,14 +376,14 @@ fn deserialize_t.parser(&self, anyptr p, ref<reflect.type_t> t):void! {
                 return
             }
 
-            throw errorf('only nullable union type deserialize is supported')
+            throw error_t.UNSUPPORTED_TYPE
         }
         reflect.ANY -> {
             var any_val = self.parser_any()
             unsafe.ptr_copy<any>(p, &any_val)
         }
         _ -> {
-            throw errorf('unsupported type `%s`', t.to_string())
+            throw error_t.UNSUPPORTED_TYPE
         }
     }
 }
@@ -458,7 +487,7 @@ fn deserialize_t.parser_bool(&self):bool! {
     self.skip_whitespace()
     
     if self.cursor >= self.data.len() {
-        throw errorf('unexpected end of input at position %d', self.cursor)
+        throw syntax_error_t{kind: error_t.UNEXPECTED_END, position: self.cursor}
     }
     
     // check "true"
@@ -471,7 +500,7 @@ fn deserialize_t.parser_bool(&self):bool! {
         return false
     }
     
-    throw errorf('expected boolean value at position %d', self.cursor)
+    throw syntax_error_t{kind: error_t.EXPECTED_BOOLEAN, position: self.cursor}
 }
 
 fn deserialize_t.parser_number(&self):f64! {
@@ -485,7 +514,7 @@ fn deserialize_t.parser_number(&self):f64! {
     }
     
     if self.cursor >= len || !self.is_digit(self.data[self.cursor]) {
-        throw errorf('invalid number format at position %d', self.cursor)
+        throw syntax_error_t{kind: error_t.INVALID_NUMBER, position: self.cursor}
     }
     
     var integer_part = 0.0
@@ -495,7 +524,7 @@ fn deserialize_t.parser_number(&self):f64! {
         integer_part = integer_part * 10.0 + (self.data[self.cursor] - '0'.char()) as f64
         self.cursor += 1
         if self.cursor < len && self.is_digit(self.data[self.cursor]) {
-            throw errorf('leading zero in number at position %d', self.cursor)
+            throw syntax_error_t{kind: error_t.LEADING_ZERO, position: self.cursor}
         }
     } else {
         for self.cursor < len && self.is_digit(self.data[self.cursor]) {
@@ -510,7 +539,7 @@ fn deserialize_t.parser_number(&self):f64! {
     if self.cursor < len && self.data[self.cursor] == '.'.char() {
         self.cursor += 1
         if self.cursor >= len || !self.is_digit(self.data[self.cursor]) {
-            throw errorf('expected digit after decimal point at position %d', self.cursor)
+            throw syntax_error_t{kind: error_t.EXPECTED_DIGIT, position: self.cursor}
         }
         var decimal_part = 0.0
         var decimal_places = 1.0
@@ -537,7 +566,7 @@ fn deserialize_t.parser_number(&self):f64! {
         }
 
         if self.cursor >= len || !self.is_digit(self.data[self.cursor]) {
-            throw errorf('expected exponent digit at position %d', self.cursor)
+            throw syntax_error_t{kind: error_t.EXPECTED_EXPONENT, position: self.cursor}
         }
         
         var exponent = 0
@@ -545,7 +574,7 @@ fn deserialize_t.parser_number(&self):f64! {
             exponent = exponent * 10 + (self.data[self.cursor] - '0'.char()) as int
             self.cursor += 1
             if exponent > 400 {
-                throw errorf('number cannot be represented as f64 at position %d', self.cursor)
+                throw syntax_error_t{kind: error_t.NUMBER_OVERFLOW, position: self.cursor}
             }
         }
         
@@ -586,7 +615,7 @@ fn deserialize_t.parser_string(&self):string! {
         if c == '\\'.char() {
             self.cursor += 1
             if self.cursor >= self.data.len() {
-                throw errorf('unexpected end of string at position %d', self.cursor)
+                throw syntax_error_t{kind: error_t.UNEXPECTED_END, position: self.cursor}
             }
             
             var escaped = self.data[self.cursor]
@@ -628,12 +657,12 @@ fn deserialize_t.parser_string(&self):string! {
                     continue
                 }
                 _ -> {
-                    throw errorf('invalid escape sequence at position %d', self.cursor)
+                    throw syntax_error_t{kind: error_t.INVALID_ESCAPE, position: self.cursor}
                 }
             }
         } else {
             if c < 0x20 {
-                throw errorf('invalid character in string literal at position %d', self.cursor)
+                throw syntax_error_t{kind: error_t.INVALID_CHARACTER, position: self.cursor}
             }
 
             if c < 0x80 {
@@ -657,13 +686,13 @@ fn deserialize_t.parser_string(&self):string! {
         self.cursor += 1
     }
     
-    throw errorf('unterminated string at position %d', start)
+    throw syntax_error_t{kind: error_t.UNTERMINATED_STRING, position: start}
 }
 
 fn deserialize_t.parser_nullable(&self, anyptr p, ref<reflect.type_t> t):void! {
     self.skip_whitespace()
     if self.cursor >= self.data.len() {
-        throw errorf('unexpected end of input at position %d', self.cursor)
+        throw syntax_error_t{kind: error_t.UNEXPECTED_END, position: self.cursor}
     }
 
     var rv = p as ptr<reflect.union_t>
@@ -675,7 +704,7 @@ fn deserialize_t.parser_nullable(&self, anyptr p, ref<reflect.type_t> t):void! {
     }
 
     if t.hashes.len() != 2 {
-        throw errorf('only support nullable union type')
+        throw error_t.UNSUPPORTED_TYPE
     }
 
     var hash = t.hashes[0]
@@ -706,7 +735,7 @@ fn deserialize_t.parser_nullable(&self, anyptr p, ref<reflect.type_t> t):void! {
 fn deserialize_t.parser_any(&self):any! {
     self.skip_whitespace()
     if self.cursor >= self.data.len() {
-        throw errorf('unexpected end of input at position %d', self.cursor)
+        throw syntax_error_t{kind: error_t.UNEXPECTED_END, position: self.cursor}
     }
     var c = self.data[self.cursor]
 
@@ -779,14 +808,14 @@ fn deserialize_t.consume(&self, string s):bool {
 
 fn deserialize_t.must(&self, string s):void! {
     if !self.consume(s) {
-        throw errorf('expected `%s` at position %d', s, self.cursor)
+        throw syntax_error_t{kind: error_t.EXPECTED_TOKEN, position: self.cursor}
     }
 }
 
 fn deserialize_t.enter_container(&self):void! {
     self.depth += 1
     if self.depth > self.max_depth {
-        throw errorf('JSON nesting exceeds %d at position %d', self.max_depth, self.cursor)
+        throw syntax_error_t{kind: error_t.NESTING_LIMIT, position: self.cursor}
     }
 }
 
@@ -796,7 +825,7 @@ fn deserialize_t.leave_container(&self) {
 
 fn deserialize_t.parser_hex4(&self):int! {
     if self.cursor + 4 > self.data.len() {
-        throw errorf('incomplete unicode escape at position %d', self.cursor)
+        throw syntax_error_t{kind: error_t.INVALID_UNICODE, position: self.cursor}
     }
 
     int value = 0
@@ -810,7 +839,7 @@ fn deserialize_t.parser_hex4(&self):int! {
         } else if c >= 'A'.char() && c <= 'F'.char() {
             digit = (c - 'A'.char()) as int + 10
         } else {
-            throw errorf('invalid unicode escape at position %d', self.cursor + i)
+            throw syntax_error_t{kind: error_t.INVALID_UNICODE, position: self.cursor + i}
         }
         value = value * 16 + digit
     }
@@ -911,7 +940,7 @@ pub fn parse(string source):any! {
 
 fn parse_with_depth(string source, int max_depth):any! {
     if max_depth <= 0 {
-        throw errorf('JSON max depth must be positive')
+        throw error_t.INVALID_DEPTH
     }
 
     var parser = new deserialize_t(
@@ -921,7 +950,7 @@ fn parse_with_depth(string source, int max_depth):any! {
     var value = parser.parser_value()
     parser.skip_whitespace()
     if parser.cursor != parser.data.len() {
-        throw errorf('unexpected trailing data at position %d', parser.cursor)
+        throw syntax_error_t{kind: error_t.TRAILING_DATA, position: parser.cursor}
     }
     return value
 }
@@ -929,7 +958,7 @@ fn parse_with_depth(string source, int max_depth):any! {
 fn deserialize_t.parser_value(&self):any! {
     self.skip_whitespace()
     if self.cursor >= self.data.len() {
-        throw errorf('unexpected end of input at position %d', self.cursor)
+        throw syntax_error_t{kind: error_t.UNEXPECTED_END, position: self.cursor}
     }
 
     var c = self.data[self.cursor]
@@ -1007,26 +1036,26 @@ fn deserialize_t.parser_number_token(&self):string! {
         self.cursor += 1
     }
     if self.cursor >= len {
-        throw errorf('invalid number at position %d', self.cursor)
+        throw syntax_error_t{kind: error_t.INVALID_NUMBER, position: self.cursor}
     }
 
     if self.data[self.cursor] == '0'.char() {
         self.cursor += 1
         if self.cursor < len && self.is_digit(self.data[self.cursor]) {
-            throw errorf('leading zero in number at position %d', self.cursor)
+            throw syntax_error_t{kind: error_t.LEADING_ZERO, position: self.cursor}
         }
     } else if self.data[self.cursor] >= '1'.char() && self.data[self.cursor] <= '9'.char() {
         for self.cursor < len && self.is_digit(self.data[self.cursor]) {
             self.cursor += 1
         }
     } else {
-        throw errorf('invalid number at position %d', self.cursor)
+        throw syntax_error_t{kind: error_t.INVALID_NUMBER, position: self.cursor}
     }
 
     if self.cursor < len && self.data[self.cursor] == '.'.char() {
         self.cursor += 1
         if self.cursor >= len || !self.is_digit(self.data[self.cursor]) {
-            throw errorf('expected digit after decimal point at position %d', self.cursor)
+            throw syntax_error_t{kind: error_t.EXPECTED_DIGIT, position: self.cursor}
         }
         for self.cursor < len && self.is_digit(self.data[self.cursor]) {
             self.cursor += 1
@@ -1041,7 +1070,7 @@ fn deserialize_t.parser_number_token(&self):string! {
             self.cursor += 1
         }
         if self.cursor >= len || !self.is_digit(self.data[self.cursor]) {
-            throw errorf('expected exponent digit at position %d', self.cursor)
+            throw syntax_error_t{kind: error_t.EXPECTED_EXPONENT, position: self.cursor}
         }
         for self.cursor < len && self.is_digit(self.data[self.cursor]) {
             self.cursor += 1
@@ -1082,7 +1111,7 @@ pub fn reader_t.write(&self, [u8] chunk):bool! {
 
         if self.complete {
             if !json_space(c) {
-                throw errorf('unexpected trailing data at position %d', self.scan_cursor)
+                throw syntax_error_t{kind: error_t.TRAILING_DATA, position: self.scan_cursor}
             }
             self.scan_cursor += 1
             continue
@@ -1117,7 +1146,7 @@ pub fn reader_t.write(&self, [u8] chunk):bool! {
                     self.complete = true
                 }
             } else if c < 0x20 {
-                throw errorf('invalid character in string literal at position %d', self.scan_cursor)
+                throw syntax_error_t{kind: error_t.INVALID_CHARACTER, position: self.scan_cursor}
             }
             self.scan_cursor += 1
             continue
@@ -1138,16 +1167,16 @@ pub fn reader_t.write(&self, [u8] chunk):bool! {
         } else if c == '{'.char() || c == '['.char() {
             self.containers.push(c)
             if self.containers.len() > self.max_depth {
-                throw errorf('JSON nesting exceeds %d at position %d', self.max_depth, self.scan_cursor)
+                throw syntax_error_t{kind: error_t.NESTING_LIMIT, position: self.scan_cursor}
             }
         } else if c == '}'.char() || c == ']'.char() {
             if self.containers.len() == 0 {
-                throw errorf('unexpected closing delimiter at position %d', self.scan_cursor)
+                throw syntax_error_t{kind: error_t.UNEXPECTED_DELIMITER, position: self.scan_cursor}
             }
             var opening = self.containers[self.containers.len() - 1]
             if (opening == '{'.char() && c != '}'.char()) ||
                (opening == '['.char() && c != ']'.char()) {
-                throw errorf('mismatched closing delimiter at position %d', self.scan_cursor)
+                throw syntax_error_t{kind: error_t.MISMATCHED_DELIMITER, position: self.scan_cursor}
             }
             self.containers = self.containers.slice(0, self.containers.len() - 1)
             if self.containers.len() == 0 {
@@ -1162,7 +1191,7 @@ pub fn reader_t.write(&self, [u8] chunk):bool! {
 
 pub fn reader_t.value(&self):any! {
     if !self.complete {
-        throw errorf('JSON value is incomplete')
+        throw error_t.INCOMPLETE_VALUE
     }
     return parse_with_depth(self.data as string, self.max_depth)
 }

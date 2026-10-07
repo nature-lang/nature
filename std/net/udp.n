@@ -54,7 +54,7 @@ pub fn socket_t.close(&self)
 
 pub fn socket_t.recvfrom(&self, [u8] buf):(int, addr_t)! {
     if self.closed {
-        throw errorf('socket closed')
+        throw runtime_error_t.CLOSED
     }
 
     var addr = addr_t{}
@@ -67,7 +67,7 @@ fn uv_sendto(ref<socket_t> s, [u8] buf, addr_t addr):int!
 
 pub fn socket_t.sendto(&self, [u8] buf, string host):int! {
     if self.closed {
-       throw errorf('socket closed')
+       throw runtime_error_t.CLOSED
     }
 
     var (ip, port) = utils.split_host(host)
@@ -84,7 +84,7 @@ pub fn socket_t.sendto(&self, [u8] buf, string host):int! {
 
 pub fn socket_t.connect(&self, string host):ref<conn_t>! {
     if self.closed {
-        throw errorf('socket closed')
+        throw runtime_error_t.CLOSED
     }
 
     var (ip, port) = utils.split_host(host)
@@ -110,7 +110,7 @@ pub fn connect(string host):ref<conn_t>! {
 
 pub fn conn_t.write(&self, [u8] buf):int! {
     if self.socket.closed {
-        throw errorf('socket closed')
+        throw runtime_error_t.CLOSED
     }
 
     return uv_sendto(self.socket, buf, self.remote_addr)
@@ -118,7 +118,7 @@ pub fn conn_t.write(&self, [u8] buf):int! {
 
 pub fn conn_t.read(&self, [u8] buf):int! {
     if self.socket.closed {
-        throw errorf('socket closed')
+        throw runtime_error_t.CLOSED
     }
 
     return self.socket.recvfrom(buf)[0]

@@ -27,15 +27,20 @@ import json
 fn main() {
     var j = '"hello\n world"'
     var s = json.deserialize<string>(j) catch e {
-        panic(e.msg())
+        assert(e is json.syntax_error_t)
+        var syntax = e as json.syntax_error_t
+        assert(syntax.kind == json.error_t.INVALID_CHARACTER)
+        assert(syntax.position == 6)
+        println('syntax error verified')
+        return
         ''
     }
     println(s)
 }
 
---- output.txt
-panic: 'invalid character in string literal at position 6' at nature-test/main.n:6:15
 
+--- output.txt
+syntax error verified
 
 === test_json_escape_failed2
 --- main.n
@@ -44,14 +49,20 @@ import json
 fn main() {
     var j = '"hello\\ world"'
     var s = json.deserialize<string>(j) catch e {
-        panic(e.msg())
+        assert(e is json.syntax_error_t)
+        var syntax = e as json.syntax_error_t
+        assert(syntax.kind == json.error_t.INVALID_ESCAPE)
+        assert(syntax.position == 7)
+        println('syntax error verified')
+        return
         ''
     }
     println(s)
 }
 
+
 --- output.txt
-panic: 'invalid escape sequence at position 7' at nature-test/main.n:6:15
+syntax error verified
 
 === test_json_escape
 --- main.n
@@ -60,12 +71,24 @@ import json
 fn main() {
     var j = '"hello\\nworld"'
     var s = json.deserialize<string>(j) catch e {
-        panic(e.msg())
+        panic(describe_error(e))
         ''
     }
     println(s)
 }
 
+
+// Render diagnostics explicitly after catch; throw only carries enum values.
+fn describe_error(errort e):string {
+    if e == runtime_error_t.END_OF_FILE { return 'EOF' }
+    if e == runtime_error_t.TIMEOUT { return 'tcp read timeout' }
+    if e == runtime_error_t.CLOSED { return 'conn closed' }
+    if e == runtime_error_t.INDEX_OUT_OF_RANGE { return 'index out of range' }
+    if e == runtime_error_t.TYPE_MISMATCH { return 'type assert failed' }
+    if e == runtime_error_t.NULL_POINTER { return 'invalid memory address or nil pointer dereference' }
+    if e == runtime_error_t.KEY_NOT_FOUND { return 'key not found in map' }
+    return 'operation failed'
+}
 --- output.txt
 hello
 world
@@ -77,12 +100,24 @@ import json
 fn main() {
     var j = `"hello\nworld"`
     var s = json.deserialize<string>(j) catch e {
-        panic(e.msg())
+        panic(describe_error(e))
         ''
     }
     println(s)
 }
 
+
+// Render diagnostics explicitly after catch; throw only carries enum values.
+fn describe_error(errort e):string {
+    if e == runtime_error_t.END_OF_FILE { return 'EOF' }
+    if e == runtime_error_t.TIMEOUT { return 'tcp read timeout' }
+    if e == runtime_error_t.CLOSED { return 'conn closed' }
+    if e == runtime_error_t.INDEX_OUT_OF_RANGE { return 'index out of range' }
+    if e == runtime_error_t.TYPE_MISMATCH { return 'type assert failed' }
+    if e == runtime_error_t.NULL_POINTER { return 'invalid memory address or nil pointer dereference' }
+    if e == runtime_error_t.KEY_NOT_FOUND { return 'key not found in map' }
+    return 'operation failed'
+}
 --- output.txt
 hello
 world

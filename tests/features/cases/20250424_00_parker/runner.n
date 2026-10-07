@@ -9,6 +9,11 @@ import os.signal
 import co
 import fs
 
+type test_error_t:errort = enum {
+    WRITE_TGZ_TO_S_FAILED_ERR_S,
+}
+
+
 const version = '0.2.0'
 
 fn main():void! {
@@ -40,7 +45,7 @@ fn main():void! {
     var tgz_fd = fs.from(fd, tgz_path)
 
     var len = tgz_fd.write(tgz_buf) catch e {
-        throw errorf('write tgz to %s failed, err=%s', tgz_path, e.msg())
+        throw test_error_t.WRITE_TGZ_TO_S_FAILED_ERR_S
     }
     tgz_fd.close()
     logf('tgz %s closed', tgz_path)

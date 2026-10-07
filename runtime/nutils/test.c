@@ -1,10 +1,43 @@
 #include "test.h"
+#include "errort.h"
 
 #include "process.h"
 #include "runtime/processor.h"
 
 #include <stdatomic.h>
 #include <stdlib.h>
+
+test_error_int_result_t test_error_result(uint8_t failure) {
+    return (test_error_int_result_t) {
+            .tag = hash_string(failure ? ERRABLE_ERROR_TAG : ERRABLE_VALUE_TAG),
+            .payload = failure ? 0 : 42,
+    };
+}
+
+n_int_result_t test_error_native_default(uint8_t failure) {
+    if (failure) return N_RESULT_ERROR(n_int_result_t, native_error(N_ERROR_EOF));
+    return N_RESULT_OK(n_int_result_t, 42);
+}
+
+n_void_result_t test_error_native_void(uint8_t failure) {
+    if (failure) return N_RESULT_ERROR(n_void_result_t, native_error(N_ERROR_CLOSED));
+    return N_RESULT_VOID;
+}
+
+void test_error_clobber_return_register(void) {
+#ifdef __ARM64
+    __asm__ volatile("mov x8, #259" ::: "x8");
+#endif
+}
+
+n_int_result_t test_error_native_read(int64_t *source, n_vec_t buffer) {
+    if (*source < 0) {
+        return N_RESULT_ERROR(n_int_result_t, native_error(N_ERROR_EOF));
+    }
+    if (buffer.length == 0) return N_RESULT_OK(n_int_result_t, 0);
+    ((uint8_t *) buffer.data)[0] = (uint8_t) *source;
+    return N_RESULT_OK(n_int_result_t, 1);
+}
 
 enum {
     PROCESSOR_TEST_WAITER_RAN = 1,

@@ -1,15 +1,20 @@
+
+type test_error_t:errort = enum {
+    DIVISOR_CANNOT_ZERO,
+}
+
 fn main():void! {
     // list index
     var list = [1, 2, 3]
     var item = list[5] catch err {
-        print('catch vec index err=', err.msg(), '\n')
+        print('catch vec index err=', describe_error(err), '\n')
         0
     }
     println(item)
 
     any a1 = 1 as i8
     var i1 = a1 as i16 catch err1 {
-        print('catch type assert err=', err1.msg(), '\n')
+        print('catch type assert err=', describe_error(err1), '\n')
         0
     }
 
@@ -24,7 +29,7 @@ fn main():void! {
         list: [1, 2, 3, 4, 5],
         div: fn(int a, int b):int! {
             if b == 0 {
-                throw errorf('divisor cannot zero')
+                throw test_error_t.DIVISOR_CANNOT_ZERO
             }
             return a / b
         },
@@ -35,14 +40,26 @@ fn main():void! {
 
     // 异常处理
     var a2 = foo.list[8] catch err2 {
-        print('chain access vec err=', err2.msg(), '\n')
+        print('chain access vec err=', describe_error(err2), '\n')
         0
     }
 
     var a3 = foo.div(10, 0) catch err3 {
-        print("chain access call err=", err3.msg(), '\n')
+        print("chain access call err=", describe_error(err3), '\n')
         0
     }
 
     println('hello world')
+}
+// Render diagnostics explicitly after catch; throw only carries enum values.
+fn describe_error(errort e):string {
+    if e == test_error_t.DIVISOR_CANNOT_ZERO { return 'divisor cannot zero' }
+    if e == runtime_error_t.END_OF_FILE { return 'EOF' }
+    if e == runtime_error_t.TIMEOUT { return 'tcp read timeout' }
+    if e == runtime_error_t.CLOSED { return 'conn closed' }
+    if e == runtime_error_t.INDEX_OUT_OF_RANGE { return 'index out of range' }
+    if e == runtime_error_t.TYPE_MISMATCH { return 'type assert failed' }
+    if e == runtime_error_t.NULL_POINTER { return 'invalid memory address or nil pointer dereference' }
+    if e == runtime_error_t.KEY_NOT_FOUND { return 'key not found in map' }
+    return 'operation failed'
 }

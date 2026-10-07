@@ -19,22 +19,25 @@ typedef struct {
     int64_t flags;
     int64_t mode;
     int64_t offset; // 用于 fallback 时的 pread/pwrite offset
+    int32_t status; // completion status for req; reset before each operation
 } fs_context_t;
 
-fs_context_t *rt_uv_fs_open(n_string_t path, int64_t flags, int64_t mode);
+N_RESULT_TYPE(n_stat_result_t, uv_stat_t);
 
-n_int_t rt_uv_fs_read(fs_context_t *ctx, n_vec_t buf);
+n_ptr_result_t rt_uv_fs_open(n_string_t path, int64_t flags, int64_t mode);
 
-n_int_t rt_uv_fs_write(fs_context_t *ctx, n_vec_t buf);
+n_int_result_t rt_uv_fs_read(fs_context_t *ctx, n_vec_t buf);
+
+n_int_result_t rt_uv_fs_write(fs_context_t *ctx, n_vec_t buf);
 
 void rt_uv_fs_close(fs_context_t *ctx);
 
-n_int_t rt_uv_fs_read_at(fs_context_t *ctx, n_vec_t buf, int offset);
+n_int_result_t rt_uv_fs_read_at(fs_context_t *ctx, n_vec_t buf, int offset);
 
-n_int_t rt_uv_fs_write_at(fs_context_t *ctx, n_vec_t buf, int offset);
+n_int_result_t rt_uv_fs_write_at(fs_context_t *ctx, n_vec_t buf, int offset);
 
-uv_stat_t rt_uv_fs_stat(fs_context_t *ctx);
+n_stat_result_t rt_uv_fs_stat(fs_context_t *ctx);
 
-fs_context_t *rt_uv_fs_from(n_int_t fd, n_string_t name);
+n_ptr_result_t rt_uv_fs_from(n_int_t fd, n_string_t name);
 
 #endif //NATURE_FS_H

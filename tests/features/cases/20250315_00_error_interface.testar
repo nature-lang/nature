@@ -13,12 +13,17 @@ fn main():void! {
 }
 
 --- output.txt
-nature-test/main.n:2:22: type 'string' cannot casting to interface 'throwable'
+nature-test/main.n:2:22: inline error payload exceeds 24 bytes; use errable<T,E> with a concrete E
 
 === test_throw
 --- main.n
+
+type test_error_t:errort = enum {
+    ERROR_IN_BAR,
+}
+
 fn bar():void! {
-    throw errorf('error in bar')
+    throw test_error_t.ERROR_IN_BAR
 }
 
 fn foo():void! {
@@ -30,14 +35,9 @@ fn main():void! {
 }
 
 --- output.txt
-coroutine 'main' uncaught error: 'error in bar' at nature-test/main.n:2:29
-stack backtrace:
-0:	main.bar
-		at nature-test/main.n:2:29
-1:	main.foo
-		at nature-test/main.n:6:8
-2:	main.main
-		at nature-test/main.n:10:8
+
+--- status.txt
+1
 
 === test_panic
 --- main.n
@@ -52,10 +52,22 @@ fn foo():void! {
 
 fn main():void! {
     foo() catch err {
-        println('catch err:', err.msg())
+        println('catch err:', describe_error(err))
     }
 }
 
+
+// Render diagnostics explicitly after catch; throw only carries enum values.
+fn describe_error(errort e):string {
+    if e == runtime_error_t.END_OF_FILE { return 'EOF' }
+    if e == runtime_error_t.TIMEOUT { return 'tcp read timeout' }
+    if e == runtime_error_t.CLOSED { return 'conn closed' }
+    if e == runtime_error_t.INDEX_OUT_OF_RANGE { return 'index out of range' }
+    if e == runtime_error_t.TYPE_MISMATCH { return 'type assert failed' }
+    if e == runtime_error_t.NULL_POINTER { return 'invalid memory address or nil pointer dereference' }
+    if e == runtime_error_t.KEY_NOT_FOUND { return 'key not found in map' }
+    return 'operation failed'
+}
 --- output.txt
 panic: 'index out of range [11] with length 10' at nature-test/main.n:3:21
 
@@ -64,7 +76,7 @@ panic: 'index out of range [11] with length 10' at nature-test/main.n:3:21
 fn bar():void! {
     var list = vec<i8>.new(0, 10)
     var s = list[11] catch err {
-        println('catch err:', err.msg())
+        println('catch err:', describe_error(err))
         0
     }
 }
@@ -75,9 +87,21 @@ fn foo():void! {
 
 fn main():void! {
     foo() catch err {
-        println('catch err:', err.msg())
+        println('catch err:', describe_error(err))
     }
 }
 
+
+// Render diagnostics explicitly after catch; throw only carries enum values.
+fn describe_error(errort e):string {
+    if e == runtime_error_t.END_OF_FILE { return 'EOF' }
+    if e == runtime_error_t.TIMEOUT { return 'tcp read timeout' }
+    if e == runtime_error_t.CLOSED { return 'conn closed' }
+    if e == runtime_error_t.INDEX_OUT_OF_RANGE { return 'index out of range' }
+    if e == runtime_error_t.TYPE_MISMATCH { return 'type assert failed' }
+    if e == runtime_error_t.NULL_POINTER { return 'invalid memory address or nil pointer dereference' }
+    if e == runtime_error_t.KEY_NOT_FOUND { return 'key not found in map' }
+    return 'operation failed'
+}
 --- output.txt
-catch err: index out of range [11] with length 10
+catch err: index out of range

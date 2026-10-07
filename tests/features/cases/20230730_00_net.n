@@ -2,6 +2,14 @@ import syscall
 import os
 import libc
 
+type test_error_t:errort = enum {
+    BIND_ERROR,
+    LISTEN_ERROR,
+    ACCEPT_ERROR,
+    SEND_ERROR,
+}
+
+
 fn main():void! {
     // 创建一个 socket
     int sockfd = syscall.socket(syscall.AF_INET, syscall.SOCK_STREAM, 0)
@@ -16,13 +24,13 @@ fn main():void! {
     }
 
     syscall.bind(sockfd, addr) catch err {
-        throw errorf('bind error: ' + err.msg())
+        throw test_error_t.BIND_ERROR
     }
     println('bind :8080 success')
 
     // 监听链接
     syscall.listen(sockfd, 10) catch err {
-        throw errorf('listen error: ' + err.msg())
+        throw test_error_t.LISTEN_ERROR
     }
     println('listen success')
 
@@ -30,7 +38,7 @@ fn main():void! {
     var client_addr_ptr = new syscall.sockaddr_in() // 初始化一个空的地址，等待 callee 赋值
 
     var client_fd = syscall.accept(sockfd, client_addr_ptr) catch err {
-       throw errorf('accept error: ' +  err.msg())
+       throw test_error_t.ACCEPT_ERROR
     }
 
     println('accept success')
@@ -41,7 +49,7 @@ fn main():void! {
 
     var resp_str = 'HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 12\r\n\r\nHello, World!'
     var bytes = syscall.sendto(client_fd, resp_str as [u8], 0) catch err {
-        throw errorf('send error: ' + err.msg())
+        throw test_error_t.SEND_ERROR
     }
     print('send success, len: ', bytes, '\n')
 

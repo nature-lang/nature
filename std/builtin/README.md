@@ -134,7 +134,8 @@ Check if the last operation was successful.
 type future_t<T> = struct{
     i64 size
     ptr<T> result
-    throwable? error
+    errort error = runtime_error_t.FAILED
+    bool has_error
     anyptr co
 }
 ```
@@ -152,7 +153,7 @@ Wait for the future to complete and return the result.
 ### future_t.await (void)
 
 ```
-fn future_t<T:void>.await():void!
+fn future_t<T>.await_void(&self):void!
 ```
 
 Wait for the future to complete (void return type).
@@ -175,50 +176,55 @@ Return a result from a coroutine.
 
 # [error](https://github.com/nature-lang/nature/blob/master/std/builtin/error.n)
 
-## type throwable
-
-```
-type throwable = interface{
-    fn msg():string
-}
-```
-
-Interface for throwable objects.
-
 ## type errort
 
-```
-type errort:throwable = struct{
-    string message
-    bool is_panic
+```nature
+pub type errort = interface {}
+
+pub type errable<value_t, error_t> = union {
+    value_t value
+    error_t error
 }
 ```
 
-Error type implementing throwable interface.
+`errort` is a compiler-recognized marker interface. Types implementing it can be returned by `T!`, which means `errable<T,errort>`. Both `.n` and `.x` use the same tagged Result return model.
 
-### errort.msg
+A default error stores the existing 8-byte `rtype_hash` field and a 24-byte inline payload. Enums, scalar aliases, small structs and pointers are supported; types must explicitly implement `errort`. The compiler rejects collisions between distinct types used as inline errors. Packing, throwing, propagating and catching do not allocate an error wrapper or call `msg()`. Constructing the payload itself follows the normal memory rules of its type.
 
-```
-fn errort.msg():string
-```
+### Enum errors
 
-Get the error message.
-
-## type errable
-
-```
-type errable<T> = errort|T
-```
-
-Union type for error handling.
-
-## fn errorf
-
-```
-fn errorf(string format, ...[any] args):ref<errort>
+```nature
+pub type error_t:errort = enum { TIMEOUT, CLOSED }
+fn load():int! { throw error_t.TIMEOUT }
+fn main() {
+    var value = load() catch e {
+        if e == error_t.TIMEOUT { println('timeout') }
+        if e is error_t { var kind = e as error_t }
+        -1
+    }
+}
 ```
 
-Create a formatted error.
+### Concrete error types
+
+`errable<T,E>` accepts any concrete E, including strings and structs larger than 24 bytes. Calls support catch, throw and automatic propagation; the catch variable has type E. A zero error value remains distinct from success.
+
+```nature
+fn parse():errable<int,string> { throw 'invalid input' }
+fn main() {
+    var value = parse() catch e { println(e); -1 }
+}
+```
+
+Concrete errors propagate only into compatible E types. Propagation into T! additionally requires the marker implementation and inline capacity. A catch containing different error types promotes to errort only if every type satisfies these requirements. Catchable runtime checks, such as bounds checks, produce runtime_error_t.
+
+### Runtime errors and native interfaces
+
+`runtime_error_t:errort` defines runtime categories. `system_error_t:errort` stores an i32 code for errno or native library status. Standard library modules expose `error_t` enums or small structs containing the required context.
+
+Native `#linkid` interfaces use the same return ABI in `.n` and `.x`: `T!` returns `errable<T,errort>`, and explicit `errable<T,E>` returns the corresponding tagged union. C functions must return a matching tag and value/error layout. Asynchronous callbacks record completion status in their operation context; the resumed native function returns the Result. Coroutines do not store a general error slot.
+
+Type hashes are compiler metadata, not a serialization or cross-version ABI contract. Uncaught errors produce numeric diagnostics and a nonzero exit status. Applications can map errors to readable text explicitly in Nature catch blocks.
 
 # [map](https://github.com/nature-lang/nature/blob/master/std/builtin/map.n)
 

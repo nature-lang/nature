@@ -13,11 +13,8 @@ extern char **command_argv;
 
 #define ASSERT_ADDR(_addr) assertf((addr_t) _addr > 0xa000 && (addr_t) _addr <= 0x1000000000000, "addr '%p' cannot valid", _addr)
 
-void union_assert(n_union_t *mu, int64_t target_rtype_hash, void *value_ref);
 
-void any_assert(n_any_t *mu, int64_t target_rtype_hash, void *value_ref);
-
-void interface_assert(n_interface_t *mu, int64_t target_rtype_hash, void *value_ref);
+int32_t interface_assert(n_interface_t *mu, int64_t target_rtype_hash, void *value_ref);
 
 bool union_is(n_union_t *mu, int64_t target_rtype_hash);
 
@@ -47,15 +44,8 @@ int64_t iterator_next_value(void *iterator, int64_t hash, int64_t cursor, void *
 
 void iterator_take_value(void *iterator, int64_t hash, int64_t cursor, void *value_ref);
 
-void co_throw_error(n_interface_t *error, char *path, char *fn_name, n_int_t line, n_int_t column);
+void error_bad_cast(void);
 
-void throw_index_out_error(n_int_t *index, n_int_t *len, n_bool_t be_catch);
-
-n_interface_t co_remove_error();
-
-uint8_t co_has_error(char *path, char *fn_name, n_int_t line, n_int_t column);
-
-uint8_t co_has_panic(bool be_catch, char *path, char *fn_name, n_int_t line, n_int_t column);
 
 n_anyptr_t anyptr_casting(value_casting v);
 
@@ -71,7 +61,6 @@ void rti_write_barrier_rtype(void *dst, void *src, rtype_t *rtype);
 
 void write_barrier(void *slot, void *new_obj);
 
-void ptr_valid(void *ptr);
 
 void rt_panic(n_string_t msg);
 
@@ -86,7 +75,13 @@ void rt_assert(n_bool_t cond);
 // allocate array data by element rtype hash
 n_anyptr_t rt_array_new(int64_t element_hash, int64_t length);
 
-n_vec_t unsafe_vec_new(int64_t hash, int64_t element_hash, int64_t len, void *data_ptr);
+// Uncaught bounds checks report the source site in either mode.
+void rt_index_panic(n_int_t index, n_int_t len, char *path, n_int_t line, n_int_t column);
+
+// Generic uncaught panic with an explicit source site.
+void rt_panic_at(char *msg, char *path, n_int_t line, n_int_t column);
+
+n_vec_result_t unsafe_vec_new(int64_t hash, int64_t element_hash, int64_t len, void *data_ptr);
 
 n_string_t rt_strerror();
 
@@ -99,10 +94,10 @@ void *rt_string_ref(n_string_t *n_str);
 n_string_t rt_string_new(n_anyptr_t raw_string);
 
 // LIR out-parameter helpers for builtin structs
-void rt_string_concat_out(n_string_t *out, n_string_t *a, n_string_t *b);
+int32_t rt_string_concat_out(n_string_t *out, n_string_t *a, n_string_t *b);
 void rt_string_to_vec_out(n_vec_t *out, n_string_t *src);
 void rt_vec_to_string_out(n_string_t *out, n_vec_t *src);
-void rt_vec_slice_out(n_vec_t *out, n_vec_t *vec, int64_t start, int64_t end);
+int32_t rt_vec_slice_out(n_vec_t *out, n_vec_t *vec, int64_t start, int64_t end);
 
 bool rt_in_heap(n_anyptr_t addr);
 

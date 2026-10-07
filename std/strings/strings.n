@@ -1,8 +1,16 @@
 mod strings
-
 import syscall
 import libc
 import runtime
+
+pub type error_t:errort = enum {
+    EMPTY_INPUT,
+    INVALID_NUMBER,
+    INVALID_DIGIT,
+    OVERFLOW,
+    INVALID_FLOAT,
+}
+
 
 fn copy_bytes(anyptr dst, int dst_offset, anyptr src, int src_offset, int length) {
     if length == 0 {
@@ -112,7 +120,7 @@ pub fn string.slice(self, int start, int end):string {
     // Reuse vec slicing for the view, then copy only the selected bytes so the
     // resulting string remains NUL-terminated.
     var sliced = runtime.vec_slice<u8>(&self as anyptr, start, end) catch e {
-        panic(e.msg())
+        panic('string conversion failed')
         []
     }
     return runtime.string_ref_new(sliced.ref(), sliced.len())
@@ -308,7 +316,7 @@ pub fn string.replace(self, string sub_old, string sub_new):string {
 
 pub fn string.to_int(self):int! {
     if self.len() == 0 {
-        throw errorf('cannot convert empty string to int')
+        throw error_t.EMPTY_INPUT
     }
 
     var result = 0
@@ -319,7 +327,7 @@ pub fn string.to_int(self):int! {
         negative = true
         start = 1
         if self.len() == 1 {
-            throw errorf("invalid number format")
+            throw error_t.INVALID_NUMBER
         }
     }
 
@@ -333,11 +341,11 @@ pub fn string.to_int(self):int! {
     for int i = start; i < self.len(); i += 1 {
         var c = self[i]
         if c < '0'.char() || c > '9'.char() {
-            throw errorf("invalid character in number")
+            throw error_t.INVALID_DIGIT
         }
 
         if result > 0x7FFFFFFF / 10 {
-            throw errorf("number too large")
+            throw error_t.OVERFLOW
         }
 
         result = result * 10 + (c - '0'.char()) as int
@@ -352,7 +360,7 @@ pub fn string.to_int(self):int! {
 
 pub fn string.to_float(self):float! {
     if self.len() == 0 {
-        throw errorf('cannot convert empty string to float')
+        throw error_t.EMPTY_INPUT
     }
 
     var result = 0.0
@@ -363,7 +371,7 @@ pub fn string.to_float(self):float! {
         negative = true
         start = 1
         if self.len() == 1 {
-            throw errorf("invalid number format")
+            throw error_t.INVALID_NUMBER
         }
     }
 
@@ -381,14 +389,14 @@ pub fn string.to_float(self):float! {
         var c = self[i]
         if c == '.'.char() {
             if decimal_point != -1 {
-                throw errorf("invalid float format: multiple decimal points")
+                throw error_t.INVALID_FLOAT
             }
             decimal_point = i
             continue
         }
         
         if c < '0'.char() || c > '9'.char() {
-            throw errorf("invalid character in float")
+            throw error_t.INVALID_DIGIT
         }
 
         if decimal_point == -1 {

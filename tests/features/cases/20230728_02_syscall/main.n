@@ -5,7 +5,7 @@ fn main():void! {
     string path2 = './asserts/test_rename'
 
     syscall.mkdir(path, 0755) catch err {
-        print('mkdir err: ', err.msg(), '\n')
+        print('mkdir err: ', describe_error(err), '\n')
     }
 
     // 读取目录进行检查
@@ -48,4 +48,16 @@ fn main():void! {
     if cwd.len() > 0 {
         println('getcwd success')
     }
+}
+
+// Render diagnostics explicitly after catch; throw only carries enum values.
+fn describe_error(errort e):string {
+    if e == runtime_error_t.END_OF_FILE { return 'EOF' }
+    if e == runtime_error_t.TIMEOUT { return 'tcp read timeout' }
+    if e == runtime_error_t.CLOSED { return 'conn closed' }
+    if e == runtime_error_t.INDEX_OUT_OF_RANGE { return 'index out of range' }
+    if e == runtime_error_t.TYPE_MISMATCH { return 'type assert failed' }
+    if e == runtime_error_t.NULL_POINTER { return 'invalid memory address or nil pointer dereference' }
+    if e == runtime_error_t.KEY_NOT_FOUND { return 'key not found in map' }
+    return 'operation failed'
 }

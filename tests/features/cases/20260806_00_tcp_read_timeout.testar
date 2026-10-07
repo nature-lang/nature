@@ -20,7 +20,7 @@ fn main() {
     var scratch = vec<u8>.new(0, 16)
     bool timed_out = false
     conn.read(scratch) catch e {
-        timed_out = e.msg() == 'tcp read timeout'
+        timed_out = e == runtime_error_t.TIMEOUT
         0
     }
     conn.close()
@@ -50,7 +50,7 @@ fn read_pending(ref<tcp.conn_t> conn, ref<read_state_t> state) {
     state.started = true
     var scratch = vec<u8>.new(0, 16)
     conn.read(scratch) catch e {
-        state.error = e.msg()
+        state.error = describe_error(e)
         0
     }
     state.done = true
@@ -70,4 +70,16 @@ fn main() {
         co.sleep(1)
     }
     assert(state.error == 'conn closed')
+}
+
+// Render diagnostics explicitly after catch; throw only carries enum values.
+fn describe_error(errort e):string {
+    if e == runtime_error_t.END_OF_FILE { return 'EOF' }
+    if e == runtime_error_t.TIMEOUT { return 'tcp read timeout' }
+    if e == runtime_error_t.CLOSED { return 'conn closed' }
+    if e == runtime_error_t.INDEX_OUT_OF_RANGE { return 'index out of range' }
+    if e == runtime_error_t.TYPE_MISMATCH { return 'type assert failed' }
+    if e == runtime_error_t.NULL_POINTER { return 'invalid memory address or nil pointer dereference' }
+    if e == runtime_error_t.KEY_NOT_FOUND { return 'key not found in map' }
+    return 'operation failed'
 }

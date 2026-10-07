@@ -1,4 +1,5 @@
 import runtime
+import strings
 
 #linkid rt_string_length
 pub fn string.len(*self):int

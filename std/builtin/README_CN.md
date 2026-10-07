@@ -134,7 +134,8 @@ fn chan<T>.is_successful(self):bool
 type future_t<T> = struct{
     i64 size
     ptr<T> result
-    throwable? error
+    errort error = runtime_error_t.FAILED
+    bool has_error
     anyptr co
 }
 ```
@@ -152,7 +153,7 @@ fn future_t.await():T!
 ### future_t.await (void)
 
 ```
-fn future_t<T:void>.await():void!
+fn future_t<T>.await_void(&self):void!
 ```
 
 等待 future 完成（void 返回类型）。
@@ -175,50 +176,68 @@ fn co_return<T>(ptr<T> result)
 
 # [error](https://github.com/nature-lang/nature/blob/master/std/builtin/error.n)
 
-## type throwable
-
-```
-type throwable = interface{
-    fn msg():string
-}
-```
-
-可抛出对象的接口。
-
 ## type errort
 
-```
-type errort:throwable = struct{
-    string message
-    bool is_panic
+```nature
+pub type errort = interface {}
+
+pub type errable<value_t, error_t> = union {
+    value_t value
+    error_t error
 }
 ```
 
-实现 throwable 接口的错误类型。
+`errort` 是编译器识别的标记接口。实现它的类型可用于默认错误返回 `T!`，即 `errable<T,errort>`。`.n` 和 `.x` 使用同一个带标签的返回值模型。
 
-### errort.msg
+默认错误包含现有的 8 字节 `rtype_hash` 字段和 24 字节内联数据。enum、标量别名、小结构体和指针可以作为错误；类型必须显式声明实现 `errort`。不同类型作为内联错误使用时，若类型 hash 碰撞，编译器会报错。转换、抛出、传播和捕获错误不会为错误包装分配堆内存，也不调用 `msg()`。错误数据自身的构造仍遵循普通类型的内存规则。
 
+### enum 错误
+
+```nature
+pub type error_t:errort = enum {
+    TIMEOUT,
+    CLOSED,
+}
+
+fn load():int! {
+    throw error_t.TIMEOUT
+}
+
+fn main() {
+    var value = load() catch e {
+        if e == error_t.TIMEOUT { println('timeout') }
+        if e is error_t { var kind = e as error_t }
+        -1
+    }
+}
 ```
-fn errort.msg():string
+
+### 具体错误类型
+
+`errable<T,E>` 允许任意具体 `E`，包括字符串和超过 24 字节的结构体。调用时仍可用 `catch`、`throw` 和自动传播；catch 变量的类型是 `E`，错误值为零也不会与成功混淆。
+
+```nature
+fn parse():errable<int,string> {
+    throw 'invalid input'
+}
+
+fn main() {
+    var value = parse() catch e {
+        println(e)
+        -1
+    }
+}
 ```
 
-获取错误消息。
+具体错误只能向兼容的 `E` 传播。若要传播到 `T!`，它必须实现 `errort` 且满足内联大小限制。一个 try/catch 中出现不同错误类型时，只能在全部满足此条件时提升为 `errort`。可捕获的运行时检查（如数组越界）产生 `runtime_error_t`。
 
-## type errable
+### 运行时错误和原生接口
 
-```
-type errable<T> = errort|T
-```
+`runtime_error_t:errort` 是内置错误分类 enum；`system_error_t:errort` 包含 `i32 code`，保存 errno 或原生库状态码。标准库也通过各自公开的 `error_t` enum 或小结构体保存分类和必要的上下文。
 
-用于错误处理的联合类型。
+`.n` 和 `.x` 的原生 `#linkid` 接口也使用同一返回 ABI：`T!` 返回 `errable<T,errort>`，显式 `errable<T,E>` 返回对应的带标签 union。C 函数必须返回匹配的 tag 和 value/error 布局。错误通过返回值传递；异步回调在各自的操作上下文中记录状态，协程恢复后由原生函数返回结果。coroutine 不保存通用错误槽。
 
-## fn errorf
-
-```
-fn errorf(string format, ...[any] args):ref<errort>
-```
-
-创建格式化错误。
+类型 hash 是编译器元数据，不应作为序列化协议或跨编译器版本的 ABI 约定。未捕获的错误输出数值诊断并以非零状态退出；需要可读文本时，由 Nature 调用方在 catch 中自行映射。
 
 # [map](https://github.com/nature-lang/nature/blob/master/std/builtin/map.n)
 

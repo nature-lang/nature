@@ -1,15 +1,21 @@
 === test_map_assign_any_assert_return
 --- main.n
+
+type test_error_t:errort = enum {
+    HEADERS_MUST_BE_AN_OBJECT,
+    HEADER_MUST_BE_A_STRING,
+}
+
 // issue #315: any assert into a map value slot wrongly took the address of the anyptr target, overflowing adjacent spill slots and crashing on return
 type options_t = struct {
     {string:string} headers = {}
 }
 
 fn stream_option_headers(any value): {string:string}! {
-    if !(value is {string:any}) {throw errorf('headers must be an object')}
+    if !(value is {string:any}) {throw test_error_t.HEADERS_MUST_BE_AN_OBJECT}
     {string:string} result = {}
     for name, item in value as {string:any} {
-        if !(item is string) {throw errorf('header must be a string')}
+        if !(item is string) {throw test_error_t.HEADER_MUST_BE_A_STRING}
         result[name] = item as string
     }
     return result
@@ -28,10 +34,24 @@ fn main() {
     headers['x-repro'] = 'yes'
     {string:any} value = {}
     value['headers'] = headers
-    set_runtime_stream_options(options, value) catch error {println(error.msg()); return}
+    set_runtime_stream_options(options, value) catch error {println(describe_error(error)); return}
     println(options.headers['x-repro'])
 }
 
+
+// Render diagnostics explicitly after catch; throw only carries enum values.
+fn describe_error(errort e):string {
+    if e == test_error_t.HEADERS_MUST_BE_AN_OBJECT { return 'headers must be an object' }
+    if e == test_error_t.HEADER_MUST_BE_A_STRING { return 'header must be a string' }
+    if e == runtime_error_t.END_OF_FILE { return 'EOF' }
+    if e == runtime_error_t.TIMEOUT { return 'tcp read timeout' }
+    if e == runtime_error_t.CLOSED { return 'conn closed' }
+    if e == runtime_error_t.INDEX_OUT_OF_RANGE { return 'index out of range' }
+    if e == runtime_error_t.TYPE_MISMATCH { return 'type assert failed' }
+    if e == runtime_error_t.NULL_POINTER { return 'invalid memory address or nil pointer dereference' }
+    if e == runtime_error_t.KEY_NOT_FOUND { return 'key not found in map' }
+    return 'operation failed'
+}
 --- output.txt
 yes
 

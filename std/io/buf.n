@@ -1,5 +1,14 @@
 import io
 
+pub type error_t:errort = enum {
+    NEGATIVE_READ,
+    NO_PROGRESS,
+    BUFFER_FULL,
+    WRITE_FAILED,
+    NEGATIVE_WRITE,
+}
+
+
 pub type reader<T>:io.reader = struct{
     T rd
     [u8] buf = vec<u8>.new(0, 4096)
@@ -42,14 +51,14 @@ pub fn reader<T>.fill(&self):void! {
     for int i = max_empty_reads; i > 0; i -= 1 {
         // maybe eof
         int n = self.rd.read(self.buf.slice(self.w, self.buf.len())) catch e {
-            if e.msg() == 'EOF' {
+            if e == runtime_error_t.END_OF_FILE {
                 self.eof = true
             }
 
             throw e
         }
         if n < 0 {
-            throw errorf('negative read count')
+            throw error_t.NEGATIVE_READ
         }
         self.w += n
         if n > 0 {
@@ -58,7 +67,7 @@ pub fn reader<T>.fill(&self):void! {
         // if n == 0, will try again
     }
 
-    throw errorf('no progress')
+    throw error_t.NO_PROGRESS
 }
 
 #where T:io.reader
@@ -69,7 +78,7 @@ pub fn reader<T>.read(&self, [u8] buf):int! {
         }
 
         self.eof = true
-        throw errorf('EOF')
+        throw runtime_error_t.END_OF_FILE
     }
 
     // buffer is empty, need to read from underlying reader
@@ -90,7 +99,7 @@ pub fn reader<T>.read(&self, [u8] buf):int! {
 
         if n == 0 {
             self.eof = true
-            throw errorf('EOF')
+            throw runtime_error_t.END_OF_FILE
         }
         self.w += n
     }
@@ -137,7 +146,6 @@ pub fn reader<T>.read_until(&self, u8 delim):[u8] {
         if self.buffered() >= self.buf.len() {
             result = self.buf
             self.r = self.w
-            // throw errorf('buffer full')
             return result
         }
 
@@ -178,14 +186,14 @@ pub fn reader<T>.read_byte(&self):u8! {
 #where T:io.reader
 pub fn reader<T>.read_line(&self):string! {
     if self.eof {
-        throw errorf('EOF')
+        throw runtime_error_t.END_OF_FILE
     }
 
     var bytes = self.read_until('\n'.char())
     if self.eof && bytes.len() == 0 {
         // The underlying descriptor reached EOF with no complete line; the
         // caller must observe the terminal condition instead of an empty line.
-        throw errorf('EOF')
+        throw runtime_error_t.END_OF_FILE
     }
 
     // 处理 \r\n
@@ -234,7 +242,7 @@ pub fn writer<T>.buffered(&self):int {
 #where T:io.writer
 pub fn writer<T>.flush(&self):void! {
     if self.err {
-        throw errorf('previous write error')
+        throw error_t.WRITE_FAILED
     }
     
     if self.n == 0 {
@@ -250,7 +258,7 @@ pub fn writer<T>.flush(&self):void! {
         
         if n < 0 {
             self.err = true
-            throw errorf('negative write count')
+            throw error_t.NEGATIVE_WRITE
         }
         
         written += n
@@ -262,7 +270,7 @@ pub fn writer<T>.flush(&self):void! {
 #where T:io.writer
 pub fn writer<T>.write(&self, [u8] buf):int! {
     if self.err {
-        throw errorf('previous write error')
+        throw error_t.WRITE_FAILED
     }
 
     int total_written = 0
@@ -286,7 +294,7 @@ pub fn writer<T>.write(&self, [u8] buf):int! {
             
             if n < 0 {
                 self.err = true
-                throw errorf('negative write count')
+                throw error_t.NEGATIVE_WRITE
             }
             
             total_written += n
@@ -310,7 +318,7 @@ pub fn writer<T>.write(&self, [u8] buf):int! {
 #where T:io.writer
 pub fn writer<T>.write_byte(&self, u8 b):void! {
     if self.err {
-        throw errorf('previous write error')
+        throw error_t.WRITE_FAILED
     }
     
     if self.available() == 0 {

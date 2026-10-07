@@ -39,7 +39,7 @@ pub fn listdir(string path):[string]! {
 
     var dir = dirent.opendir(path.ref())
     if dir == 0 {
-        throw errorf('opendir failed: ' + libc.error_string())
+        throw system_error_t{code: libc.errno() as i32}
     }
 
     for true {
@@ -67,7 +67,7 @@ pub fn listdir(string path):[string]! {
 // join and syscall.mkdir(dir, mode)
 pub fn mkdirs(string dir, u32 mode):void! {
     if dir == '' {
-        throw errorf('dir is empty')
+        throw runtime_error_t.INVALID_ARGUMENT
     }
 
     if path.exists(dir) {

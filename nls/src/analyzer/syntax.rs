@@ -968,6 +968,7 @@ impl<'a> Syntax {
             rest: is_rest,
             tpl: false,
             errable: is_errable,
+            error_type: None,
             x: self.is_x,
         })))
     }
@@ -1791,7 +1792,7 @@ impl<'a> Syntax {
             }
 
             // type args 后面不能紧跟 { 或 (, 这两者通常是 generics params
-            if !self.next_is(1, TokenType::LeftCurly) && !self.next_is(1, TokenType::LeftParen) {
+            if !self.next_is(1, TokenType::LeftCurly) && !self.next_is(1, TokenType::LeftParen) && !self.next_is(1, TokenType::Dot) {
                 self.reset_speculative_tokens(current_pos);
                 return false;
             }

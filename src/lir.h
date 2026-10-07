@@ -50,7 +50,6 @@
 #define TERNARY_IDENT ".TERNARY"
 
 
-#define ERRORT_MSG_IDENT "msg"
 #define ERRORT_IS_IDENT "is"
 
 #define F64_NEG_MASK_IDENT "f64_neg_mask" // -0
@@ -64,8 +63,6 @@
 #define RT_CALL_UNSAFE_VEC_NEW "rt_unsafe_vec_new"
 
 #define RT_CALL_WRITE_BARRIER "write_barrier"
-
-#define RT_CALL_PTR_VALID "ptr_valid"
 
 #define RT_CALL_MAP_NEW "rt_map_new"
 #define RT_CALL_MAP_ACCESS "rt_map_access"
@@ -103,16 +100,7 @@
 
 #define RT_CALL_ANY_IS "any_is"
 
-/**
- * 将 union 断言为 single 类型
- */
-#define RT_CALL_UNION_ASSERT "union_assert"
-
-#define RT_CALL_ANY_ASSERT "any_assert"
-
 #define RT_CALL_INTERFACE_ASSERT "interface_assert"
-
-#define RT_CALL_PTR_ASSERT "ptr_assert"
 
 #define RT_CALL_ITERATOR_NEXT_KEY "iterator_next_key"
 
@@ -144,12 +132,10 @@
 
 #define RT_CALL_COROUTINE_ASYNC2 "rt_coroutine_async2"
 
-#define RT_CALL_THROW_INDEX_OUT_ERROR "throw_index_out_error"
-#define RT_CALL_CO_THROW_ERROR "co_throw_error"
+#define RT_CALL_ERROR_BAD_CAST "error_bad_cast"
+#define RT_CALL_INDEX_PANIC "rt_index_panic"
+#define RT_CALL_PANIC_AT "rt_panic_at"
 
-#define RT_CALL_CO_REMOVE_ERROR "co_remove_error"
-#define RT_CALL_CO_HAS_ERROR "co_has_error"
-#define RT_CALL_CO_HAS_PANIC "co_has_panic"
 
 #define RT_CALL_SELECT_BLOCK "rt_select_block"
 
@@ -250,13 +236,11 @@ static inline bool is_rtcall(string target) {
            str_equal(target, RT_CALL_SET_CONTAINS) || str_equal(target, RT_CALL_SET_NEW) ||
            str_equal(target, RT_CALL_VEC_CAP) || str_equal(target, RT_CALL_ARRAY_NEW) ||
            str_equal(target, RT_CALL_WRITE_BARRIER) ||
-           str_equal(target, RT_CALL_PTR_VALID) ||
            str_equal(target, RT_CALL_MAP_NEW) || str_equal(target, RT_CALL_MAP_ACCESS) ||
            str_equal(target, RT_CALL_MAP_ASSIGN) || str_equal(target, RT_CALL_MAP_LENGTH) ||
            str_equal(target, RT_CALL_MAP_DELETE) || str_equal(target, RT_CALL_TUPLE_NEW) ||
            str_equal(target, RT_CALL_ANYPTR_CASTING) || str_equal(target, RT_CALL_CASTING_TO_ANYPTR) ||
            str_equal(target, RT_CALL_UNION_CASTING) || str_equal(target, RT_CALL_UNION_IS) ||
-           str_equal(target, RT_CALL_UNION_ASSERT) || str_equal(target, RT_CALL_PTR_ASSERT) ||
            str_equal(target, RT_CALL_ITERATOR_NEXT_KEY) || str_equal(target, RT_CALL_ITERATOR_NEXT_VALUE) ||
            str_equal(target, RT_CALL_ITERATOR_TAKE_VALUE) || str_equal(target, RT_CALL_FN_NEW) ||
            str_equal(target, RT_CALL_ENV_NEW) ||
@@ -267,9 +251,9 @@ static inline bool is_rtcall(string target) {
            str_equal(target, RT_CALL_STRING_LT) || str_equal(target, RT_CALL_STRING_LE) ||
            str_equal(target, RT_CALL_STRING_GT) || str_equal(target, RT_CALL_STRING_GE) ||
            str_equal(target, RT_CALL_GC_MALLOC) ||
-           str_equal(target, RT_CALL_RUNTIME_EVAL_GC) || str_equal(target, RT_CALL_COROUTINE_ASYNC2) || str_equal(target, RT_CALL_CO_THROW_ERROR) ||
-           str_equal(target, RT_CALL_CO_REMOVE_ERROR) || str_equal(target, RT_CALL_CO_HAS_ERROR) ||
-           str_equal(target, RT_CALL_CO_HAS_PANIC) || str_equal(target, RT_CALL_PROCESSOR_SET_EXIT) ||
+           str_equal(target, RT_CALL_RUNTIME_EVAL_GC) || str_equal(target, RT_CALL_COROUTINE_ASYNC2) ||
+           str_equal(target, RT_CALL_ERROR_BAD_CAST) || str_equal(target, RT_CALL_INTERFACE_ASSERT) || str_equal(target, RT_CALL_INDEX_PANIC) || str_equal(target, RT_CALL_PANIC_AT) ||
+           str_equal(target, RT_CALL_PROCESSOR_SET_EXIT) ||
            str_equal(target, RT_CALL_UNION_TO_ANY);
 }
 

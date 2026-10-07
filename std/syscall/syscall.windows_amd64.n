@@ -135,39 +135,39 @@ pub fn open(string filename, int flags, u32 perm): int! {
     }
     int fd = windows_open(filename.ref(), native_flags as i32, perm as i32) as int
     if fd == -1 {
-        throw errorf(libc.error_string())
+        throw system_error_t{code: libc.errno() as i32}
     }
     return fd
 }
 pub fn read(int fd, anyptr buf, int len): int! {
     if len < 0 || len > 0xffffffff {
-        throw errorf('read length is outside the UCRT range')
+        throw runtime_error_t.INVALID_ARGUMENT
     }
     int result = windows_read(fd as i32, buf, len as u32) as int
     if result == -1 {
-        throw errorf(libc.error_string())
+        throw system_error_t{code: libc.errno() as i32}
     }
     return result
 }
 pub fn write(int fd, anyptr buf, int len): int! {
     if len < 0 || len > 0xffffffff {
-        throw errorf('write length is outside the UCRT range')
+        throw runtime_error_t.INVALID_ARGUMENT
     }
     int result = windows_write(fd as i32, buf, len as u32) as int
     if result == -1 {
-        throw errorf(libc.error_string())
+        throw system_error_t{code: libc.errno() as i32}
     }
     return result
 }
 pub fn close(int fd): void! {
     if windows_close(fd as i32) == -1 {
-        throw errorf(libc.error_string())
+        throw system_error_t{code: libc.errno() as i32}
     }
 }
 pub fn seek(int fd, int offset, int whence): int! {
     i64 result = windows_seek(fd as i32, offset as i64, whence as i32)
     if result == -1 {
-        throw errorf(libc.error_string())
+        throw system_error_t{code: libc.errno() as i32}
     }
     return result as int
 }
@@ -175,17 +175,17 @@ pub fn seek(int fd, int offset, int whence): int! {
 // request and otherwise return the normalized target reached through a handle.
 pub fn readlink(string file, [u8] buf): int! {
     if buf.len() == 0 || buf.len() > 0xffffffff {
-        throw errorf('readlink buffer has an invalid size')
+        throw runtime_error_t.INVALID_ARGUMENT
     }
     i64 len = windows_readlink(file.ref(), buf.ref(), buf.len() as u64)
     if len < 0 {
-        throw errorf('Windows readlink failed with Windows error %d', windows_last_error())
+        throw system_error_t{code: windows_last_error() as i32}
     }
     return len as int
 }
 pub fn unlink(string path): void! {
     if windows_unlink(path.ref()) == -1 {
-        throw errorf(libc.error_string())
+        throw system_error_t{code: libc.errno() as i32}
     }
 }
 fn stat_is_blk(u32 mode): bool {
@@ -212,7 +212,7 @@ pub fn stat_is_sock(u32 mode): bool {
 pub fn stat(string filename): stat_t! {
     var raw = windows_stat64_t {}
     if windows_stat(filename.ref(), &raw) == -1 {
-        throw errorf(libc.error_string())
+        throw system_error_t{code: libc.errno() as i32}
     }
     i64 blocks = 0
     if raw.size > 0 {
@@ -231,7 +231,7 @@ pub fn stat(string filename): stat_t! {
 pub fn fstat(int fd): stat_t! {
     var raw = windows_stat64_t {}
     if windows_fstat(fd as i32, &raw) == -1 {
-        throw errorf(libc.error_string())
+        throw system_error_t{code: libc.errno() as i32}
     }
     i64 blocks = 0
     if raw.size > 0 {
@@ -249,22 +249,22 @@ pub fn fstat(int fd): stat_t! {
 }
 pub fn mkdir(string path, u32 mode): void! {
     if windows_mkdir(path.ref()) == -1 {
-        throw errorf(libc.error_string())
+        throw system_error_t{code: libc.errno() as i32}
     }
 }
 pub fn rmdir(string path): void! {
     if windows_rmdir(path.ref()) == -1 {
-        throw errorf(libc.error_string())
+        throw system_error_t{code: libc.errno() as i32}
     }
 }
 pub fn rename(string oldpath, string newpath): void! {
     if windows_rename(oldpath.ref(), newpath.ref()) == -1 {
-        throw errorf(libc.error_string())
+        throw system_error_t{code: libc.errno() as i32}
     }
 }
 pub fn chmod(string path, u32 mode): void! {
     if windows_chmod(path.ref(), mode as i32) == -1 {
-        throw errorf(libc.error_string())
+        throw system_error_t{code: libc.errno() as i32}
     }
 }
 pub fn exit(int status): void! {
@@ -276,7 +276,7 @@ pub fn getpid(): int! {
 pub fn getppid(): int! {
     i32 pid = windows_getppid()
     if pid <= 0 {
-        throw errorf(libc.error_string())
+        throw system_error_t{code: libc.errno() as i32}
     }
     return pid as int
 }
@@ -284,13 +284,13 @@ pub fn getcwd(): string! {
     var buf = vec<u8>.new(0, 32768)
     i64 len = windows_getcwd(buf.ref(), buf.len() as u64)
     if len < 0 {
-        throw errorf(libc.error_string())
+        throw system_error_t{code: libc.errno() as i32}
     }
     return buf.slice(0, len as int) as string
 }
 fn chdir(string path): void! {
     if windows_chdir(path.ref()) == -1 {
-        throw errorf(libc.error_string())
+        throw system_error_t{code: libc.errno() as i32}
     }
 }
 pub fn gettime(): timespec_t! {
@@ -298,7 +298,7 @@ pub fn gettime(): timespec_t! {
     windows_system_time(&filetime)
     u64 ticks = (filetime.high as u64) << 32 | filetime.low as u64
     if ticks < WINDOWS_UNIX_EPOCH_TICKS {
-        throw errorf('Windows system time predates the Unix epoch')
+        throw runtime_error_t.INVALID_ARGUMENT
     }
     ticks -= WINDOWS_UNIX_EPOCH_TICKS
     return timespec_t {
@@ -333,6 +333,6 @@ pub fn get_env(string key): string {
 }
 pub fn set_env(string key, string value): void! {
     if windows_set_env(key.ref(), value.ref()) == 0 {
-        throw errorf('SetEnvironmentVariableW failed with Windows error %d', windows_last_error())
+        throw system_error_t{code: windows_last_error() as i32}
     }
 }

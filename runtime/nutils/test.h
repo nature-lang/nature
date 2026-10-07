@@ -4,6 +4,13 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+typedef struct {
+    uint64_t tag;
+    int64_t payload;
+} test_error_int_result_t;
+
+test_error_int_result_t test_error_result(uint8_t failure);
+
 _Thread_local int64_t tls_safepoint = 0;
 
 void test_gc_sleep_yield();

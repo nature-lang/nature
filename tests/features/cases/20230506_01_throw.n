@@ -1,6 +1,11 @@
+
+type test_error_t:errort = enum {
+    DIVISOR_CANNOT_ZERO,
+}
+
 fn rem(int dividend, int divisor):int! {
 	if divisor == 0 {
-		throw errorf('divisor cannot zero')
+		throw test_error_t.DIVISOR_CANNOT_ZERO
 	}
 
 	return dividend % divisor
@@ -15,14 +20,14 @@ fn main():void! {
 
     // normal
     result = rem(10, 4) catch err {
-        println(err.msg())
+        println(describe_error(err))
         0
     }
     println(result)
 
     // error handle
     result = rem(10, 0) catch err {
-        println(err.msg())
+        println(describe_error(err))
         1
     }
     println(result)
@@ -31,4 +36,16 @@ fn main():void! {
     // error not handle
     result = rem(10, 0)
     println('hello world')
+}
+// Render diagnostics explicitly after catch; throw only carries enum values.
+fn describe_error(errort e):string {
+    if e == test_error_t.DIVISOR_CANNOT_ZERO { return 'divisor cannot zero' }
+    if e == runtime_error_t.END_OF_FILE { return 'EOF' }
+    if e == runtime_error_t.TIMEOUT { return 'tcp read timeout' }
+    if e == runtime_error_t.CLOSED { return 'conn closed' }
+    if e == runtime_error_t.INDEX_OUT_OF_RANGE { return 'index out of range' }
+    if e == runtime_error_t.TYPE_MISMATCH { return 'type assert failed' }
+    if e == runtime_error_t.NULL_POINTER { return 'invalid memory address or nil pointer dereference' }
+    if e == runtime_error_t.KEY_NOT_FOUND { return 'key not found in map' }
+    return 'operation failed'
 }

@@ -374,7 +374,8 @@ struct linkco_t {
 typedef struct n_future_t {
     int64_t size;
     void *result;
-    n_union_t error; // 类似 result 一样可选的 error
+    n_error_t error;
+    bool has_error;
     void *await_co;
 } n_future_t;
 
@@ -441,9 +442,6 @@ struct coroutine_t {
     //    uint64_t scan_offset;
     //    uint64_t scan_ret_addr;
 
-    bool has_error;
-    n_interface_t error; // throwable
-    n_vec_t traces; // element is n_trace_t
 
     ATOMIC int32_t select_done;
     linkco_t *waiting; // 当前 co 等待的 linkco, 如果存在多个 linkco 时，通过 linkco.waitlink 链接
@@ -498,11 +496,7 @@ struct n_processor_t {
     struct n_processor_t *next; // processor 链表支持
 };
 
-void rti_throw(char *msg, bool panic);
-
-void rti_co_throw(coroutine_t *co, char *msg, bool panic);
-
-void coroutine_dump_error(coroutine_t *co);
+void coroutine_dump_error(coroutine_t *co, n_error_t error);
 
 /**
  * 正常需要根据线程 id 返回，第一版返回 id 就行了

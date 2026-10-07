@@ -27,11 +27,23 @@ import net.tcp
 
 fn main() {
     var conn = tls.connect_timeout('220.181.7.203:443', 30) catch e {
-        println('in catch', e.msg())
+        println('in catch', describe_error(e))
 
         co.sleep(1000)
         return
     }
     println('connect success')
     co.sleep(1000)
+}
+
+// Render diagnostics explicitly after catch; throw only carries enum values.
+fn describe_error(errort e):string {
+    if e == runtime_error_t.END_OF_FILE { return 'EOF' }
+    if e == runtime_error_t.TIMEOUT { return 'tcp read timeout' }
+    if e == runtime_error_t.CLOSED { return 'conn closed' }
+    if e == runtime_error_t.INDEX_OUT_OF_RANGE { return 'index out of range' }
+    if e == runtime_error_t.TYPE_MISMATCH { return 'type assert failed' }
+    if e == runtime_error_t.NULL_POINTER { return 'invalid memory address or nil pointer dereference' }
+    if e == runtime_error_t.KEY_NOT_FOUND { return 'key not found in map' }
+    return 'operation failed'
 }

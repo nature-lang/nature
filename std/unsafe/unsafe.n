@@ -1,10 +1,14 @@
 mod unsafe
-
 import libc
+
+pub type error_t:errort = enum {
+    INVALID_LENGTH,
+}
+
 
 pub fn vec_new<T>(ptr<T> p, int len):vec<T>! {
     if len < 0 {
-        throw errorf("invalid vec index '%d' (must be non-negative)", len)
+        throw error_t.INVALID_LENGTH
     }
 
     int hash = @reflect_hash(vec<T>)

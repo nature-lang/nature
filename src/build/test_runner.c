@@ -79,13 +79,6 @@ static ast_stmt_t *test_print_stmt(char *fn_ident, char *message) {
     return test_expr_stmt(call_expr);
 }
 
-static ast_stmt_t *test_print_expr_stmt(char *fn_ident, ast_expr_t expr) {
-    list_t *args = ct_list_new(sizeof(ast_expr_t));
-    ct_list_push(args, &expr);
-    ast_expr_t call_expr = test_call_expr(test_ident_literal(fn_ident), args);
-    return test_expr_stmt(call_expr);
-}
-
 static ast_stmt_t *test_print_args_stmt(char *fn_ident, ast_expr_t first, ast_expr_t second) {
     list_t *args = ct_list_new(sizeof(ast_expr_t));
     ct_list_push(args, &first);
@@ -154,21 +147,6 @@ static ast_stmt_t *test_assign_add_one_stmt(char *ident) {
 static ast_stmt_t *test_assign_sub_one_stmt(char *ident) {
     ast_expr_t right = test_binary_expr(AST_OP_SUB, test_ident_literal(ident), *ast_int_expr(0, 0, 1));
     return test_assign_expr_stmt(ident, right);
-}
-
-static ast_expr_t test_method_call_expr(char *ident, char *method) {
-    ast_expr_select_t *select = NEW(ast_expr_select_t);
-    select->left = test_ident_literal(ident);
-    select->key = method;
-    select->type_args = NULL;
-
-    ast_expr_t select_expr = {0};
-    select_expr.assert_type = AST_EXPR_SELECT;
-    select_expr.value = select;
-    select_expr.line = 0;
-    select_expr.column = 0;
-
-    return test_call_expr(select_expr, NULL);
 }
 
 static slice_t *test_collect_main_tests(module_t *main_package, int *total, int *skipped) {
@@ -249,7 +227,7 @@ static slice_t *test_runner_body(slice_t *tests, int total, int skipped) {
 
         slice_t *catch_body = slice_new();
         slice_push(catch_body, test_print_stmt("println", "FAILED"));
-        slice_push(catch_body, test_print_expr_stmt("println", test_method_call_expr("e", "msg")));
+        slice_push(catch_body, test_print_stmt("println", "error returned by test"));
         slice_push(catch_body, test_assign_add_one_stmt("failed"));
         slice_push(catch_body, test_assign_sub_one_stmt("passed"));
 

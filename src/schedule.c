@@ -32,11 +32,14 @@ static reg_t *reg_alloc_find(reg_t *reg) {
  * 判断指令是否是内存读取操作
  */
 bool schedule_is_mem_read(lir_op_t *op) {
-    // 从 indirect_addr 读取数据
-    if (op->first && op->first->assert_type == LIR_OPERAND_INDIRECT_ADDR) {
+    // Stack slots participate in the same memory ordering as indirect accesses.
+    // ABI lowering can save a hidden return address directly to a stack slot.
+    if (op->first && (op->first->assert_type == LIR_OPERAND_INDIRECT_ADDR ||
+                      op->first->assert_type == LIR_OPERAND_STACK)) {
         return true;
     }
-    if (op->second && op->second->assert_type == LIR_OPERAND_INDIRECT_ADDR) {
+    if (op->second && (op->second->assert_type == LIR_OPERAND_INDIRECT_ADDR ||
+                       op->second->assert_type == LIR_OPERAND_STACK)) {
         return true;
     }
     // CALL 和 RT_CALL 可能读取内存
@@ -50,8 +53,9 @@ bool schedule_is_mem_read(lir_op_t *op) {
  * 判断指令是否是内存写入操作
  */
 bool schedule_is_mem_write(lir_op_t *op) {
-    // 写入 indirect_addr
-    if (op->output && op->output->assert_type == LIR_OPERAND_INDIRECT_ADDR) {
+    // Writes to explicit stack slots must precede later reads of those slots.
+    if (op->output && (op->output->assert_type == LIR_OPERAND_INDIRECT_ADDR ||
+                       op->output->assert_type == LIR_OPERAND_STACK)) {
         return true;
     }
     // CALL 和 RT_CALL 可能写入内存

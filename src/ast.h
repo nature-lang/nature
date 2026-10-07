@@ -364,7 +364,7 @@ typedef struct {
 } ast_for_cond_stmt_t;
 
 /**
- * throw "not found"
+ * throw error_t.NOT_FOUND
  */
 typedef struct {
     ast_expr_t error;
@@ -754,6 +754,9 @@ struct ast_fndef_t {
     bool is_x; // the fn belongs to an .x module (x mode)
 
     bool is_errable;
+    // The declared T, while return_type holds tagged errable<T,E> for Nature functions.
+    type_t errable_value_type;
+    type_t errable_error_type;
 
     // tpl fn 可以自定义 #linkid 宏, 用来自定义链接符号名称
     char *linkid;
