@@ -26,4 +26,8 @@ pub fn errorf(string format, ...[any] args):ref<errort> {
 }
 
 
-pub type errable<T> = errort|T
+// Explicit error returns use the existing tagged union layout.
+pub type errable<T,E> = union {
+    T value
+    E error
+}
