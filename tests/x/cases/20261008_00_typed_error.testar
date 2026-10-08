@@ -54,16 +54,14 @@ fn rethrow():errable<void,error_t> {
 fn main() {
     succeed() catch e { assert(false) }
     for var i = 0; i < 3; i += 1 {
-        try {
-            try { fail(error_t.FIRST) } catch inner {
-                println('inner', inner == error_t.FIRST)
+        fail(error_t.FIRST) catch inner {
+            println('inner', inner == error_t.FIRST)
+            rethrow() catch outer {
+                println('outer', outer == error_t.SECOND)
             }
-            rethrow()
-        } catch outer {
-            println('outer', outer == error_t.SECOND)
         }
     }
-    try { throw error_t.FIRST } catch e { println('local', e == error_t.FIRST) }
+    fail(error_t.FIRST) catch e { println('local', e == error_t.FIRST) }
 }
 
 --- output.txt
@@ -92,13 +90,15 @@ fn happy():errable<int,i32> {
 }
 
 fn main() {
+    defer { println('function defer') }
     println(happy() catch e { -1 })
     println(cleanup(true) catch e { println('original', e); -1 })
-    println(cleanup(false) catch e { println('deferred', e); -2 })
-    try {
-        defer { fail(22) }
-        fail(11)
-    } catch e { println('catch', e) }
+    println(cleanup(false) catch e {
+        defer { println('catch defer') }
+        println('deferred', e)
+        -2
+    })
+    println('after catch')
 }
 
 --- output.txt
@@ -106,8 +106,10 @@ fn main() {
 original 11
 -1
 deferred 22
+catch defer
 -2
-catch 11
+after catch
+function defer
 
 === test_aggregate_and_native_returns
 --- main.x
@@ -157,21 +159,41 @@ import "io.x"
 import "fmt.x"
 
 fn main() {
-    io.fail() catch e { println('io', e == io.error_t.TEST_ERROR) }
-    fmt.fail() catch e { println('fmt', e == fmt.error_t.TEST_ERROR) }
+    println(caller(false, false) catch e { -2 })
+    println(caller(false, true) catch e { -2 })
+    println(caller(true, false) catch e { println('fmt', e == fmt.error_t.TEST_ERROR); -2 })
+    println(io.read(fmt.read(true) catch e { println('inner fmt', e == fmt.error_t.TEST_ERROR); 7 }, false) catch e { -3 })
+}
+
+fn caller(bool argument_failure, bool call_failure):errable<int,fmt.error_t> {
+    return io.read(fmt.read(argument_failure), call_failure) catch e {
+        println('io', e == io.error_t.TEST_ERROR)
+        -1
+    }
 }
 
 --- io.x
 pub type error_t = enum:i32 { TEST_ERROR = 11 }
-pub fn fail():errable<void,error_t> { throw error_t.TEST_ERROR }
+pub fn read(int value, bool failure):errable<int,error_t> {
+    if failure { throw error_t.TEST_ERROR }
+    return value
+}
 
 --- fmt.x
 pub type error_t = enum:i32 { TEST_ERROR = 11 }
-pub fn fail():errable<void,error_t> { throw error_t.TEST_ERROR }
+pub fn read(bool failure):errable<int,error_t> {
+    if failure { throw error_t.TEST_ERROR }
+    return 42
+}
 
 --- output.txt
+42
 io true
+-1
 fmt true
+-2
+inner fmt true
+7
 
 === test_errable_interface_method
 --- main.x
@@ -229,17 +251,30 @@ fn main() {}
 --- output.txt
 nature-test/main.x:5:8: error type inconsistency, expect=main.b_t(enum:i32), actual=main.a_t(enum:i32)
 
-=== test_mixed_catch_error_types
+=== test_try_not_supported
 --- main.x
-type a_t = enum:i32 { FAILED = 11 }
-type b_t = enum:i32 { FAILED = 11 }
-fn a():errable<void,a_t> { throw a_t.FAILED }
-fn b():errable<void,b_t> { throw b_t.FAILED }
 fn main() {
-    try { a(); b() } catch e {}
+    try {} catch e {}
 }
 --- output.txt
-nature-test/main.x:6:16: error type inconsistency, expect=main.a_t(enum:i32), actual=main.b_t(enum:i32)
+nature-test/main.x:2:7: try is not supported in .x; use call() catch e { ... }
+
+=== test_catch_requires_call
+--- main.x
+fn fail():errable<int,i32> { throw 11 }
+fn main() {
+    var value = (fail() + 1) catch e { -1 }
+}
+--- output.txt
+nature-test/main.x:3:34: catch in .x requires an errable fn call
+
+=== test_throw_requires_errable_return
+--- main.x
+fn main() {
+    throw 11
+}
+--- output.txt
+nature-test/main.x:2:9: throw requires an errable return type
 
 === test_n_cannot_call_errable_x
 --- main.n

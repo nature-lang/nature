@@ -15,28 +15,6 @@ static void infer_result_signature(type_fn_t *fn) {
     if (fn->is_x && is_result_type(fn->return_type)) fn->is_errable = true;
 }
 
-static void infer_result_error(module_t *m, type_t error_type) {
-    type_t target;
-    if (!stack_empty(m->error_handlers)) {
-        type_t *caught = stack_top(m->error_handlers);
-        if (caught->kind == TYPE_UNKNOWN) {
-            *caught = error_type;
-            return;
-        }
-        target = *caught;
-    } else {
-        target = result_error_type(m->current_fn->return_type);
-    }
-    INFER_ASSERTF(type_compare(target, error_type) && type_compare(error_type, target),
-                  "error type inconsistency, expect=%s, actual=%s", type_format(target), type_format(error_type));
-}
-
-static type_t infer_handler_type(module_t *m, type_t error_type) {
-    if (!m->current_fn->is_x) return reduction_type(m, interface_throwable());
-    INFER_ASSERTF(error_type.kind != TYPE_UNKNOWN, "catch in .x requires an errable call or throw");
-    return error_type;
-}
-
 static type_t reduction_type_ident(module_t *m, type_t t, struct sc_map_s64 *visited);
 
 static type_fn_t *infer_call_left(module_t *m, ast_call_t *call, type_t target_type);
@@ -1561,12 +1539,13 @@ static type_t infer_match(module_t *m, ast_match_t *match, type_t target_type) {
 }
 
 static void infer_try_catch_stmt(module_t *m, ast_try_catch_stmt_t *try_stmt) {
-    type_t error_type = type_kind_new(TYPE_UNKNOWN);
-    stack_push(m->error_handlers, &error_type);
+    m->be_caught += 1;
     infer_body(m, try_stmt->try_body);
+    m->be_caught -= 1;
 
-    stack_pop(m->error_handlers);
-    try_stmt->catch_err.type = infer_handler_type(m, error_type);
+    type_t interface_error = interface_throwable();
+    interface_error = reduction_type(m, interface_error);
+    try_stmt->catch_err.type = interface_error;
 
     rewrite_var_decl(m, &try_stmt->catch_err);
 
@@ -1577,12 +1556,21 @@ static void infer_try_catch_stmt(module_t *m, ast_try_catch_stmt_t *try_stmt) {
 }
 
 static type_t infer_catch(module_t *m, ast_catch_t *catch_expr) {
-    type_t error_type = type_kind_new(TYPE_UNKNOWN);
-    stack_push(m->error_handlers, &error_type);
-    type_t t = infer_right_expr(m, &catch_expr->try_expr, type_kind_new(TYPE_UNKNOWN));
-
-    stack_pop(m->error_handlers);
-    catch_expr->catch_err.type = infer_handler_type(m, error_type);
+    type_t t;
+    if (m->current_fn->is_x) {
+        // Only this call is caught; calls in its arguments propagate independently.
+        INFER_ASSERTF(catch_expr->try_expr.assert_type == AST_CALL, "catch in .x requires an errable fn call");
+        ast_call_t *call = catch_expr->try_expr.value;
+        t = infer_call(m, call, type_kind_new(TYPE_UNKNOWN), false);
+        INFER_ASSERTF(is_result_type(call->return_type), "catch in .x requires an errable fn call");
+        catch_expr->try_expr.type = t;
+        catch_expr->catch_err.type = result_error_type(call->return_type);
+    } else {
+        m->be_caught += 1;
+        t = infer_right_expr(m, &catch_expr->try_expr, type_kind_new(TYPE_UNKNOWN));
+        m->be_caught -= 1;
+        catch_expr->catch_err.type = reduction_type(m, interface_throwable());
+    }
 
     rewrite_var_decl(m, &catch_expr->catch_err);
 
@@ -2912,7 +2900,6 @@ static type_t infer_call(module_t *m, ast_call_t *call, type_t target_type, bool
     if (is_result_fn(type_fn)) {
         INFER_ASSERTF(m->current_fn && m->current_fn->is_x,
                       "calling an errable .x fn from .n is not supported");
-        call->return_type = result_value_type(type_fn->return_type);
     }
 
     if (m->current_fn && m->current_fn->is_x && !type_fn->is_x) {
@@ -2922,14 +2909,19 @@ static type_t infer_call(module_t *m, ast_call_t *call, type_t target_type, bool
 
     // catch 语句中可以包含多条 call 语句, 都统一处理了
     if (type_fn->is_errable && check_errable) {
-        INFER_ASSERTF(m->current_fn->is_errable || !stack_empty(m->error_handlers),
+        INFER_ASSERTF(m->current_fn->is_errable || m->be_caught > 0,
                       "calling an errable! fn `%s` requires the current `fn %s` errable! as well or be caught.",
                       type_fn->fn_name ? type_fn->fn_name : "lambda",
                       m->current_fn->fn_name);
     }
 
-    if (is_result_fn(type_fn) && check_errable) infer_result_error(m, result_error_type(type_fn->return_type));
-    return call->return_type;
+    if (is_result_fn(type_fn) && check_errable) {
+        type_t target = result_error_type(m->current_fn->return_type);
+        type_t error_type = result_error_type(type_fn->return_type);
+        INFER_ASSERTF(type_compare(target, error_type) && type_compare(error_type, target),
+                      "error type inconsistency, expect=%s, actual=%s", type_format(target), type_format(error_type));
+    }
+    return is_result_fn(type_fn) ? result_value_type(type_fn->return_type) : type_fn->return_type;
 }
 
 static void infer_tagged_union_element(module_t *m, ast_expr_t *expr, type_t target_type) {
@@ -3364,14 +3356,8 @@ static type_t infer_env_access(module_t *m, ast_env_access_t *expr) {
 
 static void infer_throw(module_t *m, ast_throw_stmt_t *throw_stmt) {
     if (m->current_fn->is_x) {
-        INFER_ASSERTF(m->current_fn->is_errable || !stack_empty(m->error_handlers),
-                      "throw requires an errable return type or an enclosing try/catch");
-        if (!stack_empty(m->error_handlers)) {
-            type_t type = infer_right_expr(m, &throw_stmt->error, type_kind_new(TYPE_UNKNOWN));
-            infer_result_error(m, type);
-        } else {
-            infer_right_expr(m, &throw_stmt->error, result_error_type(m->current_fn->return_type));
-        }
+        INFER_ASSERTF(is_result_fn(m->current_fn->type.fn), "throw requires an errable return type");
+        infer_right_expr(m, &throw_stmt->error, result_error_type(m->current_fn->return_type));
         return;
     }
     INFER_ASSERTF(m->current_fn->is_errable,

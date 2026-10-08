@@ -213,7 +213,7 @@ type errable<T,E> = union {
 }
 ```
 
-在 `.x` 中，显式声明返回 `errable<T,E>` 后可使用 `return T`、`throw E`、错误传播和 `catch`。一个 catch 推导单一的错误类型 `E`，传播错误的调用须使用相同的 `E`。`T!` 简写和 `.n` 的错误模型后续单独处理。
+在 `.x` 中，显式声明返回 `errable<T,E>` 后可使用 `return T`、`throw E`、错误传播和 `call() catch e { ... }`。`catch` 只处理该调用返回的错误，`e` 的类型直接取自 `E`；参数中的调用须自行 `catch` 或向当前函数传播。传播的错误类型须与当前函数的 `E` 相同。`.x` 不支持 `try` 语句。`T!` 简写和 `.n` 的错误模型后续单独处理。
 
 ## fn errorf
 

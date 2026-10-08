@@ -8,17 +8,18 @@
 #include "src/error.h"
 #include "utils/linked.h"
 
-typedef struct {
-    lir_operand_t *value;
-    lir_operand_t *occupied;
-} error_slot_t;
-
 static lir_operand_t *linear_result_address(module_t *m) {
     closure_t *c = m->current_closure;
     if (!c->result_storage) return NULL;
     lir_operand_t *address = temp_var_operand(m, c->fndef->return_type);
     OP_PUSH(lir_op_lea(address, c->result_storage));
     return address;
+}
+
+static lir_operand_t *linear_result_payload(module_t *m, lir_operand_t *result, type_t type) {
+    if (type.kind == TYPE_VOID) return NULL;
+    lir_operand_t *payload = indirect_addr_operand(m, type, result, POINTER_SIZE);
+    return type.storage_kind == STORAGE_KIND_IND ? lea_operand_pointer(m, payload) : payload;
 }
 
 lir_opcode_t ast_op_convert[] = {
@@ -887,37 +888,17 @@ static lir_operand_t *global_fn_symbol(module_t *m, ast_expr_t expr) {
 
 static void linear_raise_error(module_t *m, type_t error_type, lir_operand_t *value) {
     closure_t *c = m->current_closure;
+    assert(c->result_storage);
+    lir_operand_t *result = linear_result_address(m);
+    lir_operand_t *tag = indirect_addr_operand(m, type_kind_new(TYPE_UINT64), result, 0);
     char *end = label_ident_with_unique(".error.store.end");
-    if (!stack_empty(c->catch_error_slots)) {
-        error_slot_t *slot = stack_top(c->catch_error_slots);
-        OP_PUSH(lir_op_new(LIR_OPCODE_BEE, bool_operand(true), slot->occupied, lir_label_operand(end, true)));
-        if (error_type.kind != TYPE_VOID) linear_super_move(m, error_type, slot->value, value);
-        OP_PUSH(lir_op_move(slot->occupied, bool_operand(true)));
-    } else {
-        assert(c->result_storage);
-        lir_operand_t *result = linear_result_address(m);
-        lir_operand_t *tag = indirect_addr_operand(m, type_kind_new(TYPE_UINT64), result, 0);
-        OP_PUSH(lir_op_new(LIR_OPCODE_BEE, int_operand(hash_string(ERRABLE_ERROR_TAG)), tag, lir_label_operand(end, true)));
-        if (error_type.kind != TYPE_VOID) {
-            lir_operand_t *dst = indirect_addr_operand(m, error_type, result, POINTER_SIZE);
-            if (error_type.storage_kind == STORAGE_KIND_IND) dst = lea_operand_pointer(m, dst);
-            linear_super_move(m, error_type, dst, value);
-        }
-        OP_PUSH(lir_op_move(tag, int_operand(hash_string(ERRABLE_ERROR_TAG))));
-    }
+    // A deferred error must not replace an error already being returned.
+    OP_PUSH(lir_op_new(LIR_OPCODE_BEE, int_operand(hash_string(ERRABLE_ERROR_TAG)), tag, lir_label_operand(end, true)));
+    if (error_type.kind != TYPE_VOID) linear_super_move(m, error_type, linear_result_payload(m, result, error_type), value);
+    OP_PUSH(lir_op_move(tag, int_operand(hash_string(ERRABLE_ERROR_TAG))));
     OP_PUSH(lir_op_label(end, true));
-    uint16_t depth = c->catch_error_labels->count;
-    linear_bal_error(m, depth ? stack_top(c->catch_error_labels) : c->error_label, depth);
-}
-
-static void linear_result_has_error(module_t *m, type_t error_type, lir_operand_t *result) {
-    char *end = label_ident_with_unique(".result.value");
-    OP_PUSH(lir_op_new(LIR_OPCODE_BNE, int_operand(hash_string(ERRABLE_ERROR_TAG)),
-                       indirect_addr_operand(m, type_kind_new(TYPE_UINT64), result, 0), lir_label_operand(end, true)));
-    lir_operand_t *error = error_type.kind == TYPE_VOID ? NULL : indirect_addr_operand(m, error_type, result, POINTER_SIZE);
-    if (error_type.storage_kind == STORAGE_KIND_IND) error = lea_operand_pointer(m, error);
-    linear_raise_error(m, error_type, error);
-    OP_PUSH(lir_op_label(end, true));
+    linear_unwind_all(m);
+    OP_PUSH(lir_op_bal(lir_label_operand(c->error_label, true)));
 }
 
 static void linear_has_panic(module_t *m) {
@@ -1870,9 +1851,7 @@ static void linear_return(module_t *m, ast_return_stmt_t *ast) {
             linear_super_move(m, c->fndef->return_type, result, src);
         } else if (src) {
             type_t value_type = result_value_type(c->fndef->return_type);
-            lir_operand_t *dst = indirect_addr_operand(m, value_type, result, POINTER_SIZE);
-            if (value_type.storage_kind == STORAGE_KIND_IND) dst = lea_operand_pointer(m, dst);
-            linear_super_move(m, value_type, dst, src);
+            linear_super_move(m, value_type, linear_result_payload(m, result, value_type), src);
         }
     }
 
@@ -2061,7 +2040,7 @@ select_end:*/
  * @param expr
  * @return
  */
-static lir_operand_t *linear_call(module_t *m, ast_expr_t expr, lir_operand_t *target) {
+static lir_operand_t *linear_call_impl(module_t *m, ast_expr_t expr, lir_operand_t *target, bool check_error) {
     ast_call_t *call = expr.value;
     lir_operand_t *fn_target = NULL;
     type_fn_t *type_fn = NULL;
@@ -2240,19 +2219,26 @@ static lir_operand_t *linear_call(module_t *m, ast_expr_t expr, lir_operand_t *t
     }
 
     lir_operand_t *temp = NULL;
-
-    if (type_fn->return_type.kind != TYPE_VOID) {
-        temp = temp_var_operand(m, type_fn->return_type);
+    if (call->return_type.kind != TYPE_VOID) {
+        temp = temp_var_operand(m, call->return_type);
     }
 
     // call base_target,params -> target
     OP_PUSH(lir_op_new(LIR_OPCODE_CALL, fn_target, operand_new(LIR_OPERAND_ARGS, args), temp));
 
+    // An .x catch branches on the returned union directly. Argument calls still
+    // use linear_expr and perform their own error checks.
+    if (!check_error) return temp;
+
     // 目标函数可能会产生错误才需要进行错误判断，并跳转到对应的 error label 或者 continue label
     if (is_result_fn(type_fn)) {
-        linear_result_has_error(m, result_error_type(type_fn->return_type), temp);
-        temp = call->return_type.kind == TYPE_VOID ? NULL : indirect_addr_operand(m, call->return_type, temp, POINTER_SIZE);
-        if (call->return_type.storage_kind == STORAGE_KIND_IND) temp = lea_operand_pointer(m, temp);
+        char *end = label_ident_with_unique(".result.value");
+        OP_PUSH(lir_op_new(LIR_OPCODE_BNE, int_operand(hash_string(ERRABLE_ERROR_TAG)),
+                           indirect_addr_operand(m, type_kind_new(TYPE_UINT64), temp, 0), lir_label_operand(end, true)));
+        type_t error_type = result_error_type(type_fn->return_type);
+        linear_raise_error(m, error_type, linear_result_payload(m, temp, error_type));
+        OP_PUSH(lir_op_label(end, true));
+        temp = linear_result_payload(m, temp, result_value_type(type_fn->return_type));
     } else if (type_fn->is_errable) {
         linear_has_error(m);
     }
@@ -2262,6 +2248,10 @@ static lir_operand_t *linear_call(module_t *m, ast_expr_t expr, lir_operand_t *t
     }
 
     return target;
+}
+
+static lir_operand_t *linear_call(module_t *m, ast_expr_t expr, lir_operand_t *target) {
+    return linear_call_impl(m, expr, target, true);
 }
 
 static lir_operand_t *linear_logical_or(module_t *m, ast_expr_t expr, lir_operand_t *target) {
@@ -3819,20 +3809,6 @@ static lir_operand_t *linear_block_expr(module_t *m, ast_expr_t expr, lir_operan
     return target;
 }
 
-static error_slot_t *linear_begin_catch(module_t *m, type_t type) {
-    error_slot_t *slot = NEW(error_slot_t);
-    slot->value = temp_var_operand_with_alloc(m, type);
-    if (type.storage_kind == STORAGE_KIND_IND) {
-        linear_default_empty_stack(m, slot->value, 0, type.storage_size);
-    } else if (type.kind != TYPE_VOID) {
-        OP_PUSH(lir_op_new(LIR_OPCODE_CLV, NULL, NULL, slot->value));
-    }
-    slot->occupied = temp_var_operand(m, type_kind_new(TYPE_BOOL));
-    OP_PUSH(lir_op_move(slot->occupied, bool_operand(false)));
-    stack_push(m->current_closure->catch_error_slots, slot);
-    return slot;
-}
-
 static lir_operand_t *linear_catch_expr(module_t *m, ast_expr_t expr, lir_operand_t *target) {
     ast_catch_t *catch_expr = expr.value;
     // 编译 expr, 有异常应该直接就跳转到 catch 了。
@@ -3845,11 +3821,17 @@ static lir_operand_t *linear_catch_expr(module_t *m, ast_expr_t expr, lir_operan
         target = temp_var_operand_with_alloc(m, expr.type);
     }
 
-    error_slot_t *slot = m->current_closure->fndef->is_x ? linear_begin_catch(m, catch_expr->catch_err.type) : NULL;
-    stack_push(m->current_closure->catch_error_labels, catch_start_label);
-    linear_expr(m, catch_expr->try_expr, target);
-    stack_pop(m->current_closure->catch_error_labels);
-    if (slot) stack_pop(m->current_closure->catch_error_slots);
+    lir_operand_t *result = NULL;
+    if (m->current_closure->fndef->is_x) {
+        result = linear_call_impl(m, catch_expr->try_expr, NULL, false);
+        OP_PUSH(lir_op_new(LIR_OPCODE_BEE, int_operand(hash_string(ERRABLE_ERROR_TAG)),
+                           indirect_addr_operand(m, type_kind_new(TYPE_UINT64), result, 0), lir_label_operand(catch_start_label, true)));
+        if (expr.type.kind != TYPE_VOID) linear_super_move(m, expr.type, target, linear_result_payload(m, result, expr.type));
+    } else {
+        stack_push(m->current_closure->catch_error_labels, catch_start_label);
+        linear_expr(m, catch_expr->try_expr, target);
+        stack_pop(m->current_closure->catch_error_labels);
+    }
 
     // 跳过错误处理部分
     lir_op_t *catch_end_label = lir_op_label(catch_end_ident, true);
@@ -3870,8 +3852,10 @@ static lir_operand_t *linear_catch_expr(module_t *m, ast_expr_t expr, lir_operan
     // 从 catch expr 中获取 err 然后为 err 赋值
     lir_operand_t *err_operand = linear_var_decl(m, &catch_expr->catch_err);
 
-    if (slot) {
-        if (catch_expr->catch_err.type.kind != TYPE_VOID) linear_super_move(m, catch_expr->catch_err.type, err_operand, slot->value);
+    if (result) {
+        if (catch_expr->catch_err.type.kind != TYPE_VOID) {
+            linear_super_move(m, catch_expr->catch_err.type, err_operand, linear_result_payload(m, result, catch_expr->catch_err.type));
+        }
     } else {
         push_rt_call(m, RT_CALL_CO_REMOVE_ERROR, err_operand, 0);
     }
@@ -3897,11 +3881,9 @@ static void linear_try_catch_stmt(module_t *m, ast_try_catch_stmt_t *try_stmt) {
     bool has_ret = false;
 
 
-    error_slot_t *slot = m->current_closure->fndef->is_x ? linear_begin_catch(m, try_stmt->catch_err.type) : NULL;
     stack_push(m->current_closure->catch_error_labels, catch_start_label);
     linear_body(m, try_stmt->try_body);
     stack_pop(m->current_closure->catch_error_labels);
-    if (slot) stack_pop(m->current_closure->catch_error_slots);
 
     // 跳过错误处理部分
     lir_op_t *catch_end_label = lir_op_label(catch_end_ident, true);
@@ -3913,11 +3895,7 @@ static void linear_try_catch_stmt(module_t *m, ast_try_catch_stmt_t *try_stmt) {
 
     // 为 err 赋值
     lir_operand_t *err_operand = linear_var_decl(m, &try_stmt->catch_err);
-    if (slot) {
-        if (try_stmt->catch_err.type.kind != TYPE_VOID) linear_super_move(m, try_stmt->catch_err.type, err_operand, slot->value);
-    } else {
-        push_rt_call(m, RT_CALL_CO_REMOVE_ERROR, err_operand, 0);
-    }
+    push_rt_call(m, RT_CALL_CO_REMOVE_ERROR, err_operand, 0);
 
     stack_push(m->current_closure->ret_labels, catch_end_label->output);
 
@@ -4231,14 +4209,17 @@ static void linear_stmt(module_t *m, ast_stmt_t *stmt) {
         }
         case AST_CALL: {
             ast_call_t *call = stmt->value;
+            type_t value_type = m->current_closure->fndef->is_x && is_result_type(call->return_type)
+                                        ? result_value_type(call->return_type)
+                                        : call->return_type;
             // stmt 中都 call 都是没有返回值的
             linear_call(m,
                         (ast_expr_t){
                             .line = stmt->line,
                             .column = stmt->column,
                             .assert_type = AST_CALL,
-                            .type = call->return_type,
-                            .target_type = call->return_type,
+                            .type = value_type,
+                            .target_type = value_type,
                             .value = call,
                         },
                         NULL);
