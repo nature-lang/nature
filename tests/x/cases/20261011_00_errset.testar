@@ -29,6 +29,13 @@ fn add(int a, int b):int! {
     return a + b
 }
 
+fn sum(int mode):int! {
+    var total = add(read(mode), 1) catch e {
+        -100
+    }
+    return total
+}
+
 fn is_timeout(errset_t e):bool {
     return e == TIMEOUT
 }
@@ -107,7 +114,7 @@ fn main() {
     }
     println(d)
 
-    var f = add(read(2), 1) catch e {
+    var f = sum(2) catch e {
         println('argument', e == CLOSED)
         -5
     }

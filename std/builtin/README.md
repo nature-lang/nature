@@ -235,7 +235,7 @@ fn load(string s):int! {
 }
 ```
 
-`expr catch e { ... }` handles an error from any call in `expr`, including calls in arguments. All of them must fail with the same type, which is the type of `e`. A catch over `errable<T,E>` calls does not catch a panic such as an index out of range. `go` does not support a function that returns `errable<T,E>` yet.
+A catch after a call of a function that returns `errable<T,E>` handles only that call's error, and `e` has its error type. The calls in its arguments are not covered: their errors propagate as usual and the compiler checks their error types, so in `check(parse(1)) catch e { ... }` only `check` is caught. Such a catch does not catch a panic either. In `.n`, any other catch still covers the whole expression, `T!` errors and panics included. `go` does not support a function that returns `errable<T,E>` yet.
 
 ## errset
 

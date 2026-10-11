@@ -235,7 +235,7 @@ fn load(string s):int! {
 }
 ```
 
-`expr catch e { ... }` 处理 `expr` 中任何一个调用的错误，包括参数中的调用。这些调用的错误类型必须相同，也就是 `e` 的类型。处理 `errable<T,E>` 调用的 catch 不会接住越界之类的 panic。`go` 暂不支持返回 `errable<T,E>` 的函数。
+跟在返回 `errable<T,E>` 的函数调用后面的 catch 只处理这个调用的错误，`e` 的类型就是它的错误类型。参数中的调用不在范围内：它们的错误照常向外传播，错误类型由编译器检查，所以 `check(parse(1)) catch e { ... }` 只处理 `check`。这样的 catch 也不会接住 panic。`.n` 中其他的 catch 仍然覆盖整个表达式，包括 `T!` 错误和 panic。`go` 暂不支持返回 `errable<T,E>` 的函数。
 
 ## errset
 

@@ -22,6 +22,13 @@ fn add(int a, int b):errable<int,string> {
     return a + b
 }
 
+fn sum(int at):errable<int,string> {
+    var total = add(parse(at), 1) catch msg {
+        -100
+    }
+    return total
+}
+
 fn locate(int at):errable<int,position_error_t> {
     if at > 9 {
         throw position_error_t{position: at, reason: 'too far'}
@@ -52,7 +59,7 @@ fn main() {
     }
     println(a)
 
-    var b = add(parse(-1), 1) catch msg {
+    var b = sum(-1) catch msg {
         println('string', msg)
         -2
     }
@@ -184,7 +191,7 @@ fn main() {}
 --- output.txt
 nature-test/main.x:9:19: `parse` fails with string, which cannot propagate into `fn load` that fails with errset_t(u32), catch and convert it
 
-=== test_catch_takes_one_error_type
+=== test_catch_covers_only_the_call_it_follows
 --- main.x
 errset BAD
 
@@ -202,7 +209,7 @@ fn main() {
     }
 }
 --- output.txt
-nature-test/main.x:12:25: one catch handles one error type, `check` fails with errset_t(u32) but another call with string
+nature-test/main.x:12:25: calling an errable! fn `parse` requires the current `fn main` errable! as well or be caught.
 
 === test_bang_after_errable_rejected
 --- main.x
