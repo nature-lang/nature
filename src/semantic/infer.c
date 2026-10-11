@@ -4429,7 +4429,6 @@ static type_t infer_fn_decl(module_t *m, ast_fndef_t *fndef, type_t target_type)
     fndef->return_type.status = REDUCTION_STATUS_UNDO;
     type_fn->return_type = reduction_type(m, fndef->return_type);
     infer_result_signature(m, type_fn);
-    fndef->is_errable = type_fn->is_errable;
 
     fndef->return_type = type_fn->return_type;
 

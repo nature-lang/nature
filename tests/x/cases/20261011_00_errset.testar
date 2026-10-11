@@ -350,6 +350,43 @@ errset TIMEOUT
 2 -2
 3 -3
 
+=== test_tagged_union_value
+--- main.x
+errset BAD
+
+type shape = union {
+    int circle
+    (int, int) rectangle
+}
+
+fn make(bool fail):shape! {
+    if fail {
+        throw BAD
+    }
+    return shape.rectangle(1, 2)
+}
+
+fn main() {
+    var a = make(false) catch e {
+        shape.circle(-1)
+    }
+    if a is shape.rectangle (x, y) {
+        println('rectangle', x, y)
+    }
+
+    var b = make(true) catch e {
+        println('caught', e == BAD)
+        shape.circle(-1)
+    }
+    if b is shape.circle v {
+        println('circle', v)
+    }
+}
+--- output.txt
+rectangle 1 2
+caught true
+circle -1
+
 === test_pub_errset_rejected
 --- main.x
 pub errset TIMEOUT

@@ -3838,7 +3838,9 @@ static lir_operand_t *linear_catch_expr(module_t *m, ast_expr_t expr, lir_operan
     if (has_ret && has_default_operand(m, expr.type)) {
         linear_default_operand(m, expr.type, target);
         has_ret = false; // 设置了默认值之后可以不进行 break check
-    } else {
+    } else if (expr.type.storage_kind != STORAGE_KIND_IND) {
+        // An IND value such as a tagged union is copied through target, so target must keep
+        // pointing at its storage instead of being redefined here.
         OP_PUSH(lir_op_nop_def(target));
     }
 
