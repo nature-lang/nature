@@ -213,7 +213,7 @@ type errable<T,E> = union {
 }
 ```
 
-`.x` 中可能出错的函数返回的 Result：`T!` 就是 `errable<T,u32>`，错误是 errset 的 id。不支持把 `errable<T,E>` 直接写成返回类型，带不带 `!` 都不行。`return T` 保存值，`throw` 保存错误。调用可能出错的函数时，错误会传播给外层的 `T!` 函数；`call() catch e { ... }` 只处理该调用返回的错误，参数中的调用须自行 `catch` 或向外传播。`.n` 的错误模型后续单独处理。
+`.x` 中可能出错的函数返回的 Result：`T!` 就是 `errable<T,errset_t>`。不支持把 `errable<T,E>` 直接写成返回类型，带不带 `!` 都不行。`return T` 保存值，`throw` 保存错误。调用可能出错的函数时，错误会传播给外层的 `T!` 函数。和 `.n` 一样，`expr catch e { ... }` 处理 `expr` 中任何一个调用的错误，包括参数中的调用。`.x` 中越界之类的 panic 不会被 catch。`.n` 的错误模型后续单独处理。
 
 ## errset
 
@@ -244,7 +244,7 @@ fn main() {
 
 `errset` 声明注册一个具名错误。它的身份就是这条声明本身：编译器为其分配全程序唯一的 id，因此 `io.TIMEOUT` 与 `fmt.TIMEOUT` 即使同名也是两个不同的错误。errset 不携带消息和数据，可以用 `==`、`!=` 比较，也可以用 `match e { TIMEOUT -> ... _ -> ... }` 分支。errset 的集合是开放的，所以 `match` 必须有 `_` 分支。
 
-声明只能出现在模块顶层，且始终对外公开；`pub errset` 会被拒绝，因为 errset 存在的意义就是让调用方按名字引用。errset 的值就是它的 id，类型为 `u32`。`.n` 模块可以声明 errset，但 `.n` 函数不能抛出它。
+声明只能出现在模块顶层，且始终对外公开；`pub errset` 会被拒绝，因为 errset 存在的意义就是让调用方按名字引用。errset 的值类型是内置的 `errset_t`，运行时存成 `u32` 的 id。整数字面量可以转换为 `errset_t`，但 `u32` 的值不行，所以 `u32 a = 12` 不能和 errset 比较。`.n` 模块可以声明 errset，但 `.n` 函数不能抛出它。
 
 ## fn errorf
 

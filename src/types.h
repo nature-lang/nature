@@ -579,6 +579,7 @@ typedef struct closure_t {
 
     ct_stack_t *catch_error_labels;
     lir_operand_t *result_storage; // Tagged .x result in the function's stack frame.
+    char *caught_error; // .x: var holding the error a failed call hands to its catch
 
     ct_stack_t *continue_labels; // 用于 for continue lir_operand*
     ct_stack_t *break_labels; // 用于 for break lir_operand*

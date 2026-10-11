@@ -64,7 +64,7 @@ static type_t interface_extract_fn_type(module_t *m, ast_fndef_t *fndef) {
     fn->is_x = fndef->is_x;
     fn->param_types = ct_list_new(sizeof(type_t));
     fn->return_type = reduction_type(m, type_copy(m, fndef->return_type));
-    // infer_fn_decl may already have rewritten the declaration to errable<T,u32>
+    // infer_fn_decl may already have rewritten the declaration to errable<T,errset_t>
     if (!is_result_type(fn->return_type)) infer_result_signature(m, fn);
 
     assert(fndef->self_kind != PARAM_SELF_NULL);

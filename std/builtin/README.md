@@ -213,7 +213,7 @@ type errable<T,E> = union {
 }
 ```
 
-The Result returned by an errable function in `.x`: `T!` means `errable<T,u32>`, the error being the id of an errset. Writing `errable<T,E>` as a return type is not supported, with or without `!`. `return T` stores the value and `throw` stores the error. A call to an errable function propagates its error to the enclosing `T!` function, and `call() catch e { ... }` handles only that call's error; calls in its arguments need their own catch or propagate. The `.n` error model is handled separately.
+The Result returned by an errable function in `.x`: `T!` means `errable<T,errset_t>`. Writing `errable<T,E>` as a return type is not supported, with or without `!`. `return T` stores the value and `throw` stores the error. A call to an errable function propagates its error to the enclosing `T!` function. As in `.n`, `expr catch e { ... }` handles an error from any call in `expr`, including calls in arguments. A panic such as an index out of range is not caught in `.x`. The `.n` error model is handled separately.
 
 ## errset
 
@@ -244,7 +244,7 @@ fn main() {
 
 An `errset` declaration registers a named error. Its identity is the declaration itself: the compiler gives it a program-wide id, so `io.TIMEOUT` and `fmt.TIMEOUT` are different errors even though they share a name. An errset carries no message and no data, so it is compared with `==` and `!=`, or matched with `match e { TIMEOUT -> ... _ -> ... }`. The set of errsets is open, so a `match` needs a `_` arm.
 
-Declarations are module-level only and always public; `pub errset` is rejected because an errset exists to be named by its callers. An errset value is its id, a `u32`. An `.n` module may declare an errset, but `.n` functions cannot throw one.
+Declarations are module-level only and always public; `pub errset` is rejected because an errset exists to be named by its callers. An errset value has the builtin type `errset_t` and is stored as a `u32` id at run time. An integer literal converts to `errset_t`, but a `u32` value does not, so `u32 a = 12` cannot be compared with an errset. An `.n` module may declare an errset, but `.n` functions cannot throw one.
 
 ## fn errorf
 

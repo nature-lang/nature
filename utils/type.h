@@ -18,6 +18,7 @@
 
 #define THROWABLE_IDENT "throwable"
 #define ERRABLE_IDENT "errable"
+#define ERRSET_IDENT "errset_t" // builtin type of an errset value, a u32 id at run time
 #define ERRABLE_VALUE_TAG "value"
 #define ERRABLE_ERROR_TAG "error"
 

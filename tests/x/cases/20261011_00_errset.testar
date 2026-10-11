@@ -387,6 +387,78 @@ rectangle 1 2
 caught true
 circle -1
 
+=== test_catch_covers_the_expression
+--- main.x
+errset BAD
+errset LATE
+
+fn fail(int v):int! {
+    if v < 0 {
+        throw BAD
+    }
+    return v
+}
+
+fn add(int a, int b):int! {
+    if a + b > 100 {
+        throw LATE
+    }
+    return a + b
+}
+
+fn is_bad(errset_t e):bool {
+    return e == BAD
+}
+
+fn main() {
+    var a = add(fail(-1), 2) catch e {
+        println('argument', is_bad(e))
+        -1
+    }
+    println(a)
+
+    var b = add(fail(60), fail(50)) catch e {
+        println('outer call', is_bad(e), e == LATE)
+        -2
+    }
+    println(b)
+
+    var c = add(fail(1), 2) catch e {
+        -3
+    }
+    println(c)
+
+    var d = fail(-1) catch first {
+        var inner = fail(-2) catch second {
+            println('nested', second == first)
+            -4
+        }
+        inner
+    }
+    println(d)
+}
+--- output.txt
+argument true
+-1
+outer call false true
+-2
+3
+nested true
+-4
+
+=== test_panic_is_not_caught
+--- main.x
+fn main() {
+    [int;3] list = [1, 2, 3]
+    int i = 5
+    var a = list[i] catch e {
+        -1
+    }
+    println(a)
+}
+--- output.txt
+panic: 'index out of range [5] with length 3' at nature-test/main.x:4:18
+
 === test_pub_errset_rejected
 --- main.x
 pub errset TIMEOUT
@@ -484,3 +556,21 @@ fn main() {
 }
 --- output.txt
 nature-test/main.x:12:23: match expression lacks a default case '_'
+
+=== test_u32_is_not_an_errset
+--- main.x
+errset TIMEOUT
+
+fn fail():int! {
+    throw TIMEOUT
+}
+
+fn main() {
+    u32 a = 12
+    var b = fail() catch e {
+        println(a == e)
+        0
+    }
+}
+--- output.txt
+nature-test/main.x:10:22: type inconsistency, expect=u32, actual=errset_t(u32)

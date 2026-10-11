@@ -11,8 +11,8 @@
 
 static type_t reduction_type_visited(module_t *m, type_t t, struct sc_map_s64 *visited);
 
-// In .x the `T!` shorthand means errable<T,u32>, the error being the id of an errset. An errable
-// return written in source is rejected, with or without `!`.
+// In .x the `T!` shorthand means errable<T,errset_t>. An errable return written in source is
+// rejected, with or without `!`.
 void infer_result_signature(module_t *m, type_fn_t *fn) {
     if (!fn->is_x) return;
 
@@ -21,7 +21,7 @@ void infer_result_signature(module_t *m, type_fn_t *fn) {
 
     type_t result = type_ident_new(ERRABLE_IDENT, TYPE_IDENT_DEF);
     result.args = ct_list_new(sizeof(type_t));
-    type_t error_type = type_kind_new(TYPE_UINT32);
+    type_t error_type = type_ident_new(ERRSET_IDENT, TYPE_IDENT_DEF);
     ct_list_push(result.args, &fn->return_type);
     ct_list_push(result.args, &error_type);
     fn->return_type = reduction_type(m, result);
@@ -1551,21 +1551,13 @@ static type_t infer_match(module_t *m, ast_match_t *match, type_t target_type) {
 }
 
 static type_t infer_catch(module_t *m, ast_catch_t *catch_expr) {
-    type_t t;
-    if (m->current_fn->is_x) {
-        // Only this call is caught; calls in its arguments propagate independently.
-        INFER_ASSERTF(catch_expr->try_expr.assert_type == AST_CALL, "catch in .x requires an errable fn call");
-        ast_call_t *call = catch_expr->try_expr.value;
-        t = infer_call(m, call, type_kind_new(TYPE_UNKNOWN), false);
-        INFER_ASSERTF(is_result_type(call->return_type), "catch in .x requires an errable fn call");
-        catch_expr->try_expr.type = t;
-        catch_expr->catch_err.type = result_error_type(call->return_type);
-    } else {
-        m->be_caught += 1;
-        t = infer_right_expr(m, &catch_expr->try_expr, type_kind_new(TYPE_UNKNOWN));
-        m->be_caught -= 1;
-        catch_expr->catch_err.type = reduction_type(m, interface_throwable());
-    }
+    m->be_caught += 1;
+    type_t t = infer_right_expr(m, &catch_expr->try_expr, type_kind_new(TYPE_UNKNOWN));
+    m->be_caught -= 1;
+
+    // an .x error is an errset value, an .n error is throwable
+    type_t error_type = m->current_fn->is_x ? type_ident_new(ERRSET_IDENT, TYPE_IDENT_DEF) : interface_throwable();
+    catch_expr->catch_err.type = reduction_type(m, error_type);
 
     rewrite_var_decl(m, &catch_expr->catch_err);
 
@@ -1717,9 +1709,9 @@ static type_t infer_ternary(module_t *m, ast_ternary_expr_t *expr, type_t target
 }
 
 /**
- * An errset name used as a value is rewritten to its id, a u32 literal.
+ * An errset name used as a value is rewritten to its id, a literal of type errset_t.
  */
-static bool infer_errset_ident(ast_expr_t *expr, type_t *result_type) {
+static bool infer_errset_ident(module_t *m, ast_expr_t *expr, type_t *result_type) {
     ast_ident *ident = expr->value;
     symbol_t *symbol = symbol_table_get(ident->literal);
     if (!symbol || symbol->type != SYMBOL_ERRSET) {
@@ -1733,7 +1725,7 @@ static bool infer_errset_ident(ast_expr_t *expr, type_t *result_type) {
 
     expr->assert_type = AST_EXPR_LITERAL;
     expr->value = literal;
-    *result_type = type_kind_new(TYPE_UINT32);
+    *result_type = reduction_type(m, type_ident_new(ERRSET_IDENT, TYPE_IDENT_DEF));
     return true;
 }
 
@@ -3642,7 +3634,7 @@ static type_t infer_expr(module_t *m, ast_expr_t *expr, type_t target_type, type
         }
         case AST_EXPR_IDENT: {
             type_t errset_type;
-            if (infer_errset_ident(expr, &errset_type)) {
+            if (infer_errset_ident(m, expr, &errset_type)) {
                 return errset_type;
             }
             return infer_ident(m, expr->value);
