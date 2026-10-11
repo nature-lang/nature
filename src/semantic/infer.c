@@ -13,18 +13,18 @@ static type_t reduction_type_visited(module_t *m, type_t t, struct sc_map_s64 *v
 
 // In .x the `T!` shorthand means errable<T,errset_t>. An errable return written in source is
 // rejected, with or without `!`.
-void infer_result_signature(module_t *m, type_fn_t *fn) {
+void infer_errable_return(module_t *m, type_fn_t *fn) {
     if (!fn->is_x) return;
 
-    INFER_ASSERTF(!is_result_type(fn->return_type), "an explicit errable<T,E> return is not supported in .x, use T!");
+    INFER_ASSERTF(!is_errable_type(fn->return_type), "an explicit errable<T,E> return is not supported in .x, use T!");
     if (!fn->is_errable) return;
 
-    type_t result = type_ident_new(ERRABLE_IDENT, TYPE_IDENT_DEF);
-    result.args = ct_list_new(sizeof(type_t));
+    type_t errable = type_ident_new(ERRABLE_IDENT, TYPE_IDENT_DEF);
+    errable.args = ct_list_new(sizeof(type_t));
     type_t error_type = type_ident_new(ERRSET_IDENT, TYPE_IDENT_DEF);
-    ct_list_push(result.args, &fn->return_type);
-    ct_list_push(result.args, &error_type);
-    fn->return_type = reduction_type(m, result);
+    ct_list_push(errable.args, &fn->return_type);
+    ct_list_push(errable.args, &error_type);
+    fn->return_type = reduction_type(m, errable);
 }
 
 static type_t reduction_type_ident(module_t *m, type_t t, struct sc_map_s64 *visited);
@@ -2903,7 +2903,7 @@ static type_t infer_call(module_t *m, ast_call_t *call, type_t target_type, bool
                       m->current_fn->fn_name);
     }
 
-    return is_result_fn(type_fn) ? result_value_type(type_fn->return_type) : type_fn->return_type;
+    return is_x_errable(type_fn) ? errable_value_type(type_fn->return_type) : type_fn->return_type;
 }
 
 static void infer_tagged_union_element(module_t *m, ast_expr_t *expr, type_t target_type) {
@@ -3235,8 +3235,8 @@ static void infer_return(module_t *m, ast_return_stmt_t *stmt) {
 
     // An errable function returns errable<T,E>, so `return v` is checked against T and
     // linear constructs the value variant.
-    if (is_result_fn(m->current_fn->type.fn)) {
-        expect_type = result_value_type(m->current_fn->return_type);
+    if (is_x_errable(m->current_fn->type.fn)) {
+        expect_type = errable_value_type(m->current_fn->return_type);
     }
 
     if (stmt->expr != NULL) {
@@ -3335,7 +3335,7 @@ static void infer_throw(module_t *m, ast_throw_stmt_t *throw_stmt) {
                   m->current_fn->fn_name, type_origin_format(m->current_fn->return_type));
 
     if (m->current_fn->is_x) {
-        infer_right_expr(m, &throw_stmt->error, result_error_type(m->current_fn->return_type));
+        infer_right_expr(m, &throw_stmt->error, errable_error_type(m->current_fn->return_type));
         return;
     }
 
@@ -3934,7 +3934,7 @@ static type_t reduction_complex_type(module_t *m, type_t t, struct sc_map_s64 *v
     if (t.kind == TYPE_FN) {
         type_fn_t *fn = t.fn;
         fn->return_type = reduction_type_visited(m, fn->return_type, visited);
-        infer_result_signature(m, fn);
+        infer_errable_return(m, fn);
         for (int i = 0; i < fn->param_types->length; ++i) {
             type_t *formal_type = ct_list_value(fn->param_types, i);
             *formal_type = reduction_type_visited(m, *formal_type, visited);
@@ -4373,7 +4373,7 @@ static type_t infer_fn_decl(module_t *m, ast_fndef_t *fndef, type_t target_type)
     type_fn->param_types = ct_list_new(sizeof(type_t));
     fndef->return_type.status = REDUCTION_STATUS_UNDO;
     type_fn->return_type = reduction_type(m, fndef->return_type);
-    infer_result_signature(m, type_fn);
+    infer_errable_return(m, type_fn);
 
     fndef->return_type = type_fn->return_type;
 

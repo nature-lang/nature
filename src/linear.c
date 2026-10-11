@@ -8,17 +8,17 @@
 #include "src/error.h"
 #include "utils/linked.h"
 
-static lir_operand_t *linear_result_address(module_t *m) {
+static lir_operand_t *linear_errable_address(module_t *m) {
     closure_t *c = m->current_closure;
-    if (!c->result_storage) return NULL;
+    if (!c->errable_storage) return NULL;
     lir_operand_t *address = temp_var_operand(m, c->fndef->return_type);
-    OP_PUSH(lir_op_lea(address, c->result_storage));
+    OP_PUSH(lir_op_lea(address, c->errable_storage));
     return address;
 }
 
-static lir_operand_t *linear_result_payload(module_t *m, lir_operand_t *result, type_t type) {
+static lir_operand_t *linear_errable_payload(module_t *m, lir_operand_t *errable, type_t type) {
     if (type.kind == TYPE_VOID) return NULL;
-    lir_operand_t *payload = indirect_addr_operand(m, type, result, POINTER_SIZE);
+    lir_operand_t *payload = indirect_addr_operand(m, type, errable, POINTER_SIZE);
     return type.storage_kind == STORAGE_KIND_IND ? lea_operand_pointer(m, payload) : payload;
 }
 
@@ -898,13 +898,13 @@ static lir_operand_t *linear_caught_error(module_t *m, type_t error_type) {
 
 static void linear_raise_error(module_t *m, type_t error_type, lir_operand_t *value) {
     closure_t *c = m->current_closure;
-    assert(c->result_storage);
-    lir_operand_t *result = linear_result_address(m);
-    lir_operand_t *tag = indirect_addr_operand(m, type_kind_new(TYPE_UINT64), result, 0);
+    assert(c->errable_storage);
+    lir_operand_t *errable = linear_errable_address(m);
+    lir_operand_t *tag = indirect_addr_operand(m, type_kind_new(TYPE_UINT64), errable, 0);
     char *end = label_ident_with_unique(".error.store.end");
     // A deferred error must not replace an error already being returned.
     OP_PUSH(lir_op_new(LIR_OPCODE_BEE, int_operand(hash_string(ERRABLE_ERROR_TAG)), tag, lir_label_operand(end, true)));
-    linear_super_move(m, error_type, linear_result_payload(m, result, error_type), value);
+    linear_super_move(m, error_type, linear_errable_payload(m, errable, error_type), value);
     OP_PUSH(lir_op_move(tag, int_operand(hash_string(ERRABLE_ERROR_TAG))));
     OP_PUSH(lir_op_label(end, true));
     linear_unwind_all(m);
@@ -1860,14 +1860,14 @@ static void linear_return(module_t *m, ast_return_stmt_t *ast) {
         src = linear_expr(m, *ast->expr, NULL);
     }
 
-    // `return T` constructs value(T) in the function's errable<T,E> result.
-    if (c->result_storage && src) {
-        type_t value_type = result_value_type(c->fndef->return_type);
-        linear_super_move(m, value_type, linear_result_payload(m, linear_result_address(m), value_type), src);
+    // `return T` stores value(T) in the errable<T,E> this function returns.
+    if (c->errable_storage && src) {
+        type_t value_type = errable_value_type(c->fndef->return_type);
+        linear_super_move(m, value_type, linear_errable_payload(m, linear_errable_address(m), value_type), src);
     }
 
     linear_unwind_all(m);
-    if (c->result_storage) src = linear_result_address(m);
+    if (c->errable_storage) src = linear_errable_address(m);
     OP_PUSH(lir_op_new(LIR_OPCODE_RETURN, src, NULL, NULL));
     OP_PUSH(lir_op_bal(lir_label_operand(m->current_closure->end_label, false)));
 }
@@ -2238,12 +2238,12 @@ static lir_operand_t *linear_call(module_t *m, ast_expr_t expr, lir_operand_t *t
     OP_PUSH(lir_op_new(LIR_OPCODE_CALL, fn_target, operand_new(LIR_OPERAND_ARGS, args), temp));
 
     // 目标函数可能会产生错误才需要进行错误判断，并跳转到对应的 error label 或者 continue label
-    if (is_result_fn(type_fn)) {
+    if (is_x_errable(type_fn)) {
         char *end = label_ident_with_unique(".result.value");
         OP_PUSH(lir_op_new(LIR_OPCODE_BNE, int_operand(hash_string(ERRABLE_ERROR_TAG)),
                            indirect_addr_operand(m, type_kind_new(TYPE_UINT64), temp, 0), lir_label_operand(end, true)));
-        type_t error_type = result_error_type(type_fn->return_type);
-        lir_operand_t *error = linear_result_payload(m, temp, error_type);
+        type_t error_type = errable_error_type(type_fn->return_type);
+        lir_operand_t *error = linear_errable_payload(m, temp, error_type);
         uint16_t catch_depth = m->current_closure->catch_error_labels->count;
         if (catch_depth > 0) {
             // the innermost catch takes the error instead of the caller
@@ -2253,7 +2253,7 @@ static lir_operand_t *linear_call(module_t *m, ast_expr_t expr, lir_operand_t *t
             linear_raise_error(m, error_type, error);
         }
         OP_PUSH(lir_op_label(end, true));
-        temp = linear_result_payload(m, temp, result_value_type(type_fn->return_type));
+        temp = linear_errable_payload(m, temp, errable_value_type(type_fn->return_type));
     } else if (type_fn->is_errable) {
         linear_has_error(m);
     }
@@ -4387,13 +4387,13 @@ static closure_t *linear_fndef(module_t *m, ast_fndef_t *fndef) {
         OP_PUSH(lir_op_safepoint());
     }
 
-    // Allocate the Result once. Success keeps value(T); throw stores error(E).
-    if (is_result_fn(fndef->type.fn)) {
-        lir_operand_t *result = temp_var_operand(m, fndef->return_type);
-        lir_op_t *allocation = lir_stack_alloc(c, fndef->return_type, result);
-        c->result_storage = allocation->first;
+    // Allocate the errable<T,E> once. Success keeps value(T); throw stores error(E).
+    if (is_x_errable(fndef->type.fn)) {
+        lir_operand_t *errable = temp_var_operand(m, fndef->return_type);
+        lir_op_t *allocation = lir_stack_alloc(c, fndef->return_type, errable);
+        c->errable_storage = allocation->first;
         OP_PUSH(allocation);
-        OP_PUSH(lir_op_move(indirect_addr_operand(m, type_kind_new(TYPE_UINT64), result, 0),
+        OP_PUSH(lir_op_move(indirect_addr_operand(m, type_kind_new(TYPE_UINT64), errable, 0),
                             int_operand(hash_string(ERRABLE_VALUE_TAG))));
     }
 
@@ -4410,13 +4410,13 @@ static closure_t *linear_fndef(module_t *m, ast_fndef_t *fndef) {
     OP_PUSH(lir_op_bal(lir_label_operand(c->end_label, true)));
 
     OP_PUSH(lir_op_label(c->error_label, true));
-    OP_PUSH(lir_op_new(LIR_OPCODE_RETURN, linear_result_address(m), NULL, NULL)); // 方便 return check
+    OP_PUSH(lir_op_new(LIR_OPCODE_RETURN, linear_errable_address(m), NULL, NULL)); // 方便 return check
     OP_PUSH(lir_op_bal(lir_label_operand(c->end_label, true))); // bal end
 
     OP_PUSH(lir_op_label(c->end_label, true));
 
-    if (c->result_storage && result_value_type(fndef->return_type).kind == TYPE_VOID) {
-        OP_PUSH(lir_op_new(LIR_OPCODE_RETURN, linear_result_address(m), NULL, NULL));
+    if (c->errable_storage && errable_value_type(fndef->return_type).kind == TYPE_VOID) {
+        OP_PUSH(lir_op_new(LIR_OPCODE_RETURN, linear_errable_address(m), NULL, NULL));
     }
 
     //    OP_PUSH(lir_op_safepoint());

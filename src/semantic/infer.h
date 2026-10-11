@@ -14,7 +14,7 @@ void infer(module_t *m);
 
 type_t infer_global_expr(module_t *m, ast_expr_t *expr, type_t target_type);
 
-void infer_result_signature(module_t *m, type_fn_t *fn);
+void infer_errable_return(module_t *m, type_fn_t *fn);
 
 static type_t infer_fn_decl(module_t *m, ast_fndef_t *fndef, type_t target_type);
 

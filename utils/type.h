@@ -477,24 +477,24 @@ struct type_fn_t {
     int self_kind;
 };
 
-static inline bool is_result_type(type_t type) {
+static inline bool is_errable_type(type_t type) {
     return type.kind == TYPE_TAGGED_UNION && str_equal(type.ident, ERRABLE_IDENT);
 }
 
-static inline bool is_result_fn(type_fn_t *fn) {
-    return fn && fn->is_x && fn->is_errable && is_result_type(fn->return_type);
+static inline bool is_x_errable(type_fn_t *fn) {
+    return fn && fn->is_x && fn->is_errable && is_errable_type(fn->return_type);
 }
 
 // The builtin definition fixes the variant order; derive T and E instead of
 // keeping duplicate copies on the function type and AST.
-static inline type_t result_value_type(type_t result) {
-    assert(is_result_type(result));
-    return ((tagged_union_element_t *) ct_list_value(result.tagged_union->elements, 0))->type;
+static inline type_t errable_value_type(type_t errable) {
+    assert(is_errable_type(errable));
+    return ((tagged_union_element_t *) ct_list_value(errable.tagged_union->elements, 0))->type;
 }
 
-static inline type_t result_error_type(type_t result) {
-    assert(is_result_type(result));
-    return ((tagged_union_element_t *) ct_list_value(result.tagged_union->elements, 1))->type;
+static inline type_t errable_error_type(type_t errable) {
+    assert(is_errable_type(errable));
+    return ((tagged_union_element_t *) ct_list_value(errable.tagged_union->elements, 1))->type;
 }
 
 // 类型描述信息 end
