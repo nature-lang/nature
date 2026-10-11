@@ -188,6 +188,38 @@ propagated true
 false false true false
 false true
 
+=== test_match_on_errset
+--- main.x
+import "io.x"
+
+errset CLOSED
+errset OTHER
+
+fn fail(int mode):int! {
+    if mode == 1 { throw io.TIMEOUT }
+    if mode == 2 { throw CLOSED }
+    throw OTHER
+}
+
+fn main() {
+    for var i = 1; i < 4; i += 1 {
+        var r = fail(i) catch e {
+            match e {
+                io.TIMEOUT -> -1
+                CLOSED -> -2
+                _ -> -3
+            }
+        }
+        println(i, r)
+    }
+}
+--- io.x
+errset TIMEOUT
+--- output.txt
+1 -1
+2 -2
+3 -3
+
 === test_pub_errset_rejected
 --- main.x
 pub errset TIMEOUT
@@ -278,3 +310,21 @@ errset TIMEOUT
 pub fn fail()! { throw TIMEOUT }
 --- output.txt
 nature-test/main.n:4:9: calling an errable .x fn from .n is not supported
+
+=== test_match_without_default_rejected
+--- main.x
+errset TIMEOUT
+errset CLOSED
+
+fn fail():int! { throw TIMEOUT }
+
+fn main() {
+    var r = fail() catch e {
+        match e {
+            TIMEOUT -> -1
+            CLOSED -> -2
+        }
+    }
+}
+--- output.txt
+nature-test/main.x:10:23: match expression lacks a default case '_'

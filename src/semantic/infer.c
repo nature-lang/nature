@@ -1528,8 +1528,8 @@ static type_t infer_match(module_t *m, ast_match_t *match, type_t target_type) {
                 break;
             }
 
-            // enum 穷尽检查
-            if (subject_type.kind == TYPE_ENUM) {
+            // enum 穷尽检查, an enum without members (the type of an errset) is open, only a default case covers it
+            if (subject_type.kind == TYPE_ENUM && subject_type.enum_->properties->length > 0) {
                 type_enum_t *type_enum = subject_type.enum_;
                 for (int i = 0; i < type_enum->properties->length; i++) {
                     enum_property_t *prop = ct_list_value(type_enum->properties, i);
