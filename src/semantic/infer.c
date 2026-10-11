@@ -15,7 +15,7 @@ static type_t reduction_type_visited(module_t *m, type_t t, struct sc_map_s64 *v
 // for errable<T,errset_t>; in .n it keeps its error on the coroutine.
 void infer_errable_return(module_t *m, type_fn_t *fn) {
     if (is_errable_type(fn->return_type)) {
-        INFER_ASSERTF(!fn->is_errable, "errable<T,E> is errable already, remove the `!`");
+        INFER_ASSERTF(!fn->is_errable, "a fn returning errable<T,E> is already errable, `!` is not needed");
         fn->is_errable = true;
         return;
     }

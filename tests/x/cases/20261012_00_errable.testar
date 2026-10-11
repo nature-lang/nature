@@ -212,7 +212,7 @@ fn typed():errable<int,i32>! {
 
 fn main() {}
 --- output.txt
-nature-test/main.x:1:3: errable<T,E> is errable already, remove the `!`
+nature-test/main.x:1:3: a fn returning errable<T,E> is already errable, `!` is not needed
 
 === test_n_cannot_propagate_x_error
 --- main.n
