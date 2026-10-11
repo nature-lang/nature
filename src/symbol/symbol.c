@@ -115,24 +115,6 @@ static ast_typedef_stmt_t *builtin_typedef_tuple(char *ident) {
     return stmt;
 }
 
-// The type of an errset value: an enum without members, its values are the ids given to errset
-// declarations. The ident is the `errset` keyword, so source code cannot name the type.
-static ast_typedef_stmt_t *builtin_typedef_errset(char *ident) {
-    ast_typedef_stmt_t *stmt = builtin_typedef_base(ident);
-
-    type_enum_t *type_enum = NEW(type_enum_t);
-    type_enum->properties = ct_list_new(sizeof(enum_property_t));
-    type_enum->element_type = type_kind_new(TYPE_UINT32);
-
-    // type_kind_new(TYPE_ENUM) would size the type now, before its element type is reduced
-    type_t t = {.status = REDUCTION_STATUS_UNDO};
-    t.kind = TYPE_ENUM;
-    t.enum_ = type_enum;
-    stmt->type_expr = t;
-    stmt->is_enum = true;
-    return stmt;
-}
-
 static void symbol_register_builtin_types() {
     symbol_table_set("bool", SYMBOL_TYPE, builtin_typedef_simple("bool", TYPE_BOOL), false);
     symbol_table_set("int", SYMBOL_TYPE, builtin_typedef_simple("int", TYPE_INT), false);
@@ -155,8 +137,6 @@ static void symbol_register_builtin_types() {
     symbol_table_set("map", SYMBOL_TYPE, builtin_typedef_map("map"), false);
     symbol_table_set("chan", SYMBOL_TYPE, builtin_typedef_chan("chan"), false);
     symbol_table_set("tup", SYMBOL_TYPE, builtin_typedef_tuple("tup"), false);
-
-    symbol_table_set(ERRSET_IDENT, SYMBOL_TYPE, builtin_typedef_errset(ERRSET_IDENT), false);
 }
 
 void symbol_init() {

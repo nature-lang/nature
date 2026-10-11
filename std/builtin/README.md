@@ -213,7 +213,7 @@ type errable<T,E> = union {
 }
 ```
 
-The Result returned by an errable function in `.x`: `T!` means `errable<T,E>` where `E` is the type of errset values. Writing `errable<T,E>` as a return type is not supported. `return T` stores the value and `throw` stores the error. A call to an errable function propagates its error to the enclosing `T!` function, and `call() catch e { ... }` handles only that call's error; calls in its arguments need their own catch or propagate. The `try` statement is not supported in `.x`. The `.n` error model is handled separately.
+The Result returned by an errable function in `.x`: `T!` means `errable<T,u32>`, the error being the id of an errset. Writing `errable<T,E>` as a return type is not supported. `return T` stores the value and `throw` stores the error. A call to an errable function propagates its error to the enclosing `T!` function, and `call() catch e { ... }` handles only that call's error; calls in its arguments need their own catch or propagate. The `try` statement is not supported in `.x`. The `.n` error model is handled separately.
 
 ## errset
 
@@ -244,7 +244,7 @@ fn main() {
 
 An `errset` declaration registers a named error. Its identity is the declaration itself: the compiler gives it a program-wide id, so `io.TIMEOUT` and `fmt.TIMEOUT` are different errors even though they share a name. An errset carries no message and no data, so it is compared with `==` and `!=`, or matched with `match e { TIMEOUT -> ... _ -> ... }`. The set of errsets is open, so a `match` needs a `_` arm.
 
-Declarations are module-level only and always public; `pub errset` is rejected because an errset exists to be named by its callers. The type of an errset value is provided by the compiler and has no name in source: an integer literal does not convert to it and it only compares with another errset. An `.n` module may declare an errset, but `.n` functions cannot throw one.
+Declarations are module-level only and always public; `pub errset` is rejected because an errset exists to be named by its callers. An errset value is its id, a `u32`. An `.n` module may declare an errset, but `.n` functions cannot throw one.
 
 ## fn errorf
 

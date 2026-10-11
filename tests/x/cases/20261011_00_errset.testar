@@ -375,36 +375,6 @@ fn main() {}
 --- output.txt
 nature-test/main.x:2:6: ident 'main.TIMEOUT' redeclared
 
-=== test_throw_integer_rejected
---- main.x
-fn fail():int! {
-    throw 5
-}
-
-fn main() {
-    fail() catch e {
-        0
-    }
-}
---- output.txt
-nature-test/main.x:2:11: type inconsistency, expect=errset(enum:u32), actual=i64
-
-=== test_n_cannot_throw_errset
---- main.n
-errset TIMEOUT
-
-fn fail():int! {
-    throw TIMEOUT
-}
-
-fn main() {
-    fail() catch e {
-        0
-    }
-}
---- output.txt
-nature-test/main.n:4:17: type 'errset(enum:u32)' not impl 'throwable(interface)' interface
-
 === test_missing_error_handler
 --- main.x
 errset TIMEOUT

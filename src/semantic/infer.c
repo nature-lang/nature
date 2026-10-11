@@ -11,7 +11,7 @@
 
 static type_t reduction_type_visited(module_t *m, type_t t, struct sc_map_s64 *visited);
 
-// In .x the `T!` shorthand means errable<T,E> with E the builtin type of errset values. Calling
+// In .x the `T!` shorthand means errable<T,u32>, the error being the id of an errset. Calling
 // this again on an already rewritten signature changes nothing.
 void infer_result_signature(module_t *m, type_fn_t *fn) {
     if (!fn->is_x) return;
@@ -19,7 +19,7 @@ void infer_result_signature(module_t *m, type_fn_t *fn) {
     if (fn->is_errable && !is_result_type(fn->return_type)) {
         type_t result = type_ident_new(ERRABLE_IDENT, TYPE_IDENT_DEF);
         result.args = ct_list_new(sizeof(type_t));
-        type_t error_type = type_ident_new(ERRSET_IDENT, TYPE_IDENT_DEF);
+        type_t error_type = type_kind_new(TYPE_UINT32);
         ct_list_push(result.args, &fn->return_type);
         ct_list_push(result.args, &error_type);
         fn->return_type = reduction_type(m, result);
@@ -1528,8 +1528,8 @@ static type_t infer_match(module_t *m, ast_match_t *match, type_t target_type) {
                 break;
             }
 
-            // enum 穷尽检查, an enum without members (the type of an errset) is open, only a default case covers it
-            if (subject_type.kind == TYPE_ENUM && subject_type.enum_->properties->length > 0) {
+            // enum 穷尽检查
+            if (subject_type.kind == TYPE_ENUM) {
                 type_enum_t *type_enum = subject_type.enum_;
                 for (int i = 0; i < type_enum->properties->length; i++) {
                     enum_property_t *prop = ct_list_value(type_enum->properties, i);
@@ -1736,10 +1736,9 @@ static type_t infer_ternary(module_t *m, ast_ternary_expr_t *expr, type_t target
 }
 
 /**
- * An errset name used as a value. Like an enum member it is rewritten to an integer literal typed
- * as the builtin errset type, so a plain integer never converts to an error.
+ * An errset name used as a value is rewritten to its id, a u32 literal.
  */
-static bool infer_errset_ident(module_t *m, ast_expr_t *expr, type_t *result_type) {
+static bool infer_errset_ident(ast_expr_t *expr, type_t *result_type) {
     ast_ident *ident = expr->value;
     symbol_t *symbol = symbol_table_get(ident->literal);
     if (!symbol || symbol->type != SYMBOL_ERRSET) {
@@ -1747,16 +1746,14 @@ static bool infer_errset_ident(module_t *m, ast_expr_t *expr, type_t *result_typ
     }
 
     ast_errset_stmt_t *errset = symbol->ast_value;
-    type_t errset_type = reduction_type(m, type_ident_new(ERRSET_IDENT, TYPE_IDENT_DEF));
-
     ast_literal_t *literal = NEW(ast_literal_t);
-    literal->kind = errset_type.enum_->element_type.kind;
+    literal->kind = TYPE_UINT32;
     literal->value = malloc(64);
     snprintf(literal->value, 64, "%" PRId64, errset->id);
 
     expr->assert_type = AST_EXPR_LITERAL;
     expr->value = literal;
-    *result_type = errset_type;
+    *result_type = type_kind_new(TYPE_UINT32);
     return true;
 }
 
@@ -3668,7 +3665,7 @@ static type_t infer_expr(module_t *m, ast_expr_t *expr, type_t target_type, type
         }
         case AST_EXPR_IDENT: {
             type_t errset_type;
-            if (infer_errset_ident(m, expr, &errset_type)) {
+            if (infer_errset_ident(expr, &errset_type)) {
                 return errset_type;
             }
             return infer_ident(m, expr->value);
