@@ -1100,6 +1100,12 @@ static lir_operand_t *linear_ident(module_t *m, ast_expr_t expr, lir_operand_t *
     symbol_t *s = symbol_table_get(ident->literal);
     assertf(s, "ident %s not declare");
 
+    // an errset is its id, an immediate
+    if (s->type == SYMBOL_ERRSET) {
+        ast_errset_stmt_t *errset = s->ast_value;
+        return linear_super_move(m, expr.type, target, integer_operand(errset->id, TYPE_UINT32));
+    }
+
     if (s->type == SYMBOL_FN) {
         // 现在 symbol fn 是作为一个 type_fn 值进行传递，所以需要取出其 label 进行处理。
         // 即使是 global fn 也不例外, linear call symbol 已经进行了特殊处理，进不到这里来

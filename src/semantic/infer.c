@@ -1709,27 +1709,6 @@ static type_t infer_ternary(module_t *m, ast_ternary_expr_t *expr, type_t target
 }
 
 /**
- * An errset name used as a value is rewritten to its id, a literal of type errset_t.
- */
-static bool infer_errset_ident(module_t *m, ast_expr_t *expr, type_t *result_type) {
-    ast_ident *ident = expr->value;
-    symbol_t *symbol = symbol_table_get(ident->literal);
-    if (!symbol || symbol->type != SYMBOL_ERRSET) {
-        return false;
-    }
-
-    ast_errset_stmt_t *errset = symbol->ast_value;
-    ast_literal_t *literal = NEW(ast_literal_t);
-    literal->kind = TYPE_UINT32;
-    literal->value = itoa(errset->id);
-
-    expr->assert_type = AST_EXPR_LITERAL;
-    expr->value = literal;
-    *result_type = reduction_type(m, type_ident_new(ERRSET_IDENT, TYPE_IDENT_DEF));
-    return true;
-}
-
-/**
  * use ident
  * @param expr
  * @return
@@ -1762,6 +1741,11 @@ static type_t infer_ident(module_t *m, ast_ident *ident) {
             INFER_ASSERTF(false, "generics fn `%s` cannot be passed as ident", fndef->fn_name)
         }
         return infer_fn_decl(m, fndef, type_kind_new(TYPE_UNKNOWN));
+    }
+
+    // an errset is a global name, linear turns it into its id
+    if (symbol->type == SYMBOL_ERRSET) {
+        return reduction_type(m, type_ident_new(ERRSET_IDENT, TYPE_IDENT_DEF));
     }
 
     INFER_ASSERTF(false, "unable to recognize symbol type");
@@ -3630,10 +3614,6 @@ static type_t infer_expr(module_t *m, ast_expr_t *expr, type_t target_type, type
             return infer_ternary(m, expr->value, target_type);
         }
         case AST_EXPR_IDENT: {
-            type_t errset_type;
-            if (infer_errset_ident(m, expr, &errset_type)) {
-                return errset_type;
-            }
             return infer_ident(m, expr->value);
         }
         case AST_EXPR_VEC_NEW: {
