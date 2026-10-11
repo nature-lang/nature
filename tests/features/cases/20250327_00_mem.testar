@@ -64,21 +64,17 @@ fn main():void! {
     [u8] buf = [1, 2, 3]
 
     // test u32 with small buffer
-    try {
-        mem.read_u32_le(buf)
-        panic('should throw buffer too small')
-    } catch err {
+    mem.read_u32_le(buf) catch err {
         assert(err.msg() == 'buffer too small')
         println('test u32 buffer too small: ' + err.msg())
+        0
     }
 
     // test u64 with small buffer
-    try {
-        mem.read_u64_le(buf)
-        panic('should throw buffer too small')
-    } catch err {
+    mem.read_u64_le(buf) catch err {
         assert(err.msg() == 'buffer too small')
         println('test u64 buffer too small: ' + err.msg())
+        0
     }
 }
 
@@ -93,12 +89,10 @@ import mem
 fn main():void! {
     [u8] buf = []
 
-    try {
-        mem.read_u8_le(buf)
-        panic('should throw buffer too small')
-    } catch err {
+    mem.read_u8_le(buf) catch err {
         assert(err.msg() == 'buffer too small')
         println('test empty buffer: ' + err.msg())
+        0
     }
 }
 
@@ -119,10 +113,7 @@ fn main():void! {
 
     // test buffer too small
     [u8] small_buf = [1, 2]
-    try {
-        mem.copy(small_buf, &v)
-        panic('should throw buffer too small')
-    } catch err {
+    mem.copy(small_buf, &v) catch err {
         assert(err.msg() == 'buffer too small')
         println('test copy buffer too small: ' + err.msg())
     }

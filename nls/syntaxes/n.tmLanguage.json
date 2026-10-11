@@ -564,7 +564,7 @@
                 },
                 {
                     "name": "keyword.control.n",
-                    "match": "\\b(try|catch|throw)\\b"
+                    "match": "\\b(catch|throw)\\b"
                 },
                 {
                     "name": "keyword.control.n",

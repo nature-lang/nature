@@ -108,7 +108,6 @@ typedef enum {
     TOKEN_ENUM,
     TOKEN_UNION,
     TOKEN_THROW,
-    TOKEN_TRY,
     TOKEN_CATCH,
     TOKEN_MATCH,
     TOKEN_SELECT,
@@ -122,6 +121,7 @@ typedef enum {
     TOKEN_ELSE_IF,
     TOKEN_VAR,
     TOKEN_CONST,
+    TOKEN_ERRSET,
     TOKEN_LET,
     TOKEN_IS,
     TOKEN_SIZEOF,
@@ -220,6 +220,7 @@ static string token_str[] = {
 
         [TOKEN_VAR] = "var",
         [TOKEN_CONST] = "const",
+        [TOKEN_ERRSET] = "errset",
         [TOKEN_STRING] = "string",
         [TOKEN_BOOL] = "bool",
         [TOKEN_FLOAT] = "float",
@@ -244,7 +245,6 @@ static string token_str[] = {
         [TOKEN_MATCH] = "match",
         [TOKEN_SELECT] = "select",
         [TOKEN_TEST] = "test",
-        [TOKEN_TRY] = "try",
         [TOKEN_THROW] = "throw",
         [TOKEN_LET] = "let",
 

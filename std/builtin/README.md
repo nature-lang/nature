@@ -207,10 +207,44 @@ Get the error message.
 ## type errable
 
 ```
-type errable<T> = errort|T
+type errable<T,E> = union{
+    T value
+    E error
+}
 ```
 
-Union type for error handling.
+What an errable function returns in `.x`: `T!` means `errable<T,errset_t>`. Writing `errable<T,E>` as a return type is not supported, with or without `!`. `return T` stores the value and `throw` stores the error. A call to an errable function propagates its error to the enclosing `T!` function. As in `.n`, `expr catch e { ... }` handles an error from any call in `expr`, including calls in arguments. A panic such as an index out of range is not caught in `.x`. The `.n` error model is handled separately.
+
+## errset
+
+```nature
+// in the io module
+errset TIMEOUT
+errset CLOSED
+
+pub fn read(int mode):int! {
+    if mode == 1 {
+        throw TIMEOUT
+    }
+    return 42
+}
+
+// elsewhere
+import "io.x"
+
+fn main() {
+    var n = io.read(1) catch e {
+        if e == io.TIMEOUT {
+            println('timeout')
+        }
+        -1
+    }
+}
+```
+
+An `errset` declaration registers a named error. Its identity is the declaration itself: the compiler gives it a program-wide id, so `io.TIMEOUT` and `fmt.TIMEOUT` are different errors even though they share a name. An errset carries no message and no data, so it is compared with `==` and `!=`, or matched with `match e { TIMEOUT -> ... _ -> ... }`. The set of errsets is open, so a `match` needs a `_` arm.
+
+Declarations are module-level only and always public, so `pub` is not needed; a `pub` before `errset` is accepted and ignored. An errset value has the builtin type `errset_t` and is stored as a `u32` id at run time. Only an errset name produces an `errset_t` value: neither an integer literal nor a `u32` value converts to it, so `throw 5` and comparing `u32 a = 12` with an errset are type errors. An `.n` module may declare an errset, but `.n` functions cannot throw one.
 
 ## fn errorf
 

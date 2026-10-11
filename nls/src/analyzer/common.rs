@@ -1012,7 +1012,6 @@ pub enum AstNode {
     Defer(AstBody),                           // body
     If(Box<Expr>, AstBody, AstBody),          // (condition, consequent, alternate)
     Throw(Box<Expr>),
-    TryCatch(AstBody, Arc<Mutex<VarDeclExpr>>, AstBody), // (try_body, catch_err, catch_body)
     Let(Box<Expr>),                                      // (expr)
     ForIterator(Box<Expr>, Arc<Mutex<VarDeclExpr>>, Option<Arc<Mutex<VarDeclExpr>>>, AstBody), // (iterate, first, second, body)
 

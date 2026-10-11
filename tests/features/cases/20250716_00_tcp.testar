@@ -380,30 +380,24 @@ fn test_error_cases():void! {
     println("Test 10: Error cases")
 
     // Test empty URL
-    try {
-        url.parse("")
-        assert(false) // Should not reach here
-    } catch e {
-        println("✓ Empty URL correctly throws error", e.msg())
-    }
+    println("✓ Empty URL correctly throws error", parse_error(""))
 
     // Test invalid URL format (missing //)
-    try {
-        url.parse("http:example.com")
-        assert(false) // Should not reach here
-    } catch e {
-        println("✓ Invalid URL format correctly throws error", e.msg())
-    }
+    println("✓ Invalid URL format correctly throws error", parse_error("http:example.com"))
 
     // Test URL with only scheme
-    try {
-        url.parse("http:")
-        assert(false) // Should not reach here
-    } catch e {
-        println("✓ Incomplete URL correctly throws error", e.msg())
-    }
+    println("✓ Incomplete URL correctly throws error", parse_error("http:"))
 
     println("✓ Error cases test passed")
+}
+
+// The error message of a url that must fail to parse.
+fn parse_error(string raw):string {
+    url.parse(raw) catch e {
+        return e.msg()
+    }
+    assert(false) // Should not reach here
+    return ''
 }
 
 === test_conn_interface[exclude_os=windows]

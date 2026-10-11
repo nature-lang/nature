@@ -140,20 +140,6 @@ fn main():void! {
 --- output.txt
 panic: 'index out of range [8] with length 4' at nature-test/main.n:3:16
 
-=== test_catch_vec_assign
---- main.n
-fn main():void! {
-    var list = [1, 2, 3, 4]
-    try {
-        list[8] = 12
-    } catch e {
-        println('catch vec error:', e.msg())
-    }
-}
-
---- output.txt
-catch vec error: index out of range [8] with length 4
-
 === test_catch_vec_access
 --- main.n
 fn main():void! {

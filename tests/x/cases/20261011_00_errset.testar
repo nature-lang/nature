@@ -1,0 +1,377 @@
+=== test_errset
+--- main.x
+errset TIMEOUT
+errset CLOSED
+errset LATE
+
+fn read(int mode):int! {
+    if mode == 1 {
+        throw TIMEOUT
+    }
+    if mode == 2 {
+        throw CLOSED
+    }
+    return 42
+}
+
+fn relay(int mode):int! {
+    return read(mode)
+}
+
+fn rethrow(int mode):int! {
+    var v = read(mode) catch e {
+        throw e
+    }
+    return v
+}
+
+fn add(int a, int b):int! {
+    return a + b
+}
+
+fn is_timeout(errset_t e):bool {
+    return e == TIMEOUT
+}
+
+fn nothing(bool fail)! {
+    if fail {
+        throw CLOSED
+    }
+}
+
+fn pass<T>(T value, bool fail):T! {
+    if fail {
+        throw TIMEOUT
+    }
+    return value
+}
+
+type reader_t = interface{
+    fn get(int mode):int!
+}
+
+type source_t:reader_t = int
+
+fn source_t.get(self, int mode):int! {
+    return read(mode)
+}
+
+fn fail_late()! {
+    throw LATE
+}
+
+fn cleanup(bool failure):int! {
+    defer {
+        fail_late()
+    }
+    if failure {
+        throw TIMEOUT
+    }
+    return 1
+}
+
+type shape = union{
+    int circle
+    (int, int) rectangle
+}
+
+fn make(bool fail):shape! {
+    if fail {
+        throw CLOSED
+    }
+    return shape.rectangle(1, 2)
+}
+
+fn main() {
+    var a = read(0) catch e {
+        -1
+    }
+    println(a)
+
+    var b = read(1) catch e {
+        println(e == TIMEOUT, e != CLOSED, is_timeout(e))
+        -2
+    }
+    println(b)
+
+    var saved = CLOSED
+    var c = relay(1) catch e {
+        saved = e
+        -3
+    }
+    println(c, saved == TIMEOUT)
+
+    var d = rethrow(2) catch e {
+        println('rethrow', e == CLOSED)
+        -4
+    }
+    println(d)
+
+    var f = add(read(2), 1) catch e {
+        println('argument', e == CLOSED)
+        -5
+    }
+    println(f)
+
+    var g = read(1) catch first {
+        var inner = read(2) catch second {
+            println('nested', first == TIMEOUT, second == CLOSED)
+            -6
+        }
+        inner
+    }
+    println(g)
+
+    var h = read(2) catch e {
+        match e {
+            TIMEOUT -> -7
+            CLOSED -> -8
+            _ -> -9
+        }
+    }
+    println(h)
+
+    nothing(true) catch e {
+        println('void!', e == CLOSED)
+    }
+
+    var i = pass<int>(9, false) catch e {
+        -1
+    }
+    var j = pass<string>('s', true) catch e {
+        'generic'
+    }
+    println(i, j)
+
+    source_t source = 0
+    reader_t reader = source
+    var k = reader.get(1) catch e {
+        println('interface', e == TIMEOUT)
+        -10
+    }
+    println(k)
+
+    var l = cleanup(true) catch e {
+        println('defer', e == TIMEOUT, e == LATE)
+        -11
+    }
+    println(l)
+
+    var m = cleanup(false) catch e {
+        println('defer only', e == LATE)
+        -12
+    }
+    println(m)
+
+    var n = make(true) catch e {
+        shape.circle(-1)
+    }
+    if n is shape.circle v {
+        println('circle', v)
+    }
+}
+--- output.txt
+42
+true true true
+-2
+-3 true
+rethrow true
+-4
+argument true
+-5
+nested true true
+-6
+-8
+void! true
+9 generic
+interface true
+-10
+defer true false
+-11
+defer only true
+-12
+circle -1
+
+=== test_same_name_in_two_modules_is_two_errors
+--- main.x
+import "io.x"
+import "fmt.x" as f
+import "lib.n".{TIMEOUT}
+
+fn outer(int mode):int! {
+    return io.read(mode)
+}
+
+fn from_n()! {
+    throw TIMEOUT
+}
+
+fn forward()! {
+    throw LATE
+}
+
+errset LATE
+
+fn main() {
+    var a = io.read(1) catch e {
+        println(e == io.TIMEOUT, e == f.TIMEOUT, e == TIMEOUT)
+        -1
+    }
+    println(a)
+
+    var b = f.read(1) catch e {
+        println(e == io.TIMEOUT, e == f.TIMEOUT, e == TIMEOUT)
+        -2
+    }
+    println(b)
+
+    var c = outer(1) catch e {
+        println('propagated', e == io.TIMEOUT)
+        -3
+    }
+    println(c)
+
+    var d = outer(0) catch e {
+        -4
+    }
+    println(d)
+
+    from_n() catch e {
+        println(e == io.TIMEOUT, e == f.TIMEOUT, e == TIMEOUT, e == LATE)
+    }
+    forward() catch e {
+        println(e == TIMEOUT, e == LATE)
+    }
+}
+--- io.x
+errset TIMEOUT
+
+pub fn read(int mode):int! {
+    if mode == 1 {
+        throw TIMEOUT
+    }
+    return 7
+}
+--- fmt.x
+errset TIMEOUT
+
+pub fn read(int mode):int! {
+    if mode == 1 {
+        throw TIMEOUT
+    }
+    return 8
+}
+--- lib.n
+errset TIMEOUT
+--- output.txt
+true false false
+-1
+false true false
+-2
+propagated true
+-3
+7
+false false true false
+false true
+
+=== test_panic_is_not_caught
+--- main.x
+fn main() {
+    [int;3] list = [1, 2, 3]
+    int i = 5
+    var a = list[i] catch e {
+        -1
+    }
+    println(a)
+}
+--- output.txt
+panic: 'index out of range [5] with length 3' at nature-test/main.x:4:18
+
+=== test_errset_inside_fn_rejected
+--- main.x
+fn main() {
+    errset TIMEOUT
+}
+--- output.txt
+nature-test/main.x:2:10: cannot parser ident 'errset'
+
+=== test_duplicate_errset
+--- main.x
+errset TIMEOUT
+errset TIMEOUT
+
+fn main() {}
+--- output.txt
+nature-test/main.x:2:6: ident 'main.TIMEOUT' redeclared
+
+=== test_missing_error_handler
+--- main.x
+errset TIMEOUT
+
+fn fail():int! {
+    throw TIMEOUT
+}
+
+fn main() {
+    var value = fail()
+}
+--- output.txt
+nature-test/main.x:8:20: calling an errable! fn `fail` requires the current `fn main` errable! as well or be caught.
+
+=== test_errable_return_rejected
+--- main.x
+fn typed():errable<int,i32>! {
+    return 1
+}
+
+fn main() {}
+--- output.txt
+nature-test/main.x:1:3: an explicit errable<T,E> return is not supported in .x, use T!
+
+=== test_match_without_default_rejected
+--- main.x
+errset TIMEOUT
+errset CLOSED
+
+fn fail():int! {
+    throw TIMEOUT
+}
+
+fn main() {
+    var r = fail() catch e {
+        match e {
+            TIMEOUT -> -1
+            CLOSED -> -2
+        }
+    }
+}
+--- output.txt
+nature-test/main.x:12:23: match expression lacks a default case '_'
+
+=== test_u32_is_not_an_errset
+--- main.x
+errset TIMEOUT
+
+fn fail():int! {
+    throw TIMEOUT
+}
+
+fn main() {
+    u32 a = 12
+    var b = fail() catch e {
+        println(a == e)
+        0
+    }
+}
+--- output.txt
+nature-test/main.x:10:22: type inconsistency, expect=u32, actual=errset_t(u32)
+
+=== test_integer_literal_is_not_an_errset
+--- main.x
+fn fail():int! {
+    throw 5
+}
+
+fn main() {}
+--- output.txt
+nature-test/main.x:2:11: type inconsistency, expect=errset_t(u32), actual=i64

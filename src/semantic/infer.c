@@ -11,6 +11,22 @@
 
 static type_t reduction_type_visited(module_t *m, type_t t, struct sc_map_s64 *visited);
 
+// In .x the `T!` shorthand means errable<T,errset_t>. An errable return written in source is
+// rejected, with or without `!`.
+void infer_errable_return(module_t *m, type_fn_t *fn) {
+    if (!fn->is_x) return;
+
+    INFER_ASSERTF(!is_errable_type(fn->return_type), "an explicit errable<T,E> return is not supported in .x, use T!");
+    if (!fn->is_errable) return;
+
+    type_t errable = type_ident_new(ERRABLE_IDENT, TYPE_IDENT_DEF);
+    errable.args = ct_list_new(sizeof(type_t));
+    type_t error_type = type_ident_new(ERRSET_IDENT, TYPE_IDENT_DEF);
+    ct_list_push(errable.args, &fn->return_type);
+    ct_list_push(errable.args, &error_type);
+    fn->return_type = reduction_type(m, errable);
+}
+
 static type_t reduction_type_ident(module_t *m, type_t t, struct sc_map_s64 *visited);
 
 static type_fn_t *infer_call_left(module_t *m, ast_call_t *call, type_t target_type);
@@ -1534,31 +1550,14 @@ static type_t infer_match(module_t *m, ast_match_t *match, type_t target_type) {
     return target_type;
 }
 
-static void infer_try_catch_stmt(module_t *m, ast_try_catch_stmt_t *try_stmt) {
-    m->be_caught += 1;
-    infer_body(m, try_stmt->try_body);
-    m->be_caught -= 1;
-
-    type_t interface_error = interface_throwable();
-    interface_error = reduction_type(m, interface_error);
-    try_stmt->catch_err.type = interface_error;
-
-    rewrite_var_decl(m, &try_stmt->catch_err);
-
-    type_t t = type_kind_new(TYPE_VOID);
-    stack_push(m->current_fn->ret_target_types, &t);
-    infer_body(m, try_stmt->catch_body);
-    stack_pop(m->current_fn->ret_target_types);
-}
-
 static type_t infer_catch(module_t *m, ast_catch_t *catch_expr) {
     m->be_caught += 1;
     type_t t = infer_right_expr(m, &catch_expr->try_expr, type_kind_new(TYPE_UNKNOWN));
     m->be_caught -= 1;
 
-    type_t interface_error = interface_throwable();
-    interface_error = reduction_type(m, interface_error);
-    catch_expr->catch_err.type = interface_error;
+    // an .x error is an errset value, an .n error is throwable
+    type_t error_type = m->current_fn->is_x ? type_ident_new(ERRSET_IDENT, TYPE_IDENT_DEF) : interface_throwable();
+    catch_expr->catch_err.type = reduction_type(m, error_type);
 
     rewrite_var_decl(m, &catch_expr->catch_err);
 
@@ -1742,6 +1741,11 @@ static type_t infer_ident(module_t *m, ast_ident *ident) {
             INFER_ASSERTF(false, "generics fn `%s` cannot be passed as ident", fndef->fn_name)
         }
         return infer_fn_decl(m, fndef, type_kind_new(TYPE_UNKNOWN));
+    }
+
+    // an errset is a global name, linear turns it into its id
+    if (symbol->type == SYMBOL_ERRSET) {
+        return reduction_type(m, type_ident_new(ERRSET_IDENT, TYPE_IDENT_DEF));
     }
 
     INFER_ASSERTF(false, "unable to recognize symbol type");
@@ -2899,7 +2903,7 @@ static type_t infer_call(module_t *m, ast_call_t *call, type_t target_type, bool
                       m->current_fn->fn_name);
     }
 
-    return type_fn->return_type;
+    return is_x_errable(type_fn) ? errable_value_type(type_fn->return_type) : type_fn->return_type;
 }
 
 static void infer_tagged_union_element(module_t *m, ast_expr_t *expr, type_t target_type) {
@@ -3228,6 +3232,13 @@ static void infer_typedef_stmt(module_t *m, ast_typedef_stmt_t *stmt) {
  */
 static void infer_return(module_t *m, ast_return_stmt_t *stmt) {
     type_t expect_type = m->current_fn->return_type;
+
+    // An errable function returns errable<T,E>, so `return v` is checked against T and
+    // linear constructs the value variant.
+    if (is_x_errable(m->current_fn->type.fn)) {
+        expect_type = errable_value_type(m->current_fn->return_type);
+    }
+
     if (stmt->expr != NULL) {
         infer_right_expr(m, stmt->expr, expect_type);
     } else {
@@ -3293,7 +3304,8 @@ static type_t infer_literal(module_t *m, ast_expr_t *expr, type_t target_type) {
     }
 
     // float 转换为 int 会导致数据丢失，所以不进行自动转换, 请手动使用 as 转换
-    if (is_integer(literal_type.kind) && is_integer_or_anyptr(target_kind)) {
+    // an errset_t value only comes from an errset name, never from an integer literal
+    if (is_integer(literal_type.kind) && is_integer_or_anyptr(target_kind) && !str_equal(target_type.ident, ERRSET_IDENT)) {
         int64_t i = atoll(literal->value);
         if (target_kind == TYPE_ANYPTR) {
             target_kind = TYPE_UINT;
@@ -3321,6 +3333,11 @@ static void infer_throw(module_t *m, ast_throw_stmt_t *throw_stmt) {
     INFER_ASSERTF(m->current_fn->is_errable,
                   "can't use throw stmt in a fn without an errable! declaration. example: fn %s(...):%s!",
                   m->current_fn->fn_name, type_origin_format(m->current_fn->return_type));
+
+    if (m->current_fn->is_x) {
+        infer_right_expr(m, &throw_stmt->error, errable_error_type(m->current_fn->return_type));
+        return;
+    }
 
     infer_right_expr(m, &throw_stmt->error, interface_throwable());
 }
@@ -3450,9 +3467,6 @@ static void infer_stmt(module_t *m, ast_stmt_t *stmt) {
         case AST_CATCH: {
             infer_catch(m, stmt->value);
             break;
-        }
-        case AST_STMT_TRY_CATCH: {
-            return infer_try_catch_stmt(m, stmt->value);
         }
         case AST_STMT_SELECT: {
             return infer_select(m, stmt->value);
@@ -3920,6 +3934,7 @@ static type_t reduction_complex_type(module_t *m, type_t t, struct sc_map_s64 *v
     if (t.kind == TYPE_FN) {
         type_fn_t *fn = t.fn;
         fn->return_type = reduction_type_visited(m, fn->return_type, visited);
+        infer_errable_return(m, fn);
         for (int i = 0; i < fn->param_types->length; ++i) {
             type_t *formal_type = ct_list_value(fn->param_types, i);
             *formal_type = reduction_type_visited(m, *formal_type, visited);
@@ -4358,6 +4373,7 @@ static type_t infer_fn_decl(module_t *m, ast_fndef_t *fndef, type_t target_type)
     type_fn->param_types = ct_list_new(sizeof(type_t));
     fndef->return_type.status = REDUCTION_STATUS_UNDO;
     type_fn->return_type = reduction_type(m, fndef->return_type);
+    infer_errable_return(m, type_fn);
 
     fndef->return_type = type_fn->return_type;
 
@@ -4431,10 +4447,8 @@ static void infer_fndef(module_t *m, ast_fndef_t *fn) {
     m->current_line = fn->line;
     m->current_column = fn->column;
 
-    // v1 x mode subset. both are demonstrated crashes rather than style rules: an errable chain
-    // aborts register allocation, and a capturing closure segfaults on the gc env promotion.
+    // v1 x mode subset: a capturing closure segfaults on the gc env promotion.
     if (fn->is_x) {
-        INFER_ASSERTF(!fn->is_errable, "errable fn declaration is not supported in .x");
         INFER_ASSERTF(fn->capture_exprs->length == 0, "closure capture is not supported in .x");
     }
 

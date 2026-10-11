@@ -17,6 +17,10 @@
 #endif
 
 #define THROWABLE_IDENT "throwable"
+#define ERRABLE_IDENT "errable"
+#define ERRSET_IDENT "errset_t" // builtin type of an errset value, a u32 id at run time
+#define ERRABLE_VALUE_TAG "value"
+#define ERRABLE_ERROR_TAG "error"
 
 #define ALL_T_IDENT "all_t"
 #define FN_T_IDENT "fn_t"
@@ -472,6 +476,26 @@ struct type_fn_t {
     bool is_tpl;
     int self_kind;
 };
+
+static inline bool is_errable_type(type_t type) {
+    return type.kind == TYPE_TAGGED_UNION && str_equal(type.ident, ERRABLE_IDENT);
+}
+
+static inline bool is_x_errable(type_fn_t *fn) {
+    return fn && fn->is_x && fn->is_errable && is_errable_type(fn->return_type);
+}
+
+// The builtin definition fixes the variant order; derive T and E instead of
+// keeping duplicate copies on the function type and AST.
+static inline type_t errable_value_type(type_t errable) {
+    assert(is_errable_type(errable));
+    return ((tagged_union_element_t *) ct_list_value(errable.tagged_union->elements, 0))->type;
+}
+
+static inline type_t errable_error_type(type_t errable) {
+    assert(is_errable_type(errable));
+    return ((tagged_union_element_t *) ct_list_value(errable.tagged_union->elements, 1))->type;
+}
 
 // 类型描述信息 end
 

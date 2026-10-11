@@ -272,6 +272,38 @@ fn read_until_space(ref<buf.reader<types.connable>> br):string! {
     return bytes as string
 }
 
+// Read the status line and the headers of a response into resp.
+fn read_head(ref<buf.reader<types.connable>> br, ref<response_t> resp):void! {
+    resp.version = read_until_space(br).rtrim([' '])
+    var status = read_until_space(br).rtrim([' '])
+    resp.status = status.to_int() catch e {0}
+    resp.message = br.read_line()
+    for true {
+        var line = br.read_line()
+
+        // if empty line, break
+        if line == '' {
+            break
+        }
+
+        // parser header: split on the first ':' only, values may contain ':'
+        var colon = line.find(':')
+        if colon > 0 {
+            var key = line.slice(0, colon).trim([' '])
+            var value = line.slice(colon + 1, line.len()).trim([' '])
+            resp.headers[key] = value
+
+            if key == 'Content-Length' {
+                resp.length = value.to_int()
+            }
+
+            if key == 'Transfer-Encoding' && value.contains('chunked') {
+                resp.chunked = true
+            }
+        }
+    }
+}
+
 pub fn request_t.send(&self):ref<response_t>! {
     self.u = url.parse(self.url)
     self.remote_ip = dns.lookup(self.u.hostname)[0]
@@ -295,36 +327,7 @@ pub fn request_t.send(&self):ref<response_t>! {
     var br = new buf.reader<types.connable>(rd = conn)
 
     var resp = new response_t(buf_conn = br)
-    try {
-        resp.version = read_until_space(br).rtrim([' '])
-        var status = read_until_space(br).rtrim([' '])
-        resp.status = status.to_int() catch e {0}
-        resp.message = br.read_line()
-        for true {
-            var line = br.read_line()
-
-            // if empty line, break
-            if line == '' {
-                break
-            }
-
-            // parser header: split on the first ':' only, values may contain ':'
-            var colon = line.find(':')
-            if colon > 0 {
-                var key = line.slice(0, colon).trim([' '])
-                var value = line.slice(colon + 1, line.len()).trim([' '])
-                resp.headers[key] = value
-
-                if key == 'Content-Length' {
-                    resp.length = value.to_int()
-                }
-
-                if key == 'Transfer-Encoding' && value.contains('chunked') {
-                    resp.chunked = true
-                }
-            }
-        }
-    } catch e {
+    read_head(br, resp) catch e {
         if e.msg() == 'tcp read timeout' {
             throw errorf('HTTP response read timeout')
         }
@@ -373,9 +376,7 @@ pub fn response_t.status(&self):int {
 // 读取响应体的一段字节到 buf, 返回实际读取的字节数,
 // 响应体读取完毕时抛出 EOF。超时错误统一为 'HTTP response read timeout'
 pub fn response_t.read(&self, [u8] buf):int! {
-    try {
-        return self.buf_conn.read(buf)
-    } catch e {
+    return self.buf_conn.read(buf) catch e {
         if e.msg() == 'tcp read timeout' {
             throw errorf('HTTP response read timeout')
         }

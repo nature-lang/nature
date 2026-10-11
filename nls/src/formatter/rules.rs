@@ -394,7 +394,6 @@ impl<'a> Formatter<'a> {
             | TokenType::Enum
             | TokenType::Union
             | TokenType::Throw
-            | TokenType::Try
             | TokenType::Catch
             | TokenType::Match
             | TokenType::Select

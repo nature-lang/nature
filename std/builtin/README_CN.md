@@ -207,10 +207,44 @@ fn errort.msg():string
 ## type errable
 
 ```
-type errable<T> = errort|T
+type errable<T,E> = union{
+    T value
+    E error
+}
 ```
 
-用于错误处理的联合类型。
+`.x` 中可能出错的函数返回 `errable<T,E>`：`T!` 就是 `errable<T,errset_t>`。不支持把 `errable<T,E>` 直接写成返回类型，带不带 `!` 都不行。`return T` 保存值，`throw` 保存错误。调用可能出错的函数时，错误会传播给外层的 `T!` 函数。和 `.n` 一样，`expr catch e { ... }` 处理 `expr` 中任何一个调用的错误，包括参数中的调用。`.x` 中越界之类的 panic 不会被 catch。`.n` 的错误模型后续单独处理。
+
+## errset
+
+```nature
+// 在 io 模块中
+errset TIMEOUT
+errset CLOSED
+
+pub fn read(int mode):int! {
+    if mode == 1 {
+        throw TIMEOUT
+    }
+    return 42
+}
+
+// 其他模块
+import "io.x"
+
+fn main() {
+    var n = io.read(1) catch e {
+        if e == io.TIMEOUT {
+            println('timeout')
+        }
+        -1
+    }
+}
+```
+
+`errset` 声明注册一个具名错误。它的身份就是这条声明本身：编译器为其分配全程序唯一的 id，因此 `io.TIMEOUT` 与 `fmt.TIMEOUT` 即使同名也是两个不同的错误。errset 不携带消息和数据，可以用 `==`、`!=` 比较，也可以用 `match e { TIMEOUT -> ... _ -> ... }` 分支。errset 的集合是开放的，所以 `match` 必须有 `_` 分支。
+
+声明只能出现在模块顶层，且始终对外公开，不需要写 `pub`；写了 `pub` 也会被忽略。errset 的值类型是内置的 `errset_t`，运行时存成 `u32` 的 id。只有 errset 名字能产生 `errset_t` 的值：整数字面量和 `u32` 的值都不能转换为它，所以 `throw 5`、把 `u32 a = 12` 和 errset 比较都是类型错误。`.n` 模块可以声明 errset，但 `.n` 函数不能抛出它。
 
 ## fn errorf
 

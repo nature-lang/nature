@@ -439,31 +439,35 @@ pub fn main():void! {
     println("Generated hash: ", hashed as string)
     
     // Verify password
-    try {
-        verify(hashed, password as [u8])
+    var verified = true
+    verify(hashed, password as [u8]) catch e {
+        verified = false
+    }
+    if verified {
         println("✓ Password verification successful")
-    } catch e {
+    } else {
         println("✗ Password verification failed")
     }
-    
+
     // Test wrong password
     string wrong_password = "wrongpassword"
-    try {
-        verify(hashed, wrong_password as [u8])
-        println("✗ Wrong password verification anomaly")
-    } catch e {
-        println("✓ Wrong password correctly rejected")
+    var rejected = false
+    verify(hashed, wrong_password as [u8]) catch e {
+        rejected = true
     }
-    
+    if rejected {
+        println("✓ Wrong password correctly rejected")
+    } else {
+        println("✗ Wrong password verification anomaly")
+    }
+
     // Get cost
-    try {
-        int extracted_cost = cost(hashed)
-        if extracted_cost == DEFAULT_COST {
-            println("✓ Cost extraction correct: ", extracted_cost)
-        } else {
-            println("✗ Cost extraction failed")
-        }
-    } catch e {
+    int extracted_cost = cost(hashed) catch e {
+        -1
+    }
+    if extracted_cost == DEFAULT_COST {
+        println("✓ Cost extraction correct: ", extracted_cost)
+    } else {
         println("✗ Cost extraction failed")
     }
     
