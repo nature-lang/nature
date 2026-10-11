@@ -2259,6 +2259,7 @@ static ast_stmt_t *parser_select_stmt(module_t *m) {
 }
 
 static ast_stmt_t *parser_try_catch_stmt(module_t *m) {
+    PARSER_ASSERTF(!m->is_x, "try is not supported in .x; use call() catch e { ... }");
     ast_stmt_t *result = stmt_new(m);
     parser_must(m, TOKEN_TRY);
 

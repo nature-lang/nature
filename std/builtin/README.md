@@ -207,10 +207,13 @@ Get the error message.
 ## type errable
 
 ```
-type errable<T> = errort|T
+type errable<T,E> = union {
+    T value
+    E error
+}
 ```
 
-Union type for error handling.
+In `.x`, an explicit `errable<T,E>` return declaration enables `return T`, `throw E`, propagation, and `call() catch e { ... }`. A catch handles only that call's error, with `e` taking its type directly from `E`; calls in arguments need their own catch or propagate to the enclosing function. Propagated errors must match the function's `E`. The `try` statement is not supported in `.x`. The `T!` shorthand and `.n` error model are handled separately.
 
 ## fn errorf
 

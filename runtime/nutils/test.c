@@ -6,6 +6,18 @@
 #include <stdatomic.h>
 #include <stdlib.h>
 
+typedef struct {
+    uint64_t tag;
+    int64_t payload;
+} test_error_int_result_t;
+
+test_error_int_result_t test_error_result(uint8_t failure) {
+    return (test_error_int_result_t) {
+            .tag = hash_string(failure ? ERRABLE_ERROR_TAG : ERRABLE_VALUE_TAG),
+            .payload = failure ? 11 : 42,
+    };
+}
+
 enum {
     PROCESSOR_TEST_WAITER_RAN = 1,
     PROCESSOR_TEST_OTHER_RAN = 2,

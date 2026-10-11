@@ -1,0 +1,311 @@
+=== test_return_throw_and_propagate
+--- main.x
+type error_t = enum:i32 { FAILED = 11 }
+type int_result_t = errable<int,error_t>
+
+fn leaf(int value):int_result_t {
+    if value < 0 { throw error_t.FAILED }
+    return value * 2
+}
+
+fn relay<T>(T value, bool failure):errable<T,error_t> {
+    if failure { throw error_t.FAILED }
+    return value
+}
+
+fn caller(int value):errable<int,error_t> {
+    return leaf(value)
+}
+
+fn constructed(bool failure):errable<int,error_t> {
+    if failure { return errable<int,error_t>.error(error_t.FAILED) }
+    var result = errable<int,error_t>.value(7)
+    return result
+}
+
+fn main() {
+    println(caller(21) catch e { -1 })
+    println(caller(-1) catch e { assert(e == error_t.FAILED); -2 })
+    println(relay<int>(9, false) catch e { -1 })
+    println(relay<string>('generic', false) catch e { 'failed' })
+    println(constructed(false) catch e { -1 })
+    println(constructed(true) catch e { assert(e == error_t.FAILED); -3 })
+}
+
+--- output.txt
+42
+-2
+9
+generic
+7
+-3
+
+=== test_nested_catch_and_rethrow
+--- main.x
+type error_t = enum:i32 { FIRST = 11, SECOND = 12 }
+
+fn fail(error_t error):errable<void,error_t> { throw error }
+fn succeed():errable<void,error_t> {}
+
+fn rethrow():errable<void,error_t> {
+    fail(error_t.SECOND) catch e { throw e }
+}
+
+fn main() {
+    succeed() catch e { assert(false) }
+    for var i = 0; i < 3; i += 1 {
+        fail(error_t.FIRST) catch inner {
+            println('inner', inner == error_t.FIRST)
+            rethrow() catch outer {
+                println('outer', outer == error_t.SECOND)
+            }
+        }
+    }
+    fail(error_t.FIRST) catch e { println('local', e == error_t.FIRST) }
+}
+
+--- output.txt
+inner true
+outer true
+inner true
+outer true
+inner true
+outer true
+local true
+
+=== test_defer_preserves_first_error
+--- main.x
+fn fail(i32 code):errable<void,i32> { throw code }
+fn succeed():errable<void,i32> { return }
+
+fn cleanup(bool failure):errable<int,i32> {
+    defer { fail(22) }
+    if failure { fail(11) }
+    return 42
+}
+
+fn happy():errable<int,i32> {
+    defer { succeed() }
+    return 42
+}
+
+fn main() {
+    defer { println('function defer') }
+    println(happy() catch e { -1 })
+    println(cleanup(true) catch e { println('original', e); -1 })
+    println(cleanup(false) catch e {
+        defer { println('catch defer') }
+        println('deferred', e)
+        -2
+    })
+    println('after catch')
+}
+
+--- output.txt
+42
+original 11
+-1
+deferred 22
+catch defer
+-2
+after catch
+function defer
+
+=== test_aggregate_and_native_returns
+--- main.x
+type value_t = struct { int a; int b; int c }
+type error_t = struct { i32 code; int detail }
+
+#linkid test_error_result
+fn native(bool failure):errable<int,int>
+fn aggregate(bool failure):errable<value_t,error_t> {
+    if failure { throw error_t{code: 11, detail: 99} }
+    return value_t{a: 10, b: 20, c: 30}
+}
+
+fn fail_string():errable<void,string> { throw 'escaped string error' }
+fn saved_error():string {
+    string saved = ''
+    fail_string() catch e { saved = e }
+    return saved
+}
+
+fn main() {
+    println(native(false) catch e { -1 })
+    println(native(true) catch e { println('native', e); -2 })
+    var value = aggregate(false) catch e { value_t{} }
+    println(value.a, value.b, value.c)
+    var fallback = aggregate(true) catch e {
+        println('aggregate', e.code, e.detail)
+        value_t{}
+    }
+    println(fallback.a)
+    var saved = saved_error()
+    println(saved)
+}
+
+--- output.txt
+42
+native 11
+-2
+10 20 30
+aggregate 11 99
+0
+escaped string error
+
+=== test_cross_module_same_numeric_error
+--- main.x
+import "io.x"
+import "fmt.x"
+
+fn main() {
+    println(caller(false, false) catch e { -2 })
+    println(caller(false, true) catch e { -2 })
+    println(caller(true, false) catch e { println('fmt', e == fmt.error_t.TEST_ERROR); -2 })
+    println(io.read(fmt.read(true) catch e { println('inner fmt', e == fmt.error_t.TEST_ERROR); 7 }, false) catch e { -3 })
+}
+
+fn caller(bool argument_failure, bool call_failure):errable<int,fmt.error_t> {
+    return io.read(fmt.read(argument_failure), call_failure) catch e {
+        println('io', e == io.error_t.TEST_ERROR)
+        -1
+    }
+}
+
+--- io.x
+pub type error_t = enum:i32 { TEST_ERROR = 11 }
+pub fn read(int value, bool failure):errable<int,error_t> {
+    if failure { throw error_t.TEST_ERROR }
+    return value
+}
+
+--- fmt.x
+pub type error_t = enum:i32 { TEST_ERROR = 11 }
+pub fn read(bool failure):errable<int,error_t> {
+    if failure { throw error_t.TEST_ERROR }
+    return 42
+}
+
+--- output.txt
+42
+io true
+-1
+fmt true
+-2
+inner fmt true
+7
+
+=== test_errable_interface_method
+--- main.x
+type error_t = enum:i32 { FAILED = 11 }
+type reader_t = interface { fn read(bool failure):errable<int,error_t> }
+type source_t:reader_t = int
+
+fn source_t.read(self, bool failure):errable<int,error_t> {
+    if failure { throw error_t.FAILED }
+    return self as int
+}
+
+fn main() {
+    source_t source = 42
+    reader_t reader = source
+    println(reader.read(false) catch e { -1 })
+    println(reader.read(true) catch e { assert(e == error_t.FAILED); -2 })
+}
+
+--- output.txt
+42
+-2
+
+=== test_void_error_variant
+--- main.x
+fn succeed():errable<void,void> {}
+fn fail():errable<void,void> { return errable<void,void>.error() }
+
+fn main() {
+    succeed() catch e { assert(false) }
+    fail() catch e { println('failed') }
+}
+
+--- output.txt
+failed
+
+=== test_missing_error_handler
+--- main.x
+fn fail():errable<void,i32> { throw 11 }
+fn main() {
+    fail()
+}
+--- output.txt
+nature-test/main.x:3:8: calling an errable! fn `fail` requires the current `fn main` errable! as well or be caught.
+
+=== test_error_type_mismatch
+--- main.x
+type a_t = enum:i32 { FAILED = 11 }
+type b_t = enum:i32 { FAILED = 11 }
+fn leaf():errable<void,a_t> { throw a_t.FAILED }
+fn caller():errable<void,b_t> {
+    leaf()
+}
+fn main() {}
+--- output.txt
+nature-test/main.x:5:8: error type inconsistency, expect=main.b_t(enum:i32), actual=main.a_t(enum:i32)
+
+=== test_try_not_supported
+--- main.x
+fn main() {
+    try {} catch e {}
+}
+--- output.txt
+nature-test/main.x:2:7: try is not supported in .x; use call() catch e { ... }
+
+=== test_catch_requires_call
+--- main.x
+fn fail():errable<int,i32> { throw 11 }
+fn main() {
+    var value = (fail() + 1) catch e { -1 }
+}
+--- output.txt
+nature-test/main.x:3:34: catch in .x requires an errable fn call
+
+=== test_throw_requires_errable_return
+--- main.x
+fn main() {
+    throw 11
+}
+--- output.txt
+nature-test/main.x:2:9: throw requires an errable return type
+
+=== test_n_cannot_call_errable_x
+--- main.n
+import "util.x"
+fn main() {
+    util.fail()
+}
+--- util.x
+pub fn fail():errable<void,i32> { throw 11 }
+--- output.txt
+nature-test/main.n:3:9: calling an errable .x fn from .n is not supported
+
+=== test_direct_cross_module_enum_equality
+--- main.x
+import "io.x"
+import "fmt.x"
+fn main() {
+    println(io.error_t.TEST_ERROR == fmt.error_t.TEST_ERROR)
+}
+--- io.x
+pub type error_t = enum:i32 { TEST_ERROR = 11 }
+--- fmt.x
+pub type error_t = enum:i32 { TEST_ERROR = 11 }
+--- output.txt
+nature-test/main.x:4:49: type inconsistency, expect=nature-test.io.error_t(enum:i32), actual=nature-test.fmt.error_t(enum:i32)
+
+=== test_missing_success_return
+--- main.x
+fn missing(bool failure):errable<int,i32> {
+    if failure { throw 11 }
+}
+fn main() {}
+--- output.txt
+nature-test/main.x:1:3: fn main.missing missing return
