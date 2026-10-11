@@ -252,6 +252,7 @@ struct module_t {
     // stack 的值是 table_t*, key 是 type_param, value 是赋值的具体类型(该类型需要 reduction)
     ct_stack_t *infer_type_args_stack;
     int64_t be_caught; // 用于判断当前 call 是否则存在 catch 拦截
+    type_t catch_error_type; // the error type the innermost catch handles, unknown until a call sets it
     bool in_fake_stmt;
 
     // compiler
@@ -579,7 +580,7 @@ typedef struct closure_t {
 
     ct_stack_t *catch_error_labels;
     lir_operand_t *errable_storage; // .x: the errable<T,E> this fn returns, in its stack frame
-    char *caught_error; // .x: var holding the error a failed call hands to its catch
+    table_t *value_catches; // label of a catch over errable<T,E> calls -> the var a failed call puts its error in
 
     ct_stack_t *continue_labels; // 用于 for continue lir_operand*
     ct_stack_t *break_labels; // 用于 for break lir_operand*

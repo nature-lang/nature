@@ -213,7 +213,29 @@ type errable<T,E> = union{
 }
 ```
 
-What an errable function returns in `.x`: `T!` means `errable<T,errset_t>`. Writing `errable<T,E>` as a return type is not supported, with or without `!`. `return T` stores the value and `throw` stores the error. A call to an errable function propagates its error to the enclosing `T!` function. As in `.n`, `expr catch e { ... }` handles an error from any call in `expr`, including calls in arguments. A panic such as an index out of range is not caught in `.x`. The `.n` error model is handled separately.
+A function that returns `errable<T,E>` is errable, in `.x` and `.n`: `return` gives a `T`, `throw` gives an `E`, and the error comes back in the return value. In `.x`, `T!` is shorthand for `errable<T,errset_t>`; in `.n`, `T!` still keeps its error on the coroutine. A `!` after `errable<T,E>` is rejected.
+
+An error propagates only into a function that fails with the same type. A call that fails with another type has to be caught and converted, which the compiler checks:
+
+```nature
+// in .x
+errset BAD
+
+fn parse(string s):errable<int,string> {
+    if s == '' {
+        throw 'empty input'
+    }
+    return 1
+}
+
+fn load(string s):int! {
+    return parse(s) catch msg {
+        throw BAD
+    }
+}
+```
+
+`expr catch e { ... }` handles an error from any call in `expr`, including calls in arguments. All of them must fail with the same type, which is the type of `e`. A catch over `errable<T,E>` calls does not catch a panic such as an index out of range. `go` does not support a function that returns `errable<T,E>` yet.
 
 ## errset
 

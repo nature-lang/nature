@@ -318,16 +318,6 @@ fn main() {
 --- output.txt
 nature-test/main.x:8:20: calling an errable! fn `fail` requires the current `fn main` errable! as well or be caught.
 
-=== test_errable_return_rejected
---- main.x
-fn typed():errable<int,i32>! {
-    return 1
-}
-
-fn main() {}
---- output.txt
-nature-test/main.x:1:3: an explicit errable<T,E> return is not supported in .x, use T!
-
 === test_match_without_default_rejected
 --- main.x
 errset TIMEOUT

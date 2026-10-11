@@ -11,13 +11,15 @@
 
 static type_t reduction_type_visited(module_t *m, type_t t, struct sc_map_s64 *visited);
 
-// In .x the `T!` shorthand means errable<T,errset_t>. An errable return written in source is
-// rejected, with or without `!`.
+// A fn returning errable<T,E> is errable with error type E, in .x and .n. In .x `T!` is shorthand
+// for errable<T,errset_t>; in .n it keeps its error on the coroutine.
 void infer_errable_return(module_t *m, type_fn_t *fn) {
-    if (!fn->is_x) return;
-
-    INFER_ASSERTF(!is_errable_type(fn->return_type), "an explicit errable<T,E> return is not supported in .x, use T!");
-    if (!fn->is_errable) return;
+    if (is_errable_type(fn->return_type)) {
+        INFER_ASSERTF(!fn->is_errable, "errable<T,E> is errable already, remove the `!`");
+        fn->is_errable = true;
+        return;
+    }
+    if (!fn->is_x || !fn->is_errable) return;
 
     type_t errable = type_ident_new(ERRABLE_IDENT, TYPE_IDENT_DEF);
     errable.args = ct_list_new(sizeof(type_t));
@@ -1550,13 +1552,27 @@ static type_t infer_match(module_t *m, ast_match_t *match, type_t target_type) {
     return target_type;
 }
 
+// The type of the error a call of fn fails with: E of the errable<T,E> it returns, or throwable for
+// a T! fn in .n, whose error is on the coroutine.
+static type_t infer_fn_error_type(module_t *m, type_fn_t *fn) {
+    return is_errable_return(fn) ? errable_error_type(fn->return_type) : reduction_type(m, interface_throwable());
+}
+
 static type_t infer_catch(module_t *m, ast_catch_t *catch_expr) {
+    // infer_call records the error type of the calls this catch handles
+    type_t outer_error_type = m->catch_error_type;
+    m->catch_error_type = type_kind_new(TYPE_UNKNOWN);
     m->be_caught += 1;
     type_t t = infer_right_expr(m, &catch_expr->try_expr, type_kind_new(TYPE_UNKNOWN));
     m->be_caught -= 1;
+    type_t caught_type = m->catch_error_type;
+    m->catch_error_type = outer_error_type;
 
-    // an .x error is an errset value, an .n error is throwable
-    type_t error_type = m->current_fn->is_x ? type_ident_new(ERRSET_IDENT, TYPE_IDENT_DEF) : interface_throwable();
+    // the error has the type of the calls it handles; with none it is errset_t in .x and throwable in .n
+    type_t error_type = caught_type;
+    if (error_type.kind == TYPE_UNKNOWN) {
+        error_type = m->current_fn->is_x ? type_ident_new(ERRSET_IDENT, TYPE_IDENT_DEF) : interface_throwable();
+    }
     catch_expr->catch_err.type = reduction_type(m, error_type);
 
     rewrite_var_decl(m, &catch_expr->catch_err);
@@ -2901,9 +2917,26 @@ static type_t infer_call(module_t *m, ast_call_t *call, type_t target_type, bool
                       "calling an errable! fn `%s` requires the current `fn %s` errable! as well or be caught.",
                       type_fn->fn_name ? type_fn->fn_name : "lambda",
                       m->current_fn->fn_name);
+
+        // An error propagates only into the same error type, and one catch handles one error type.
+        type_t error_type = infer_fn_error_type(m, type_fn);
+        char *fn_name = type_fn->fn_name ? type_fn->fn_name : "lambda";
+        if (m->be_caught > 0) {
+            if (m->catch_error_type.kind == TYPE_UNKNOWN) {
+                m->catch_error_type = error_type;
+            }
+            INFER_ASSERTF(type_compare(m->catch_error_type, error_type),
+                          "one catch handles one error type, `%s` fails with %s but another call with %s",
+                          fn_name, type_format(error_type), type_format(m->catch_error_type));
+        } else {
+            type_t fn_error_type = infer_fn_error_type(m, m->current_fn->type.fn);
+            INFER_ASSERTF(type_compare(fn_error_type, error_type),
+                          "`%s` fails with %s, which cannot propagate into `fn %s` that fails with %s, catch and convert it",
+                          fn_name, type_format(error_type), m->current_fn->fn_name, type_format(fn_error_type));
+        }
     }
 
-    return is_x_errable(type_fn) ? errable_value_type(type_fn->return_type) : type_fn->return_type;
+    return is_errable_return(type_fn) ? errable_value_type(type_fn->return_type) : type_fn->return_type;
 }
 
 static void infer_tagged_union_element(module_t *m, ast_expr_t *expr, type_t target_type) {
@@ -3235,7 +3268,7 @@ static void infer_return(module_t *m, ast_return_stmt_t *stmt) {
 
     // An errable function returns errable<T,E>, so `return v` is checked against T and
     // linear constructs the value variant.
-    if (is_x_errable(m->current_fn->type.fn)) {
+    if (is_errable_return(m->current_fn->type.fn)) {
         expect_type = errable_value_type(m->current_fn->return_type);
     }
 
@@ -3334,12 +3367,7 @@ static void infer_throw(module_t *m, ast_throw_stmt_t *throw_stmt) {
                   "can't use throw stmt in a fn without an errable! declaration. example: fn %s(...):%s!",
                   m->current_fn->fn_name, type_origin_format(m->current_fn->return_type));
 
-    if (m->current_fn->is_x) {
-        infer_right_expr(m, &throw_stmt->error, errable_error_type(m->current_fn->return_type));
-        return;
-    }
-
-    infer_right_expr(m, &throw_stmt->error, interface_throwable());
+    infer_right_expr(m, &throw_stmt->error, infer_fn_error_type(m, m->current_fn->type.fn));
 }
 
 /**
@@ -4374,6 +4402,7 @@ static type_t infer_fn_decl(module_t *m, ast_fndef_t *fndef, type_t target_type)
     fndef->return_type.status = REDUCTION_STATUS_UNDO;
     type_fn->return_type = reduction_type(m, fndef->return_type);
     infer_errable_return(m, type_fn);
+    fndef->is_errable = type_fn->is_errable;
 
     fndef->return_type = type_fn->return_type;
 
