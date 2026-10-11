@@ -11,6 +11,10 @@
 
 int64_t global_var_unique_count = 0;
 
+// Every module of a program is built by one compiler process, so a counter gives each errset a
+// program-wide identity without hashing and without collisions. 0 is never handed out.
+static int64_t errset_id_counter = 0;
+
 /**
  * Switch the module's processing focus to one source part
  * scanner/parser/analyzer all work off these module_t fields
@@ -190,6 +194,16 @@ static void module_source_register_symbols(module_t *m, source_file_t *sf) {
             const_def->ident = ident_with_prefix(m->ident, const_def->ident);
             symbol_t *s = symbol_table_set_module(const_def->ident, SYMBOL_CONST, const_def, m, const_def->is_pub);
             ANALYZER_ASSERTF(s, "ident '%s' redeclared", const_def->ident);
+            continue;
+        }
+
+        if (stmt->assert_type == AST_STMT_ERRSET) {
+            ast_errset_stmt_t *errset = stmt->value;
+            errset->ident = ident_with_prefix(m->ident, errset->ident);
+            errset->id = ++errset_id_counter;
+            // always public: callers need the name to compare against what they catch
+            symbol_t *s = symbol_table_set_module(errset->ident, SYMBOL_ERRSET, errset, m, true);
+            ANALYZER_ASSERTF(s, "ident '%s' redeclared", errset->ident);
             continue;
         }
 

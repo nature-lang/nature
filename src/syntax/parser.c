@@ -2259,6 +2259,7 @@ static ast_stmt_t *parser_select_stmt(module_t *m) {
 }
 
 static ast_stmt_t *parser_try_catch_stmt(module_t *m) {
+    PARSER_ASSERTF(!m->is_x, "try is not supported in .x; use call() catch e { ... }");
     ast_stmt_t *result = stmt_new(m);
     parser_must(m, TOKEN_TRY);
 
@@ -2818,6 +2819,24 @@ static ast_stmt_t *parser_constdef_stmt(module_t *m, bool is_pub) {
 }
 
 /**
+ * errset NAME
+ *
+ * Registers a named error. It carries no value and no message, its identity is the declaration.
+ */
+static ast_stmt_t *parser_errset_stmt(module_t *m) {
+    ast_stmt_t *result = stmt_new(m);
+
+    parser_must(m, TOKEN_ERRSET);
+    ast_errset_stmt_t *errset = NEW(ast_errset_stmt_t);
+    token_t *ident_token = parser_must(m, TOKEN_IDENT);
+    errset->ident = ident_token->literal;
+
+    result->assert_type = AST_STMT_ERRSET;
+    result->value = errset;
+    return result;
+}
+
+/**
  * var a = xxx
  * var (a, b) = xx
  * @param m
@@ -3330,6 +3349,10 @@ static ast_stmt_t *parser_global_stmt(module_t *m) {
         return parser_var_begin_stmt(m, is_pub);
     } else if (parser_is(m, TOKEN_CONST)) {
         return parser_constdef_stmt(m, is_pub);
+    } else if (parser_is(m, TOKEN_ERRSET)) {
+        // an errset exists to be named by its callers, so there is no private form
+        PARSER_ASSERTF(!is_pub, "errset is always public, remove 'pub'");
+        return parser_errset_stmt(m);
     } else if (is_type_begin_stmt(m)) {
         return parser_type_begin_stmt(m, is_pub);
     } else if (!is_pub && parser_is(m, TOKEN_LABEL)) {

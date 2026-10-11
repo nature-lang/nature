@@ -2401,6 +2401,11 @@ static void analyzer_module_decls(module_t *m, slice_t *stmt_list, slice_t *fn_l
             continue;
         }
 
+        if (stmt->assert_type == AST_STMT_ERRSET) {
+            // registered with the other global symbols in module_source_register_symbols
+            continue;
+        }
+
         if (stmt->assert_type == AST_STMT_TYPEDEF) {
             ast_typedef_stmt_t *typedef_stmt = stmt->value;
             assert(typedef_stmt->type_expr.kind > 0);

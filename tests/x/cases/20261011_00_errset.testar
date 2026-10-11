@@ -1,0 +1,280 @@
+=== test_throw_catch_and_compare
+--- main.x
+errset TIMEOUT
+errset CLOSED
+
+fn read(int mode):int! {
+    if mode == 1 { throw TIMEOUT }
+    if mode == 2 { throw CLOSED }
+    return 42
+}
+
+fn main() {
+    println(read(0) catch e { -1 })
+    println(read(1) catch e { println(e == TIMEOUT, e == CLOSED, e != CLOSED); -2 })
+    println(read(2) catch e { println(e == TIMEOUT, e == CLOSED, e != CLOSED); -3 })
+    var saved = CLOSED
+    var n = read(1) catch e { saved = e; -9 }
+    println(n, saved == TIMEOUT, saved != CLOSED)
+}
+
+--- output.txt
+42
+true false true
+-2
+false true false
+-3
+-9 true true
+
+=== test_propagation_and_rethrow
+--- main.x
+errset FIRST
+errset SECOND
+
+fn leaf(int mode):int! {
+    if mode == 1 { throw FIRST }
+    if mode == 2 { throw SECOND }
+    return mode
+}
+
+fn relay(int mode):int! {
+    return leaf(mode)
+}
+
+fn rethrow(int mode):int! {
+    leaf(mode) catch e { throw e }
+    return 0
+}
+
+fn fail_first()! { throw FIRST }
+fn fail_second()! { throw SECOND }
+
+fn main() {
+    println(relay(0) catch e { -1 })
+    println(relay(1) catch e { println('relay', e == FIRST); -2 })
+    println(rethrow(2) catch e { println('rethrow', e == SECOND, e != FIRST); -3 })
+    for var i = 0; i < 2; i += 1 {
+        fail_first() catch outer {
+            println('outer', outer == FIRST)
+            fail_second() catch inner { println('inner', inner == SECOND, inner == outer) }
+        }
+    }
+}
+
+--- output.txt
+0
+relay true
+-2
+rethrow true true
+-3
+outer true
+inner true false
+outer true
+inner true false
+
+=== test_t_bang_forms
+--- main.x
+errset FAILED
+errset OTHER
+
+fn nothing(bool fail)! {
+    if fail { throw OTHER }
+}
+
+fn relay<T>(T value, bool fail):T! {
+    if fail { throw FAILED }
+    return value
+}
+
+type reader_t = interface { fn read(bool fail):int! }
+type source_t:reader_t = int
+
+fn source_t.read(self, bool fail):int! {
+    if fail { throw OTHER }
+    return self as int
+}
+
+fn main() {
+    nothing(false) catch e { println('unreachable') }
+    nothing(true) catch e { println('void!', e == OTHER, e != FAILED) }
+    println(relay<int>(9, false) catch e { -1 })
+    println(relay<string>('s', true) catch e { println('generic', e == FAILED); 'failed' })
+    source_t source = 42
+    reader_t reader = source
+    println(reader.read(false) catch e { -1 })
+    println(reader.read(true) catch e { println('interface', e == OTHER); -2 })
+}
+
+--- output.txt
+void! true true
+9
+generic true
+failed
+42
+interface true
+-2
+
+=== test_defer_preserves_first_error
+--- main.x
+errset BAD
+errset LATE
+
+fn fail_late()! { throw LATE }
+
+fn cleanup(bool failure):int! {
+    defer { fail_late() }
+    if failure { throw BAD }
+    return 42
+}
+
+fn main() {
+    println(cleanup(true) catch e { println('first', e == BAD, e == LATE); -1 })
+    println(cleanup(false) catch e { println('deferred', e == BAD, e == LATE); -2 })
+}
+
+--- output.txt
+first true false
+-1
+deferred false true
+-2
+
+=== test_same_name_in_two_modules_is_two_errors
+--- main.x
+import "io.x"
+import "fmt.x" as f
+import "lib.n".{TIMEOUT}
+
+fn outer(int mode):int! {
+    return io.read(mode)
+}
+
+fn from_n()! { throw TIMEOUT }
+fn forward()! { throw LATE }
+
+errset LATE
+
+fn main() {
+    println(io.read(1) catch e { println(e == io.TIMEOUT, e == f.TIMEOUT, e == TIMEOUT); -1 })
+    println(f.read(1) catch e { println(e == io.TIMEOUT, e == f.TIMEOUT, e == TIMEOUT); -2 })
+    println(outer(1) catch e { println('propagated', e == io.TIMEOUT); -3 })
+    println(outer(0) catch e { -4 })
+    from_n() catch e { println(e == io.TIMEOUT, e == f.TIMEOUT, e == TIMEOUT, e == LATE) }
+    forward() catch e { println(e == TIMEOUT, e == LATE) }
+}
+--- io.x
+errset TIMEOUT
+
+pub fn read(int mode):int! {
+    if mode == 1 { throw TIMEOUT }
+    return 7
+}
+--- fmt.x
+errset TIMEOUT
+
+pub fn read(int mode):int! {
+    if mode == 1 { throw TIMEOUT }
+    return 8
+}
+--- lib.n
+errset TIMEOUT
+--- output.txt
+true false false
+-1
+false true false
+-2
+propagated true
+-3
+7
+false false true false
+false true
+
+=== test_pub_errset_rejected
+--- main.x
+pub errset TIMEOUT
+
+fn main() {}
+--- output.txt
+nature-test/main.x:1:11: errset is always public, remove 'pub'
+
+=== test_errset_inside_fn_rejected
+--- main.x
+fn main() {
+    errset TIMEOUT
+}
+--- output.txt
+nature-test/main.x:2:10: cannot parser ident 'errset'
+
+=== test_duplicate_errset
+--- main.x
+errset TIMEOUT
+errset TIMEOUT
+
+fn main() {}
+--- output.txt
+nature-test/main.x:2:6: ident 'main.TIMEOUT' redeclared
+
+=== test_throw_integer_rejected
+--- main.x
+fn fail():int! { throw 5 }
+
+fn main() {
+    fail() catch e { 0 }
+}
+--- output.txt
+nature-test/main.x:1:25: type inconsistency, expect=errset(enum:u32), actual=i64
+
+=== test_n_cannot_throw_errset
+--- main.n
+errset TIMEOUT
+
+fn fail():int! { throw TIMEOUT }
+
+fn main() {
+    fail() catch e { 0 }
+}
+--- output.txt
+nature-test/main.n:3:30: type 'errset(enum:u32)' not impl 'throwable(interface)' interface
+
+=== test_missing_error_handler
+--- main.x
+errset TIMEOUT
+
+fn fail():int! { throw TIMEOUT }
+
+fn main() {
+    var value = fail()
+}
+--- output.txt
+nature-test/main.x:6:20: calling an errable! fn `fail` requires the current `fn main` errable! as well or be caught.
+
+=== test_try_not_supported
+--- main.x
+fn main() {
+    try {} catch e {}
+}
+--- output.txt
+nature-test/main.x:2:7: try is not supported in .x; use call() catch e { ... }
+
+=== test_explicit_errable_return_rejected
+--- main.x
+fn typed():errable<int,i32> {
+    return 1
+}
+
+fn main() {}
+--- output.txt
+nature-test/main.x:1:3: an explicit errable<T,E> return is not supported in .x, use T!
+
+=== test_n_cannot_call_errable_x
+--- main.n
+import "util.x"
+
+fn main() {
+    util.fail()
+}
+--- util.x
+errset TIMEOUT
+
+pub fn fail()! { throw TIMEOUT }
+--- output.txt
+nature-test/main.n:4:9: calling an errable .x fn from .n is not supported
