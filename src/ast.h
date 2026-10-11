@@ -71,6 +71,7 @@ typedef enum {
     AST_STMT_IMPORT,
     AST_STMT_VARDEF,
     AST_STMT_CONSTDEF,
+    AST_STMT_ERRSET,
     AST_STMT_VAR_TUPLE_DESTR,
     AST_STMT_ASSIGN,
     AST_STMT_GLOBAL_ASSIGN,
@@ -322,6 +323,13 @@ typedef struct {
     bool processing;
     bool is_pub; // module 外可见, 默认 false
 } ast_constdef_stmt_t;
+
+// `errset NAME` registers a named error that is public to every importer. Its identity is the
+// declaration itself: `id` is unique across the whole program and 0 is never assigned.
+typedef struct {
+    char *ident;
+    int64_t id;
+} ast_errset_stmt_t;
 
 typedef struct {
     ast_expr_t left; // a  或 foo.bar.car 或者 d[0] 或者 (xx, xx, xx)

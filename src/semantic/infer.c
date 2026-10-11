@@ -11,8 +11,22 @@
 
 static type_t reduction_type_visited(module_t *m, type_t t, struct sc_map_s64 *visited);
 
-static void infer_result_signature(type_fn_t *fn) {
-    if (fn->is_x && is_result_type(fn->return_type)) fn->is_errable = true;
+// In .x an explicit errable<T,E> return makes a Result fn, and the `T!` shorthand means
+// errable<T,E> with E the builtin type of errset values. Calling this again on an already
+// rewritten signature changes nothing.
+void infer_result_signature(module_t *m, type_fn_t *fn) {
+    if (!fn->is_x) return;
+
+    if (fn->is_errable && !is_result_type(fn->return_type)) {
+        type_t result = type_ident_new(ERRABLE_IDENT, TYPE_IDENT_DEF);
+        result.args = ct_list_new(sizeof(type_t));
+        type_t error_type = type_ident_new(ERRSET_IDENT, TYPE_IDENT_DEF);
+        ct_list_push(result.args, &fn->return_type);
+        ct_list_push(result.args, &error_type);
+        fn->return_type = reduction_type(m, result);
+    }
+
+    if (is_result_type(fn->return_type)) fn->is_errable = true;
 }
 
 static type_t reduction_type_ident(module_t *m, type_t t, struct sc_map_s64 *visited);
@@ -1722,6 +1736,31 @@ static type_t infer_ternary(module_t *m, ast_ternary_expr_t *expr, type_t target
 }
 
 /**
+ * An errset name used as a value. Like an enum member it is rewritten to an integer literal typed
+ * as the builtin errset type, so a plain integer never converts to an error.
+ */
+static bool infer_errset_ident(module_t *m, ast_expr_t *expr, type_t *result_type) {
+    ast_ident *ident = expr->value;
+    symbol_t *symbol = symbol_table_get(ident->literal);
+    if (!symbol || symbol->type != SYMBOL_ERRSET) {
+        return false;
+    }
+
+    ast_errset_stmt_t *errset = symbol->ast_value;
+    type_t errset_type = reduction_type(m, type_ident_new(ERRSET_IDENT, TYPE_IDENT_DEF));
+
+    ast_literal_t *literal = NEW(ast_literal_t);
+    literal->kind = errset_type.enum_->element_type.kind;
+    literal->value = malloc(64);
+    snprintf(literal->value, 64, "%" PRId64, errset->id);
+
+    expr->assert_type = AST_EXPR_LITERAL;
+    expr->value = literal;
+    *result_type = errset_type;
+    return true;
+}
+
+/**
  * use ident
  * @param expr
  * @return
@@ -1755,6 +1794,9 @@ static type_t infer_ident(module_t *m, ast_ident *ident) {
         }
         return infer_fn_decl(m, fndef, type_kind_new(TYPE_UNKNOWN));
     }
+
+    // infer_expr rewrites an errset used as a value, so reaching here means it sits in an lvalue position
+    INFER_ASSERTF(symbol->type != SYMBOL_ERRSET, "errset '%s' is not a variable", ident->literal);
 
     INFER_ASSERTF(false, "unable to recognize symbol type");
     exit(1);
@@ -3642,6 +3684,10 @@ static type_t infer_expr(module_t *m, ast_expr_t *expr, type_t target_type, type
             return infer_ternary(m, expr->value, target_type);
         }
         case AST_EXPR_IDENT: {
+            type_t errset_type;
+            if (infer_errset_ident(m, expr, &errset_type)) {
+                return errset_type;
+            }
             return infer_ident(m, expr->value);
         }
         case AST_EXPR_VEC_NEW: {
@@ -3962,7 +4008,7 @@ static type_t reduction_complex_type(module_t *m, type_t t, struct sc_map_s64 *v
     if (t.kind == TYPE_FN) {
         type_fn_t *fn = t.fn;
         fn->return_type = reduction_type_visited(m, fn->return_type, visited);
-        infer_result_signature(fn);
+        infer_result_signature(m, fn);
         for (int i = 0; i < fn->param_types->length; ++i) {
             type_t *formal_type = ct_list_value(fn->param_types, i);
             *formal_type = reduction_type_visited(m, *formal_type, visited);
@@ -4344,7 +4390,7 @@ static type_t infer_impl_fn_decl(module_t *m, ast_fndef_t *fndef) {
     f->is_x = fndef->is_x;
     f->param_types = ct_list_new(sizeof(type_t));
     f->return_type = reduction_type(m, fndef->return_type);
-    infer_result_signature(f);
+    infer_result_signature(m, f);
     f->self_kind = fndef->self_kind;
 
     // 跳过 self(仅当存在 receiver)
@@ -4405,7 +4451,7 @@ static type_t infer_fn_decl(module_t *m, ast_fndef_t *fndef, type_t target_type)
     type_fn->param_types = ct_list_new(sizeof(type_t));
     fndef->return_type.status = REDUCTION_STATUS_UNDO;
     type_fn->return_type = reduction_type(m, fndef->return_type);
-    infer_result_signature(type_fn);
+    infer_result_signature(m, type_fn);
     fndef->is_errable = type_fn->is_errable;
 
     fndef->return_type = type_fn->return_type;
@@ -4482,8 +4528,6 @@ static void infer_fndef(module_t *m, ast_fndef_t *fn) {
 
     // .x uses explicit Result types; capturing closures still require GC environment promotion.
     if (fn->is_x) {
-        INFER_ASSERTF(!fn->is_errable || is_result_type(fn->return_type),
-                      "the ! shorthand is not supported in .x; use errable<T,E>");
         INFER_ASSERTF(fn->capture_exprs->length == 0, "closure capture is not supported in .x");
     }
 

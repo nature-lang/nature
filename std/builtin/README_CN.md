@@ -213,7 +213,36 @@ type errable<T,E> = union {
 }
 ```
 
-在 `.x` 中，显式声明返回 `errable<T,E>` 后可使用 `return T`、`throw E`、错误传播和 `call() catch e { ... }`。`catch` 只处理该调用返回的错误，`e` 的类型直接取自 `E`；参数中的调用须自行 `catch` 或向当前函数传播。传播的错误类型须与当前函数的 `E` 相同。`.x` 不支持 `try` 语句。`T!` 简写和 `.n` 的错误模型后续单独处理。
+在 `.x` 中，显式声明返回 `errable<T,E>` 后可使用 `return T`、`throw E`、错误传播和 `call() catch e { ... }`。`catch` 只处理该调用返回的错误，`e` 的类型直接取自 `E`；参数中的调用须自行 `catch` 或向当前函数传播。传播的错误类型须与当前函数的 `E` 相同。`.x` 不支持 `try` 语句。`T!` 简写见 `errset` 一节。`.n` 的错误模型后续单独处理。
+
+## errset
+
+```nature
+// 在 io 模块中
+errset TIMEOUT
+errset CLOSED
+
+pub fn read(int mode):int! {
+    if mode == 1 { throw TIMEOUT }
+    return 42
+}
+
+// 其他模块
+import "io.x"
+
+fn main() {
+    var n = io.read(1) catch e {
+        if e == io.TIMEOUT { println('timeout') }
+        -1
+    }
+}
+```
+
+`errset` 声明注册一个具名错误。它的身份就是这条声明本身：编译器为其分配全程序唯一的 id，因此 `io.TIMEOUT` 与 `fmt.TIMEOUT` 即使同名也是两个不同的错误。errset 不携带消息和数据，只能用 `==` 和 `!=` 比较。
+
+声明只能出现在模块顶层，且始终对外公开；`pub errset` 会被拒绝，因为 errset 存在的意义就是让调用方按名字引用。需要私有的错误，用普通的私有类型作为 `E` 即可。
+
+`.x` 中的 `T!` 函数可以抛出、传播和捕获 errset：`T!` 就是 `errable<T,E>`，其中 `E` 是 errset 值的类型。这个类型由编译器提供，源码中没有它的名字：它保存 id，整数字面量不会转换为它，也只能与另一个 errset 比较，所以只有通过 errset 的名字才能得到它的值。错误需要携带数据时，请使用显式的 `errable<T,E>`。`.n` 模块可以声明 errset，但 `.n` 函数暂时不能抛出它。
 
 ## fn errorf
 

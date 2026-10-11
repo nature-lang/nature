@@ -213,7 +213,36 @@ type errable<T,E> = union {
 }
 ```
 
-In `.x`, an explicit `errable<T,E>` return declaration enables `return T`, `throw E`, propagation, and `call() catch e { ... }`. A catch handles only that call's error, with `e` taking its type directly from `E`; calls in arguments need their own catch or propagate to the enclosing function. Propagated errors must match the function's `E`. The `try` statement is not supported in `.x`. The `T!` shorthand and `.n` error model are handled separately.
+In `.x`, an explicit `errable<T,E>` return declaration enables `return T`, `throw E`, propagation, and `call() catch e { ... }`. A catch handles only that call's error, with `e` taking its type directly from `E`; calls in arguments need their own catch or propagate to the enclosing function. Propagated errors must match the function's `E`. The `try` statement is not supported in `.x`. The `T!` shorthand is described under `errset`. The `.n` error model is handled separately.
+
+## errset
+
+```nature
+// in the io module
+errset TIMEOUT
+errset CLOSED
+
+pub fn read(int mode):int! {
+    if mode == 1 { throw TIMEOUT }
+    return 42
+}
+
+// elsewhere
+import "io.x"
+
+fn main() {
+    var n = io.read(1) catch e {
+        if e == io.TIMEOUT { println('timeout') }
+        -1
+    }
+}
+```
+
+An `errset` declaration registers a named error. Its identity is the declaration itself: the compiler gives it a program-wide id, so `io.TIMEOUT` and `fmt.TIMEOUT` are different errors even though they share a name. An errset carries no message and no data, so it is compared with `==` and `!=` only.
+
+Declarations are module-level only and always public; `pub errset` is rejected because an errset exists to be named by its callers. A private error is an ordinary private type used as `E`.
+
+A `T!` function in `.x` throws, propagates and catches errsets: `T!` is `errable<T,E>` where `E` is the type of errset values. That type is provided by the compiler and has no name in source. It holds the id, an integer literal does not convert to it, and it only compares with another errset, so naming an errset is the only way to get one. Use an explicit `errable<T,E>` when an error has to carry data. An `.n` module may declare an errset, but `.n` functions cannot throw one yet.
 
 ## fn errorf
 

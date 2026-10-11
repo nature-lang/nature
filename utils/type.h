@@ -18,6 +18,8 @@
 
 #define THROWABLE_IDENT "throwable"
 #define ERRABLE_IDENT "errable"
+// ident of the builtin type of an errset value, the keyword itself so it cannot be written as a type name
+#define ERRSET_IDENT "errset"
 #define ERRABLE_VALUE_TAG "value"
 #define ERRABLE_ERROR_TAG "error"
 

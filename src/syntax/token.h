@@ -122,6 +122,7 @@ typedef enum {
     TOKEN_ELSE_IF,
     TOKEN_VAR,
     TOKEN_CONST,
+    TOKEN_ERRSET,
     TOKEN_LET,
     TOKEN_IS,
     TOKEN_SIZEOF,
@@ -220,6 +221,7 @@ static string token_str[] = {
 
         [TOKEN_VAR] = "var",
         [TOKEN_CONST] = "const",
+        [TOKEN_ERRSET] = "errset",
         [TOKEN_STRING] = "string",
         [TOKEN_BOOL] = "bool",
         [TOKEN_FLOAT] = "float",
