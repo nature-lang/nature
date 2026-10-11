@@ -27,12 +27,10 @@ fn main():void! {
     var br = new buf.reader<ref<io.buffer>>(rd)
 
     var buf = vec<u8>.new(0, 5)
-    try {
-        br.read(buf)
-        panic('should throw EOF')
-    } catch err {
+    br.read(buf) catch err {
         assert(err.msg() == 'EOF')
         println(err.msg())
+        0
     }
 }
 
@@ -132,10 +130,7 @@ fn main():void! {
     println("second read data: " + (buf as string))
     assert(buf as string == " worl")
 
-    try {
-        br.read_exact(buf)
-        panic('an error should have occurred')
-    } catch e {
+    br.read_exact(buf) catch e {
         println("expected error: " + e.msg())
         assert(e.msg() == "EOF")
     }
@@ -158,10 +153,7 @@ fn main():void! {
     var br = new buf.reader<ref<io.buffer>>(rd)
 
     var buf = vec<u8>.new(0, 5)
-    try {
-        br.read_exact(buf)
-        panic('an error should have occurred')
-    } catch e {
+    br.read_exact(buf) catch e {
         println("expected error: " + e.msg())
         assert(e.msg() == "EOF")
     }
@@ -184,10 +176,7 @@ fn main():void! {
     var br = new buf.reader<ref<io.buffer>>(rd)
 
     var buf = vec<u8>.new(0, 5)
-    try {
-        br.read_exact(buf)
-        panic('an error should have occurred')
-    } catch e {
+    br.read_exact(buf) catch e {
         println("expected error: " + e.msg())
         assert(e.msg() == "EOF")
     }
@@ -245,11 +234,10 @@ fn main():void! {
         fmt.printf('%c\n', b)
     }
 
-    try {
-        b = br.read_byte()
-    } catch e {
+    b = br.read_byte() catch e {
         println("expected err: " + e.msg())
         assert(e.msg() == "EOF")
+        0
     }
 }
 
@@ -287,11 +275,9 @@ fn main():void! {
     assert(line == "Test\rEnd")
 
     // Test EOF
-    try {
-        line = br.read_line()
-        println("can't get here")
-    } catch e {
+    line = br.read_line() catch e {
         println("catch e: " + e.msg())
+        ''
     }
 }
 
@@ -318,11 +304,9 @@ fn main():void! {
         println("Read line: '" + line + "'")
     }
 
-    try {
-        var line = br.read_line()
-        println("unexpected line: '" + line + "'")
-    } catch e {
+    br.read_line() catch e {
         println("catch e: " + e.msg())
+        ''
     }
 }
 

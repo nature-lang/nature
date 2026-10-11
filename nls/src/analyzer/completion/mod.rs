@@ -344,7 +344,6 @@ impl<'a> CompletionProvider<'a> {
             ("false", "false", "Boolean false"),
             ("null", "null", "Null value"),
             ("throw", "throw $0", "Throw error"),
-            ("try", "try {\n\t$0\n} catch err {\n\t\n}", "Try-catch block"),
             ("catch", "catch $0 {\n\t\n}", "Catch clause"),
             ("go", "go $0", "Spawn coroutine"),
             ("select", "select {\n\t$0\n}", "Select statement"),

@@ -213,7 +213,7 @@ type errable<T,E> = union {
 }
 ```
 
-The Result returned by an errable function in `.x`: `T!` means `errable<T,u32>`, the error being the id of an errset. Writing `errable<T,E>` as a return type is not supported, with or without `!`. `return T` stores the value and `throw` stores the error. A call to an errable function propagates its error to the enclosing `T!` function, and `call() catch e { ... }` handles only that call's error; calls in its arguments need their own catch or propagate. The `try` statement is not supported in `.x`. The `.n` error model is handled separately.
+The Result returned by an errable function in `.x`: `T!` means `errable<T,u32>`, the error being the id of an errset. Writing `errable<T,E>` as a return type is not supported, with or without `!`. `return T` stores the value and `throw` stores the error. A call to an errable function propagates its error to the enclosing `T!` function, and `call() catch e { ... }` handles only that call's error; calls in its arguments need their own catch or propagate. The `.n` error model is handled separately.
 
 ## errset
 

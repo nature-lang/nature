@@ -66,11 +66,6 @@ static ast_stmt_t *test_expr_stmt(ast_expr_t expr) {
     return stmt;
 }
 
-static ast_stmt_t *test_call_stmt(char *fn_ident) {
-    ast_expr_t call_expr = test_call_expr(test_ident_literal(fn_ident), NULL);
-    return test_expr_stmt(call_expr);
-}
-
 static ast_stmt_t *test_print_stmt(char *fn_ident, char *message) {
     list_t *args = ct_list_new(sizeof(ast_expr_t));
     ast_expr_t msg_expr = test_string_literal(message);
@@ -236,36 +231,43 @@ static slice_t *test_runner_body(slice_t *tests, int total, int skipped) {
     slice_push(body, test_var_def_stmt("failed", *ast_int_expr(0, 0, 0)));
     slice_push(body, test_var_def_stmt("passed", *ast_int_expr(0, 0, (uint64_t) run_total)));
     slice_push(body, test_var_def_stmt("skipped", *ast_int_expr(0, 0, (uint64_t) skipped)));
+    slice_push(body, test_var_def_stmt("ok", *ast_bool_expr(0, 0, true)));
 
+    // Each test runs as:
+    //   ok = true
+    //   test_fn() catch e { ok = false; println('FAILED'); println(e.msg()); failed += 1; passed -= 1 }
+    //   if ok { println('OK') }
     for (int i = 0; i < tests->count; ++i) {
         ast_fndef_t *test_fn = tests->take[i];
         char *display_name = test_fn->test_name ? test_fn->test_name : test_fn->fn_name;
         char *prefix = dsprintf("Test [%d/%d] %s ... ", i + 1, run_total, display_name);
 
         slice_push(body, test_print_stmt("print", prefix));
-        slice_t *try_body = slice_new();
-        slice_push(try_body, test_call_stmt(test_fn->fn_name));
-        slice_push(try_body, test_print_stmt("println", "OK"));
+        slice_push(body, test_assign_expr_stmt("ok", *ast_bool_expr(0, 0, true)));
 
         slice_t *catch_body = slice_new();
+        slice_push(catch_body, test_assign_expr_stmt("ok", *ast_bool_expr(0, 0, false)));
         slice_push(catch_body, test_print_stmt("println", "FAILED"));
         slice_push(catch_body, test_print_expr_stmt("println", test_method_call_expr("e", "msg")));
         slice_push(catch_body, test_assign_add_one_stmt("failed"));
         slice_push(catch_body, test_assign_sub_one_stmt("passed"));
 
-        ast_try_catch_stmt_t *try_stmt = NEW(ast_try_catch_stmt_t);
-        try_stmt->try_body = try_body;
-        try_stmt->catch_err = (ast_var_decl_t) {0};
-        try_stmt->catch_err.ident = "e";
-        try_stmt->catch_err.type = type_kind_new(TYPE_UNKNOWN);
-        try_stmt->catch_body = catch_body;
+        ast_catch_t *catch_expr = NEW(ast_catch_t);
+        catch_expr->try_expr = test_call_expr(test_ident_literal(test_fn->fn_name), NULL);
+        catch_expr->catch_err.ident = "e";
+        catch_expr->catch_err.type = type_kind_new(TYPE_UNKNOWN);
+        catch_expr->catch_body = catch_body;
 
         ast_stmt_t *stmt = NEW(ast_stmt_t);
         stmt->line = 0;
         stmt->column = 0;
-        stmt->assert_type = AST_STMT_TRY_CATCH;
-        stmt->value = try_stmt;
+        stmt->assert_type = AST_CATCH;
+        stmt->value = catch_expr;
         slice_push(body, stmt);
+
+        slice_t *ok_body = slice_new();
+        slice_push(ok_body, test_print_stmt("println", "OK"));
+        slice_push(body, test_if_stmt(test_ident_literal("ok"), ok_body, slice_new()));
     }
 
     ast_expr_t failed_zero = test_eq_expr(test_ident_literal("failed"), *ast_int_expr(0, 0, 0));

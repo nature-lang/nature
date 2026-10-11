@@ -138,9 +138,7 @@ fn boom():void! {
 }
 
 fn main() {
-    try {
-        boom()
-    } catch e {
+    boom() catch e {
         println('caught', e.msg())
     }
 }
@@ -148,24 +146,6 @@ fn main() {
 --- output.txt
 cleanup
 caught x
-
-=== test_runtime_error_unwind
---- main.n
-fn main() {
-    try {
-        defer {
-            println('cleanup')
-        }
-        [int] list = []
-        var b = list[1]
-    } catch e {
-        println('caught')
-    }
-}
-
---- output.txt
-cleanup
-caught
 
 === test_defer_eval_time_like_zig
 --- main.n

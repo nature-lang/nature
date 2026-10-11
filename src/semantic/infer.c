@@ -1550,23 +1550,6 @@ static type_t infer_match(module_t *m, ast_match_t *match, type_t target_type) {
     return target_type;
 }
 
-static void infer_try_catch_stmt(module_t *m, ast_try_catch_stmt_t *try_stmt) {
-    m->be_caught += 1;
-    infer_body(m, try_stmt->try_body);
-    m->be_caught -= 1;
-
-    type_t interface_error = interface_throwable();
-    interface_error = reduction_type(m, interface_error);
-    try_stmt->catch_err.type = interface_error;
-
-    rewrite_var_decl(m, &try_stmt->catch_err);
-
-    type_t t = type_kind_new(TYPE_VOID);
-    stack_push(m->current_fn->ret_target_types, &t);
-    infer_body(m, try_stmt->catch_body);
-    stack_pop(m->current_fn->ret_target_types);
-}
-
 static type_t infer_catch(module_t *m, ast_catch_t *catch_expr) {
     type_t t;
     if (m->current_fn->is_x) {
@@ -3511,9 +3494,6 @@ static void infer_stmt(module_t *m, ast_stmt_t *stmt) {
         case AST_CATCH: {
             infer_catch(m, stmt->value);
             break;
-        }
-        case AST_STMT_TRY_CATCH: {
-            return infer_try_catch_stmt(m, stmt->value);
         }
         case AST_STMT_SELECT: {
             return infer_select(m, stmt->value);

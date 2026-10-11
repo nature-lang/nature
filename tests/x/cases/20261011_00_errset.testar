@@ -426,14 +426,6 @@ fn main() {
 --- output.txt
 nature-test/main.x:8:20: calling an errable! fn `fail` requires the current `fn main` errable! as well or be caught.
 
-=== test_try_not_supported
---- main.x
-fn main() {
-    try {} catch e {}
-}
---- output.txt
-nature-test/main.x:2:7: try is not supported in .x; use call() catch e { ... }
-
 === test_explicit_errable_return_rejected
 --- main.x
 fn typed():errable<int,i32> {

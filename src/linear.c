@@ -3868,39 +3868,6 @@ static lir_operand_t *linear_catch_expr(module_t *m, ast_expr_t expr, lir_operan
     return target;
 }
 
-static void linear_try_catch_stmt(module_t *m, ast_try_catch_stmt_t *try_stmt) {
-    // 编译 expr, 有异常应该直接就跳转到 catch 了。
-    char *catch_start_label = label_ident_with_unique(CATCH_IDENT);
-    char *catch_end_ident = str_connect(catch_start_label, LABEL_END_SUFFIX);
-
-    bool has_ret = false;
-
-
-    stack_push(m->current_closure->catch_error_labels, catch_start_label);
-    linear_body(m, try_stmt->try_body);
-    stack_pop(m->current_closure->catch_error_labels);
-
-    // 跳过错误处理部分
-    lir_op_t *catch_end_label = lir_op_label(catch_end_ident, true);
-    OP_PUSH(lir_op_bal(catch_end_label->output));
-    OP_PUSH(lir_op_label(catch_start_label, true));
-
-
-    table_set(m->current_closure->match_has_ret, catch_start_label, (void *) has_ret);
-
-    // 为 err 赋值
-    lir_operand_t *err_operand = linear_var_decl(m, &try_stmt->catch_err);
-    push_rt_call(m, RT_CALL_CO_REMOVE_ERROR, err_operand, 0);
-
-    stack_push(m->current_closure->ret_labels, catch_end_label->output);
-
-    linear_body(m, try_stmt->catch_body);
-
-    stack_pop(m->current_closure->ret_labels);
-
-    OP_PUSH(catch_end_label);
-}
-
 /**
  * @param c
  * @param literal
@@ -4230,9 +4197,6 @@ static void linear_stmt(module_t *m, ast_stmt_t *stmt) {
                               },
                               NULL);
             return;
-        }
-        case AST_STMT_TRY_CATCH: {
-            return linear_try_catch_stmt(m, stmt->value);
         }
         case AST_STMT_RETURN: {
             return linear_return(m, stmt->value);

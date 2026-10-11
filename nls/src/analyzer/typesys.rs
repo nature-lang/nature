@@ -269,12 +269,6 @@ impl GenericSpecialFnClone {
             }
             AstNode::Match(subject, cases) => AstNode::Match(subject.as_ref().map(|s| Box::new(self.clone_expr(s))), self.clone_match_cases(cases)),
 
-            AstNode::TryCatch(try_body, catch_err, catch_body) => AstNode::TryCatch(
-                self.clone_body(try_body),
-                Arc::new(Mutex::new(catch_err.lock().unwrap().clone())),
-                self.clone_body(catch_body),
-            ),
-
             AstNode::Typedef(alias) => AstNode::Typedef(Arc::new(Mutex::new(alias.lock().unwrap().clone()))),
             _ => stmt.node.clone(),
         };
@@ -3168,34 +3162,6 @@ impl<'a> Typesys<'a> {
         Ok(())
     }
 
-    pub fn infer_try_catch(
-        &mut self,
-        try_body: &mut AstBody,
-        catch_err_mutex: &Arc<Mutex<VarDeclExpr>>,
-        catch_body: &mut AstBody,
-    ) -> Result<(), AnalyzerError> {
-        self.be_caught += 1;
-
-        self.infer_body(try_body);
-
-        self.be_caught -= 1;
-
-        {
-            let mut catch_err = catch_err_mutex.lock().unwrap();
-            let errort = self.interface_throwable();
-            catch_err.type_ = errort;
-        }
-
-        self.rewrite_var_decl(catch_err_mutex.clone());
-
-        // set break target types
-        self.ret_target_types.push(Type::new(TypeKind::Void));
-        self.infer_body(catch_body);
-        self.ret_target_types.pop().unwrap();
-
-        Ok(())
-    }
-
     pub fn infer_catch(
         &mut self,
         try_expr: &mut Box<Expr>,
@@ -4365,9 +4331,6 @@ impl<'a> Typesys<'a> {
             AstNode::FnDef(_) => {}
             AstNode::Call(call) => {
                 self.infer_call(call, Type::new(TypeKind::Void), stmt.start, stmt.end, true)?;
-            }
-            AstNode::TryCatch(try_body, catch_err_mutex, catch_body) => {
-                self.infer_try_catch(try_body, catch_err_mutex, catch_body)?;
             }
             AstNode::Catch(try_expr, catch_err_mutex, catch_body) => {
                 self.infer_catch(try_expr, catch_err_mutex, catch_body)?;

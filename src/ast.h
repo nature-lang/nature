@@ -87,7 +87,6 @@ typedef enum {
     AST_STMT_TYPEDEF,
     AST_STMT_SELECT,
     AST_CALL,
-    AST_STMT_TRY_CATCH,
     AST_CATCH,
     AST_MATCH,
     AST_FNDEF, // fn def (其包含 body)
@@ -400,21 +399,6 @@ typedef struct {
     ast_var_decl_t catch_err;
     slice_t *catch_body;
 } ast_catch_t;
-
-/**
- * try {
- *  stmt
- *  stmt
- * } catch e {
- *    stmt
- *    stmt
- * }
- */
-typedef struct {
-    slice_t *try_body;
-    ast_var_decl_t catch_err;
-    slice_t *catch_body;
-} ast_try_catch_stmt_t;
 
 /**
  * match nice {

@@ -2258,27 +2258,6 @@ static ast_stmt_t *parser_select_stmt(module_t *m) {
     return result;
 }
 
-static ast_stmt_t *parser_try_catch_stmt(module_t *m) {
-    PARSER_ASSERTF(!m->is_x, "try is not supported in .x; use call() catch e { ... }");
-    ast_stmt_t *result = stmt_new(m);
-    parser_must(m, TOKEN_TRY);
-
-    ast_try_catch_stmt_t *try_stmt = NEW(ast_try_catch_stmt_t);
-    try_stmt->try_body = parser_body(m, false);
-
-    parser_must(m, TOKEN_CATCH);
-
-    token_t *error_ident = parser_must(m, TOKEN_IDENT);
-    try_stmt->catch_err.ident = error_ident->literal;
-    try_stmt->catch_err.type = type_kind_new(TYPE_UNKNOWN);
-
-    try_stmt->catch_body = parser_body(m, false);
-
-    result->assert_type = AST_STMT_TRY_CATCH;
-    result->value = try_stmt;
-    return result;
-}
-
 static ast_stmt_t *parser_continue_stmt(module_t *m) {
     ast_stmt_t *result = stmt_new(m);
     parser_must(m, TOKEN_CONTINUE);
@@ -3324,8 +3303,6 @@ static ast_stmt_t *parser_local_stmt(module_t *m) {
         PARSER_ASSERTF(false, "test block can only appear at global scope");
     } else if (parser_is(m, TOKEN_SELECT)) {
         return parser_select_stmt(m);
-    } else if (parser_is(m, TOKEN_TRY)) {
-        return parser_try_catch_stmt(m);
     } else if (parser_is(m, TOKEN_MACRO_IDENT)) {
         ast_expr_t expr = parser_expr_with_precedence(m);
         return stmt_expr_fake_new(m, expr);

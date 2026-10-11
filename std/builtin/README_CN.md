@@ -213,7 +213,7 @@ type errable<T,E> = union {
 }
 ```
 
-`.x` 中可能出错的函数返回的 Result：`T!` 就是 `errable<T,u32>`，错误是 errset 的 id。不支持把 `errable<T,E>` 直接写成返回类型，带不带 `!` 都不行。`return T` 保存值，`throw` 保存错误。调用可能出错的函数时，错误会传播给外层的 `T!` 函数；`call() catch e { ... }` 只处理该调用返回的错误，参数中的调用须自行 `catch` 或向外传播。`.x` 不支持 `try` 语句。`.n` 的错误模型后续单独处理。
+`.x` 中可能出错的函数返回的 Result：`T!` 就是 `errable<T,u32>`，错误是 errset 的 id。不支持把 `errable<T,E>` 直接写成返回类型，带不带 `!` 都不行。`return T` 保存值，`throw` 保存错误。调用可能出错的函数时，错误会传播给外层的 `T!` 函数；`call() catch e { ... }` 只处理该调用返回的错误，参数中的调用须自行 `catch` 或向外传播。`.n` 的错误模型后续单独处理。
 
 ## errset
 

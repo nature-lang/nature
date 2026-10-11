@@ -108,7 +108,6 @@ typedef enum {
     TOKEN_ENUM,
     TOKEN_UNION,
     TOKEN_THROW,
-    TOKEN_TRY,
     TOKEN_CATCH,
     TOKEN_MATCH,
     TOKEN_SELECT,
@@ -246,7 +245,6 @@ static string token_str[] = {
         [TOKEN_MATCH] = "match",
         [TOKEN_SELECT] = "select",
         [TOKEN_TEST] = "test",
-        [TOKEN_TRY] = "try",
         [TOKEN_THROW] = "throw",
         [TOKEN_LET] = "let",
 
