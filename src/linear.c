@@ -896,7 +896,8 @@ static lir_operand_t *linear_caught_error(module_t *m, type_t error_type) {
     return lir_var_operand(m, c->caught_error);
 }
 
-static void linear_raise_error(module_t *m, type_t error_type, lir_operand_t *value) {
+// Return from the current .x fn with this error in the errable<T,E> it returns.
+static void linear_return_error(module_t *m, type_t error_type, lir_operand_t *value) {
     closure_t *c = m->current_closure;
     assert(c->errable_storage);
     lir_operand_t *errable = linear_errable_address(m);
@@ -2250,7 +2251,7 @@ static lir_operand_t *linear_call(module_t *m, ast_expr_t expr, lir_operand_t *t
             linear_super_move(m, error_type, linear_caught_error(m, error_type), error);
             linear_bal_error(m, stack_top(m->current_closure->catch_error_labels), catch_depth);
         } else {
-            linear_raise_error(m, error_type, error);
+            linear_return_error(m, error_type, error);
         }
         OP_PUSH(lir_op_label(end, true));
         temp = linear_errable_payload(m, temp, errable_value_type(type_fn->return_type));
@@ -4093,7 +4094,7 @@ static lir_operand_t *linear_fn_decl(module_t *m, ast_expr_t expr, lir_operand_t
 static void linear_throw(module_t *m, ast_throw_stmt_t *stmt) {
     if (m->current_closure->fndef->is_x) {
         lir_operand_t *value = linear_expr(m, stmt->error, NULL);
-        linear_raise_error(m, stmt->error.type, value);
+        linear_return_error(m, stmt->error.type, value);
         return;
     }
     // msg to errort
