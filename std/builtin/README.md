@@ -244,7 +244,7 @@ fn main() {
 
 An `errset` declaration registers a named error. Its identity is the declaration itself: the compiler gives it a program-wide id, so `io.TIMEOUT` and `fmt.TIMEOUT` are different errors even though they share a name. An errset carries no message and no data, so it is compared with `==` and `!=`, or matched with `match e { TIMEOUT -> ... _ -> ... }`. The set of errsets is open, so a `match` needs a `_` arm.
 
-Declarations are module-level only and always public; `pub errset` is rejected because an errset exists to be named by its callers. An errset value has the builtin type `errset_t` and is stored as a `u32` id at run time. Only an errset name produces an `errset_t` value: neither an integer literal nor a `u32` value converts to it, so `throw 5` and comparing `u32 a = 12` with an errset are type errors. An `.n` module may declare an errset, but `.n` functions cannot throw one.
+Declarations are module-level only and always public, so `pub` is not needed; a `pub` before `errset` is accepted and ignored. An errset value has the builtin type `errset_t` and is stored as a `u32` id at run time. Only an errset name produces an `errset_t` value: neither an integer literal nor a `u32` value converts to it, so `throw 5` and comparing `u32 a = 12` with an errset are type errors. An `.n` module may declare an errset, but `.n` functions cannot throw one.
 
 ## fn errorf
 

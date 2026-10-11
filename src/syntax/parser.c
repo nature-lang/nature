@@ -3327,8 +3327,7 @@ static ast_stmt_t *parser_global_stmt(module_t *m) {
     } else if (parser_is(m, TOKEN_CONST)) {
         return parser_constdef_stmt(m, is_pub);
     } else if (parser_is(m, TOKEN_ERRSET)) {
-        // an errset exists to be named by its callers, so there is no private form
-        PARSER_ASSERTF(!is_pub, "errset is always public, remove 'pub'");
+        // an errset is always public, a `pub` before it is accepted and ignored
         return parser_errset_stmt(m);
     } else if (is_type_begin_stmt(m)) {
         return parser_type_begin_stmt(m, is_pub);

@@ -2905,10 +2905,6 @@ static type_t infer_call(module_t *m, ast_call_t *call, type_t target_type, bool
     infer_call_args(m, call, type_fn);
 
     call->return_type = type_fn->return_type;
-    if (is_result_fn(type_fn)) {
-        INFER_ASSERTF(m->current_fn && m->current_fn->is_x,
-                      "calling an errable .x fn from .n is not supported");
-    }
 
     if (m->current_fn && m->current_fn->is_x && !type_fn->is_x) {
         INFER_ASSERTF(false, "calling .n fn '%s' from .x fn '%s' is not allowed.",
