@@ -207,7 +207,7 @@ Get the error message.
 ## type errable
 
 ```
-type errable<T,E> = union {
+type errable<T,E> = union{
     T value
     E error
 }

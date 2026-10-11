@@ -27,7 +27,7 @@ pub fn errorf(string format, ...[any] args):ref<errort> {
 
 
 // In .x `T!` returns errable<T,errset_t>: the value, or an errset.
-pub type errable<T,E> = union {
+pub type errable<T,E> = union{
     T value
     E error
 }

@@ -46,7 +46,7 @@ fn pass<T>(T value, bool fail):T! {
     return value
 }
 
-type reader_t = interface {
+type reader_t = interface{
     fn get(int mode):int!
 }
 
@@ -70,7 +70,7 @@ fn cleanup(bool failure):int! {
     return 1
 }
 
-type shape = union {
+type shape = union{
     int circle
     (int, int) rectangle
 }
