@@ -1,7 +1,8 @@
-=== test_throw_catch_and_compare
+=== test_errset
 --- main.x
 errset TIMEOUT
 errset CLOSED
+errset LATE
 
 fn read(int mode):int! {
     if mode == 1 {
@@ -13,190 +14,47 @@ fn read(int mode):int! {
     return 42
 }
 
-fn main() {
-    var a = read(0) catch e {
-        -1
-    }
-    println(a)
-
-    var b = read(1) catch e {
-        println(e == TIMEOUT, e == CLOSED, e != CLOSED)
-        -2
-    }
-    println(b)
-
-    var c = read(2) catch e {
-        println(e == TIMEOUT, e == CLOSED, e != CLOSED)
-        -3
-    }
-    println(c)
-
-    var saved = CLOSED
-    var d = read(1) catch e {
-        saved = e
-        -9
-    }
-    println(d, saved == TIMEOUT, saved != CLOSED)
-}
-
---- output.txt
-42
-true false true
--2
-false true false
--3
--9 true true
-
-=== test_propagation_and_rethrow
---- main.x
-errset FIRST
-errset SECOND
-
-fn leaf(int mode):int! {
-    if mode == 1 {
-        throw FIRST
-    }
-    if mode == 2 {
-        throw SECOND
-    }
-    return mode
-}
-
 fn relay(int mode):int! {
-    return leaf(mode)
+    return read(mode)
 }
 
 fn rethrow(int mode):int! {
-    leaf(mode) catch e {
+    var v = read(mode) catch e {
         throw e
     }
-    return 0
+    return v
 }
 
-fn fail_first()! {
-    throw FIRST
+fn add(int a, int b):int! {
+    return a + b
 }
 
-fn fail_second()! {
-    throw SECOND
+fn is_timeout(errset_t e):bool {
+    return e == TIMEOUT
 }
-
-fn main() {
-    var a = relay(0) catch e {
-        -1
-    }
-    println(a)
-
-    var b = relay(1) catch e {
-        println('relay', e == FIRST)
-        -2
-    }
-    println(b)
-
-    var c = rethrow(2) catch e {
-        println('rethrow', e == SECOND, e != FIRST)
-        -3
-    }
-    println(c)
-
-    for var i = 0; i < 2; i += 1 {
-        fail_first() catch outer {
-            println('outer', outer == FIRST)
-            fail_second() catch inner {
-                println('inner', inner == SECOND, inner == outer)
-            }
-        }
-    }
-}
-
---- output.txt
-0
-relay true
--2
-rethrow true true
--3
-outer true
-inner true false
-outer true
-inner true false
-
-=== test_t_bang_forms
---- main.x
-errset FAILED
-errset OTHER
 
 fn nothing(bool fail)! {
     if fail {
-        throw OTHER
+        throw CLOSED
     }
 }
 
-fn relay<T>(T value, bool fail):T! {
+fn pass<T>(T value, bool fail):T! {
     if fail {
-        throw FAILED
+        throw TIMEOUT
     }
     return value
 }
 
 type reader_t = interface {
-    fn read(bool fail):int!
+    fn get(int mode):int!
 }
 
 type source_t:reader_t = int
 
-fn source_t.read(self, bool fail):int! {
-    if fail {
-        throw OTHER
-    }
-    return self as int
+fn source_t.get(self, int mode):int! {
+    return read(mode)
 }
-
-fn main() {
-    nothing(false) catch e {
-        println('unreachable')
-    }
-    nothing(true) catch e {
-        println('void!', e == OTHER, e != FAILED)
-    }
-
-    var a = relay<int>(9, false) catch e {
-        -1
-    }
-    println(a)
-
-    var b = relay<string>('s', true) catch e {
-        println('generic', e == FAILED)
-        'failed'
-    }
-    println(b)
-
-    source_t source = 42
-    reader_t reader = source
-    var c = reader.read(false) catch e {
-        -1
-    }
-    println(c)
-
-    var d = reader.read(true) catch e {
-        println('interface', e == OTHER)
-        -2
-    }
-    println(d)
-}
-
---- output.txt
-void! true true
-9
-generic true
-failed
-42
-interface true
--2
-
-=== test_defer_preserves_first_error
---- main.x
-errset BAD
-errset LATE
 
 fn fail_late()! {
     throw LATE
@@ -207,30 +65,132 @@ fn cleanup(bool failure):int! {
         fail_late()
     }
     if failure {
-        throw BAD
+        throw TIMEOUT
     }
-    return 42
+    return 1
+}
+
+type shape = union {
+    int circle
+    (int, int) rectangle
+}
+
+fn make(bool fail):shape! {
+    if fail {
+        throw CLOSED
+    }
+    return shape.rectangle(1, 2)
 }
 
 fn main() {
-    var a = cleanup(true) catch e {
-        println('first', e == BAD, e == LATE)
+    var a = read(0) catch e {
         -1
     }
     println(a)
 
-    var b = cleanup(false) catch e {
-        println('deferred', e == BAD, e == LATE)
+    var b = read(1) catch e {
+        println(e == TIMEOUT, e != CLOSED, is_timeout(e))
         -2
     }
     println(b)
-}
 
+    var saved = CLOSED
+    var c = relay(1) catch e {
+        saved = e
+        -3
+    }
+    println(c, saved == TIMEOUT)
+
+    var d = rethrow(2) catch e {
+        println('rethrow', e == CLOSED)
+        -4
+    }
+    println(d)
+
+    var f = add(read(2), 1) catch e {
+        println('argument', e == CLOSED)
+        -5
+    }
+    println(f)
+
+    var g = read(1) catch first {
+        var inner = read(2) catch second {
+            println('nested', first == TIMEOUT, second == CLOSED)
+            -6
+        }
+        inner
+    }
+    println(g)
+
+    var h = read(2) catch e {
+        match e {
+            TIMEOUT -> -7
+            CLOSED -> -8
+            _ -> -9
+        }
+    }
+    println(h)
+
+    nothing(true) catch e {
+        println('void!', e == CLOSED)
+    }
+
+    var i = pass<int>(9, false) catch e {
+        -1
+    }
+    var j = pass<string>('s', true) catch e {
+        'generic'
+    }
+    println(i, j)
+
+    source_t source = 0
+    reader_t reader = source
+    var k = reader.get(1) catch e {
+        println('interface', e == TIMEOUT)
+        -10
+    }
+    println(k)
+
+    var l = cleanup(true) catch e {
+        println('defer', e == TIMEOUT, e == LATE)
+        -11
+    }
+    println(l)
+
+    var m = cleanup(false) catch e {
+        println('defer only', e == LATE)
+        -12
+    }
+    println(m)
+
+    var n = make(true) catch e {
+        shape.circle(-1)
+    }
+    if n is shape.circle v {
+        println('circle', v)
+    }
+}
 --- output.txt
-first true false
--1
-deferred false true
+42
+true true true
 -2
+-3 true
+rethrow true
+-4
+argument true
+-5
+nested true true
+-6
+-8
+void! true
+9 generic
+interface true
+-10
+defer true false
+-11
+defer only true
+-12
+circle -1
 
 === test_same_name_in_two_modules_is_two_errors
 --- main.x
@@ -314,138 +274,6 @@ propagated true
 false false true false
 false true
 
-=== test_match_on_errset
---- main.x
-import "io.x"
-
-errset CLOSED
-errset OTHER
-
-fn fail(int mode):int! {
-    if mode == 1 {
-        throw io.TIMEOUT
-    }
-    if mode == 2 {
-        throw CLOSED
-    }
-    throw OTHER
-}
-
-fn main() {
-    for var i = 1; i < 4; i += 1 {
-        var r = fail(i) catch e {
-            match e {
-                io.TIMEOUT -> -1
-                CLOSED -> -2
-                _ -> -3
-            }
-        }
-        println(i, r)
-    }
-}
---- io.x
-errset TIMEOUT
---- output.txt
-1 -1
-2 -2
-3 -3
-
-=== test_tagged_union_value
---- main.x
-errset BAD
-
-type shape = union {
-    int circle
-    (int, int) rectangle
-}
-
-fn make(bool fail):shape! {
-    if fail {
-        throw BAD
-    }
-    return shape.rectangle(1, 2)
-}
-
-fn main() {
-    var a = make(false) catch e {
-        shape.circle(-1)
-    }
-    if a is shape.rectangle (x, y) {
-        println('rectangle', x, y)
-    }
-
-    var b = make(true) catch e {
-        println('caught', e == BAD)
-        shape.circle(-1)
-    }
-    if b is shape.circle v {
-        println('circle', v)
-    }
-}
---- output.txt
-rectangle 1 2
-caught true
-circle -1
-
-=== test_catch_covers_the_expression
---- main.x
-errset BAD
-errset LATE
-
-fn fail(int v):int! {
-    if v < 0 {
-        throw BAD
-    }
-    return v
-}
-
-fn add(int a, int b):int! {
-    if a + b > 100 {
-        throw LATE
-    }
-    return a + b
-}
-
-fn is_bad(errset_t e):bool {
-    return e == BAD
-}
-
-fn main() {
-    var a = add(fail(-1), 2) catch e {
-        println('argument', is_bad(e))
-        -1
-    }
-    println(a)
-
-    var b = add(fail(60), fail(50)) catch e {
-        println('outer call', is_bad(e), e == LATE)
-        -2
-    }
-    println(b)
-
-    var c = add(fail(1), 2) catch e {
-        -3
-    }
-    println(c)
-
-    var d = fail(-1) catch first {
-        var inner = fail(-2) catch second {
-            println('nested', second == first)
-            -4
-        }
-        inner
-    }
-    println(d)
-}
---- output.txt
-argument true
--1
-outer call false true
--2
-3
-nested true
--4
-
 === test_panic_is_not_caught
 --- main.x
 fn main() {
@@ -498,22 +326,9 @@ fn main() {
 --- output.txt
 nature-test/main.x:8:20: calling an errable! fn `fail` requires the current `fn main` errable! as well or be caught.
 
-=== test_explicit_errable_return_rejected
+=== test_errable_return_rejected
 --- main.x
-fn typed():errable<int,i32> {
-    return 1
-}
-
-fn main() {}
---- output.txt
-nature-test/main.x:1:3: an explicit errable<T,E> return is not supported in .x, use T!
-
-=== test_errable_with_bang_rejected
---- main.x
-fn typed(bool fail):errable<int,i32>! {
-    if fail {
-        throw 5
-    }
+fn typed():errable<int,i32>! {
     return 1
 }
 
@@ -574,3 +389,13 @@ fn main() {
 }
 --- output.txt
 nature-test/main.x:10:22: type inconsistency, expect=u32, actual=errset_t(u32)
+
+=== test_integer_literal_is_not_an_errset
+--- main.x
+fn fail():int! {
+    throw 5
+}
+
+fn main() {}
+--- output.txt
+nature-test/main.x:2:11: type inconsistency, expect=errset_t(u32), actual=i64

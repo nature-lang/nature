@@ -3324,7 +3324,8 @@ static type_t infer_literal(module_t *m, ast_expr_t *expr, type_t target_type) {
     }
 
     // float 转换为 int 会导致数据丢失，所以不进行自动转换, 请手动使用 as 转换
-    if (is_integer(literal_type.kind) && is_integer_or_anyptr(target_kind)) {
+    // an errset_t value only comes from an errset name, never from an integer literal
+    if (is_integer(literal_type.kind) && is_integer_or_anyptr(target_kind) && !str_equal(target_type.ident, ERRSET_IDENT)) {
         int64_t i = atoll(literal->value);
         if (target_kind == TYPE_ANYPTR) {
             target_kind = TYPE_UINT;
