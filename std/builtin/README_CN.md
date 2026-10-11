@@ -223,7 +223,9 @@ errset TIMEOUT
 errset CLOSED
 
 pub fn read(int mode):int! {
-    if mode == 1 { throw TIMEOUT }
+    if mode == 1 {
+        throw TIMEOUT
+    }
     return 42
 }
 
@@ -232,7 +234,9 @@ import "io.x"
 
 fn main() {
     var n = io.read(1) catch e {
-        if e == io.TIMEOUT { println('timeout') }
+        if e == io.TIMEOUT {
+            println('timeout')
+        }
         -1
     }
 }
