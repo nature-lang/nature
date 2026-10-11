@@ -11,22 +11,20 @@
 
 static type_t reduction_type_visited(module_t *m, type_t t, struct sc_map_s64 *visited);
 
-// In .x the `T!` shorthand means errable<T,u32>, the error being the id of an errset. Calling
-// this again on an already rewritten signature changes nothing.
+// In .x the `T!` shorthand means errable<T,u32>, the error being the id of an errset. An errable
+// return written in source is rejected, with or without `!`.
 void infer_result_signature(module_t *m, type_fn_t *fn) {
     if (!fn->is_x) return;
 
-    if (fn->is_errable && !is_result_type(fn->return_type)) {
-        type_t result = type_ident_new(ERRABLE_IDENT, TYPE_IDENT_DEF);
-        result.args = ct_list_new(sizeof(type_t));
-        type_t error_type = type_kind_new(TYPE_UINT32);
-        ct_list_push(result.args, &fn->return_type);
-        ct_list_push(result.args, &error_type);
-        fn->return_type = reduction_type(m, result);
-    }
+    INFER_ASSERTF(!is_result_type(fn->return_type), "an explicit errable<T,E> return is not supported in .x, use T!");
+    if (!fn->is_errable) return;
 
-    INFER_ASSERTF(fn->is_errable || !is_result_type(fn->return_type),
-                  "an explicit errable<T,E> return is not supported in .x, use T!");
+    type_t result = type_ident_new(ERRABLE_IDENT, TYPE_IDENT_DEF);
+    result.args = ct_list_new(sizeof(type_t));
+    type_t error_type = type_kind_new(TYPE_UINT32);
+    ct_list_push(result.args, &fn->return_type);
+    ct_list_push(result.args, &error_type);
+    fn->return_type = reduction_type(m, result);
 }
 
 static type_t reduction_type_ident(module_t *m, type_t t, struct sc_map_s64 *visited);
@@ -1748,8 +1746,7 @@ static bool infer_errset_ident(ast_expr_t *expr, type_t *result_type) {
     ast_errset_stmt_t *errset = symbol->ast_value;
     ast_literal_t *literal = NEW(ast_literal_t);
     literal->kind = TYPE_UINT32;
-    literal->value = malloc(64);
-    snprintf(literal->value, 64, "%" PRId64, errset->id);
+    literal->value = itoa(errset->id);
 
     expr->assert_type = AST_EXPR_LITERAL;
     expr->value = literal;
@@ -3377,14 +3374,14 @@ static type_t infer_env_access(module_t *m, ast_env_access_t *expr) {
 }
 
 static void infer_throw(module_t *m, ast_throw_stmt_t *throw_stmt) {
-    if (m->current_fn->is_x) {
-        INFER_ASSERTF(is_result_fn(m->current_fn->type.fn), "throw requires an errable return type");
-        infer_right_expr(m, &throw_stmt->error, result_error_type(m->current_fn->return_type));
-        return;
-    }
     INFER_ASSERTF(m->current_fn->is_errable,
                   "can't use throw stmt in a fn without an errable! declaration. example: fn %s(...):%s!",
                   m->current_fn->fn_name, type_origin_format(m->current_fn->return_type));
+
+    if (m->current_fn->is_x) {
+        infer_right_expr(m, &throw_stmt->error, result_error_type(m->current_fn->return_type));
+        return;
+    }
 
     infer_right_expr(m, &throw_stmt->error, interface_throwable());
 }
@@ -4367,7 +4364,6 @@ static type_t infer_impl_fn_decl(module_t *m, ast_fndef_t *fndef) {
     f->is_x = fndef->is_x;
     f->param_types = ct_list_new(sizeof(type_t));
     f->return_type = reduction_type(m, fndef->return_type);
-    infer_result_signature(m, f);
     f->self_kind = fndef->self_kind;
 
     // 跳过 self(仅当存在 receiver)

@@ -444,6 +444,19 @@ fn main() {}
 --- output.txt
 nature-test/main.x:1:3: an explicit errable<T,E> return is not supported in .x, use T!
 
+=== test_errable_with_bang_rejected
+--- main.x
+fn typed(bool fail):errable<int,i32>! {
+    if fail {
+        throw 5
+    }
+    return 1
+}
+
+fn main() {}
+--- output.txt
+nature-test/main.x:1:3: an explicit errable<T,E> return is not supported in .x, use T!
+
 === test_n_cannot_call_errable_x
 --- main.n
 import "util.x"

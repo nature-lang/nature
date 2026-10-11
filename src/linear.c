@@ -3821,7 +3821,7 @@ static lir_operand_t *linear_catch_expr(module_t *m, ast_expr_t expr, lir_operan
         result = linear_call_impl(m, catch_expr->try_expr, NULL, false);
         OP_PUSH(lir_op_new(LIR_OPCODE_BEE, int_operand(hash_string(ERRABLE_ERROR_TAG)),
                            indirect_addr_operand(m, type_kind_new(TYPE_UINT64), result, 0), lir_label_operand(catch_start_label, true)));
-        if (expr.type.kind != TYPE_VOID) linear_super_move(m, expr.type, target, linear_result_payload(m, result, expr.type));
+        linear_super_move(m, expr.type, target, linear_result_payload(m, result, expr.type));
     } else {
         stack_push(m->current_closure->catch_error_labels, catch_start_label);
         linear_expr(m, catch_expr->try_expr, target);
@@ -4204,17 +4204,14 @@ static void linear_stmt(module_t *m, ast_stmt_t *stmt) {
         }
         case AST_CALL: {
             ast_call_t *call = stmt->value;
-            type_t value_type = m->current_closure->fndef->is_x && is_result_type(call->return_type)
-                                        ? result_value_type(call->return_type)
-                                        : call->return_type;
             // stmt 中都 call 都是没有返回值的
             linear_call(m,
                         (ast_expr_t){
                             .line = stmt->line,
                             .column = stmt->column,
                             .assert_type = AST_CALL,
-                            .type = value_type,
-                            .target_type = value_type,
+                            .type = call->return_type,
+                            .target_type = call->return_type,
                             .value = call,
                         },
                         NULL);
@@ -4424,7 +4421,6 @@ static closure_t *linear_fndef(module_t *m, ast_fndef_t *fndef) {
         lir_op_t *allocation = lir_stack_alloc(c, fndef->return_type, result);
         c->result_storage = allocation->first;
         OP_PUSH(allocation);
-        linear_default_empty_stack(m, result, 0, fndef->return_type.storage_size);
         OP_PUSH(lir_op_move(indirect_addr_operand(m, type_kind_new(TYPE_UINT64), result, 0),
                             int_operand(hash_string(ERRABLE_VALUE_TAG))));
     }

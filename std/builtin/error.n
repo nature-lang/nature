@@ -26,7 +26,7 @@ pub fn errorf(string format, ...[any] args):ref<errort> {
 }
 
 
-// Explicit error returns use the existing tagged union layout.
+// In .x `T!` returns errable<T,u32>: the value, or the id of an errset.
 pub type errable<T,E> = union {
     T value
     E error
