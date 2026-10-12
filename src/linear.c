@@ -2938,6 +2938,7 @@ static lir_operand_t *linear_struct_select(module_t *m, ast_expr_t expr, lir_ope
  */
 static lir_operand_t *linear_tuple_access(module_t *m, ast_expr_t expr, lir_operand_t *target) {
     ast_tuple_access_t *ast = expr.value;
+    linear_take_catch_panic(m); // the index is checked at compile time, so a catch right after it gets nothing
 
     // may be symbol_var
     lir_operand_t *tuple_target = linear_expr(m, ast->left, NULL);

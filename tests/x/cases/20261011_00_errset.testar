@@ -331,6 +331,25 @@ as true
 0
 panic: 'index out of range [5] with length 3' at nature-test/main.x:37:23
 
+=== test_tuple_operand_panic_is_not_caught
+--- main.x
+fn main() {
+    [(int, int);1] pairs = [(1, 2)]
+    var t = pairs[0][1] catch e {
+        0
+    }
+    println(t)
+
+    int i = 5
+    var u = pairs[i][0] catch e {
+        0
+    }
+    println(u)
+}
+--- output.txt
+2
+panic: 'index out of range [5] with length 1' at nature-test/main.x:9:19
+
 === test_errset_inside_fn_rejected
 --- main.x
 fn main() {
