@@ -64,7 +64,7 @@ panic: 'index out of range [11] with length 10' at nature-test/main.n:3:21
 fn bar():void! {
     var list = vec<i8>.new(0, 10)
     var s = list[11] catch err {
-        println('catch err:', err.msg())
+        println('catch err:', err == INDEX_OUT_OF_RANGE)
         0
     }
 }
@@ -80,4 +80,4 @@ fn main():void! {
 }
 
 --- output.txt
-catch err: index out of range [11] with length 10
+catch err: true

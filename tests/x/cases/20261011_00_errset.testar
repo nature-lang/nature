@@ -281,18 +281,55 @@ propagated true
 false false true false
 false true
 
-=== test_panic_is_not_caught
+=== test_panic_errsets
 --- main.x
+type reader_t = interface{
+    fn read():int
+}
+
+type file_t:reader_t = struct{
+    int fd
+}
+
+fn file_t.read(self):int {
+    return self.fd
+}
+
+type sock_t:reader_t = struct{
+    int port
+}
+
+fn sock_t.read(self):int {
+    return self.port
+}
+
 fn main() {
     [int;3] list = [1, 2, 3]
     int i = 5
     var a = list[i] catch e {
+        println('index', e == INDEX_OUT_OF_RANGE)
         -1
     }
     println(a)
+
+    reader_t r = file_t{fd: 3}
+    var s = r as sock_t catch e {
+        println('as', e == TYPE_ASSERT_FAILED)
+        sock_t{port: 0}
+    }
+    println(s.port)
+
+    var b = list[list[i]] catch e {
+        0
+    }
+    println(b)
 }
 --- output.txt
-panic: 'index out of range [5] with length 3' at nature-test/main.x:4:18
+index true
+-1
+as true
+0
+panic: 'index out of range [5] with length 3' at nature-test/main.x:37:23
 
 === test_errset_inside_fn_rejected
 --- main.x

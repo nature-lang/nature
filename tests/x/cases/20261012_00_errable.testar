@@ -147,7 +147,7 @@ fn main() {
 
     var list = [1, 2]
     var f = list[5] catch e {
-        println('panic', e.msg())
+        println('panic', e == INDEX_OUT_OF_RANGE)
         -5
     }
     println(f)
@@ -170,7 +170,7 @@ coroutine old error
 -3
 converted: negative position
 -4
-panic index out of range [5] with length 2
+panic true
 -5
 from .x true
 

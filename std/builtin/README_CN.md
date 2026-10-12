@@ -42,6 +42,25 @@ fn assert(bool cond)
 
 断言条件为真，如果为假则 panic。
 
+## errset INDEX_OUT_OF_RANGE、KEY_NOT_FOUND、TYPE_ASSERT_FAILED
+
+```
+errset INDEX_OUT_OF_RANGE
+errset KEY_NOT_FOUND
+errset TYPE_ASSERT_FAILED
+```
+
+索引或切片越界、map 里没有这个 key、`as` 失败都会 panic。catch 紧跟在这类表达式后面时，会把 panic 当作其中一个 errset 接住，`.x` 和 `.n` 都一样：
+
+```nature
+var a = list[5] catch e {
+    // e == INDEX_OUT_OF_RANGE
+    -1
+}
+```
+
+只有 catch 紧跟的那个表达式算数：`list[list[5]] catch e { ... }` 里内层的越界照样 panic。被调函数内部的 panic、`panic()` 和 `assert()` 总是结束程序。
+
 # [chan](https://github.com/nature-lang/nature/blob/master/std/builtin/chan.n)
 
 ## fn chan<T>.new
@@ -235,7 +254,7 @@ fn load(string s):int! {
 }
 ```
 
-跟在返回 `errable<T,E>` 的函数调用后面的 catch 只处理这个调用的错误，`e` 的类型就是它的错误类型。参数中的调用不在范围内：它们的错误照常向外传播，错误类型由编译器检查，所以 `check(parse(1)) catch e { ... }` 只处理 `check`。这样的 catch 也不会接住 panic。`.n` 中其他的 catch 仍然覆盖整个表达式，包括 `T!` 错误和 panic。`go` 暂不支持返回 `errable<T,E>` 的函数。
+跟在返回 `errable<T,E>` 的函数调用后面的 catch 只处理这个调用的错误，`e` 的类型就是它的错误类型。参数中的调用不在范围内：它们的错误照常向外传播，错误类型由编译器检查，所以 `check(parse(1)) catch e { ... }` 只处理 `check`。`.n` 中其他的 catch 仍然处理整个表达式里 `T!` 调用的错误。`go` 暂不支持返回 `errable<T,E>` 的函数。
 
 ## errset
 

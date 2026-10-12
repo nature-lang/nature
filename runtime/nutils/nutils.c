@@ -204,24 +204,25 @@ static inline void panic_dump(caller_t *caller, char *msg) {
     exit(EXIT_FAILURE);
 }
 
-n_ptr_t *ptr_assert(n_ptr_t *ptr) {
+// caught: a catch right after the `as` takes the failure, which is then only reported by the return value
+n_ptr_t *ptr_assert(n_ptr_t *ptr, bool caught) {
     if (ptr == 0) {
         DEBUGF("[ptr_assert] raw pointer");
-        rti_throw("ptr is null, cannot assert", true);
+        if (!caught) rti_throw("ptr is null, cannot assert", true);
         return 0;
     }
 
     return ptr;
 }
 
-void interface_assert(n_interface_t *mu, int64_t target_rtype_hash, void *value_ref) {
+bool interface_assert(n_interface_t *mu, int64_t target_rtype_hash, void *value_ref, bool caught) {
     if (mu->rtype->hash != target_rtype_hash) {
         DEBUGF("[interface_assert] type assert failed, mu->rtype->kind: %s, target_rtype_hash: %ld",
                type_kind_str[mu->rtype->kind],
                target_rtype_hash);
 
-        rti_throw("type assert failed", true);
-        return;
+        if (!caught) rti_throw("type assert failed", true);
+        return false;
     }
 
     rtype_t *rtype = rt_find_rtype(target_rtype_hash);
@@ -236,6 +237,7 @@ void interface_assert(n_interface_t *mu, int64_t target_rtype_hash, void *value_
         "[interface_assert] success, interface_base: %p, interface_rtype_kind: %s, heap_out_size: %lu, interface_i64_value: %ld, "
         "values_ref: %p",
         mu, type_kind_str[mu->rtype->kind], size, mu->value.i64_value, value_ref);
+    return true;
 }
 
 
@@ -245,14 +247,14 @@ void interface_assert(n_interface_t *mu, int64_t target_rtype_hash, void *value_
  * @param target_rtype_hash
  * @param value_ref
  */
-void union_assert(n_union_t *mu, int64_t target_rtype_hash, void *value_ref) {
+bool union_assert(n_union_t *mu, int64_t target_rtype_hash, void *value_ref, bool caught) {
     if (mu->rtype->hash != target_rtype_hash) {
         DEBUGF("[union_assert] type assert failed, mu->rtype->kind: %s, target_rtype_hash: %ld",
                type_kind_str[mu->rtype->kind],
                target_rtype_hash);
 
-        rti_throw("type assert failed", true);
-        return;
+        if (!caught) rti_throw("type assert failed", true);
+        return false;
     }
 
     rtype_t *rtype = rt_find_rtype(target_rtype_hash);
@@ -265,16 +267,17 @@ void union_assert(n_union_t *mu, int64_t target_rtype_hash, void *value_ref) {
         "[union_assert] success, union_base: %p, union_rtype_kind: %s, heap_out_size: %lu, union_i64_value: %ld, "
         "values_ref: %p",
         mu, type_kind_str[mu->rtype->kind], rtype->storage_size, mu->value.i64_value, value_ref);
+    return true;
 }
 
-void any_assert(n_any_t *mu, int64_t target_rtype_hash, void *value_ref) {
+bool any_assert(n_any_t *mu, int64_t target_rtype_hash, void *value_ref, bool caught) {
     if (mu->rtype->hash != target_rtype_hash) {
         DEBUGF("[any_assert] type assert failed, mu->rtype->kind: %s, target_rtype_hash: %ld",
                type_kind_str[mu->rtype->kind],
                target_rtype_hash);
 
-        rti_throw("type assert failed", true);
-        return;
+        if (!caught) rti_throw("type assert failed", true);
+        return false;
     }
 
     rtype_t *rtype = rt_find_rtype(target_rtype_hash);
@@ -287,6 +290,7 @@ void any_assert(n_any_t *mu, int64_t target_rtype_hash, void *value_ref) {
         "[any_assert] success, any_base: %p, any_rtype_kind: %s, heap_out_size: %lu, any_i64_value: %ld, "
         "values_ref: %p",
         mu, type_kind_str[mu->rtype->kind], rtype->storage_size, mu->value.i64_value, value_ref);
+    return true;
 }
 
 bool union_is(n_union_t *mu, int64_t target_rtype_hash) {
@@ -684,8 +688,8 @@ void co_throw_error(n_interface_t *error, char *path, char *fn_name, n_int_t lin
     co->has_error = true;
 }
 
-void throw_index_out_error(n_int_t *index, n_int_t *len, n_bool_t be_catch) {
-    coroutine_t *co = coroutine_get();
+// a catch right after the access never gets here, the compiled code jumps to it instead
+void throw_index_out_error(n_int_t *index, n_int_t *len) {
     addr_t ret_addr = CALLER_RET_ADDR();
 
     assert(ret_addr);
@@ -695,32 +699,9 @@ void throw_index_out_error(n_int_t *index, n_int_t *len, n_bool_t be_catch) {
 
     char *msg = tlsprintf("index out of range [%d] with length %d", index, len);
 
-    if (be_catch) {
-        n_interface_t error = n_error_new(string_new(msg, strlen(msg)), true);
-        assert(error.method_count == 1);
-
-        DEBUGF("[runtime.co_throw_error_msg] co=%p, error=%p, msg=%s", co, (void *) &error, (char *) msg);
-
-        assert(co->traces.data == NULL);
-
-        fndef_t *caller_fn = caller->data;
-
-        n_vec_t traces = rti_vec_new(&errort_trace_rtype, 0, 0);
-        co->traces = traces;
-        n_trace_t trace = {
-            .path = string_new(STRTABLE(caller_fn->relpath_offset), strlen(STRTABLE(caller_fn->relpath_offset))),
-            .ident = string_new(STRTABLE(caller_fn->name_offset), strlen(STRTABLE(caller_fn->name_offset))),
-            .line = caller->line,
-            .column = caller->column,
-        };
-        rt_vec_push(&co->traces, errort_trace_rtype.hash, &trace);
-        rti_write_barrier_rtype(&co->error, &error, &throwable_rtype);
-        co->has_error = true;
-    } else {
-        char *copy_msg = strdup(msg);
-        panic_dump(caller, copy_msg);
-        free(copy_msg);
-    }
+    char *copy_msg = strdup(msg);
+    panic_dump(caller, copy_msg);
+    free(copy_msg);
 }
 
 n_interface_t co_remove_error() {
@@ -737,7 +718,8 @@ n_interface_t co_remove_error() {
     return error;
 }
 
-uint8_t co_has_panic(bool be_catch, char *path, char *fn_name, n_int_t line, n_int_t column) {
+// a panic a catch takes never gets here, the runtime call reports it by its return value instead
+uint8_t co_has_panic(char *path, char *fn_name, n_int_t line, n_int_t column) {
     coroutine_t *co = coroutine_get();
     if (!co->has_error) {
         return 0;
@@ -747,22 +729,6 @@ uint8_t co_has_panic(bool be_catch, char *path, char *fn_name, n_int_t line, n_i
     assert(line >= 0 && line < 1000000);
     assert(column >= 0 && column < 1000000);
     assert(co->traces.data);
-
-    // build in panic 可以被 catch 捕获，但只能是立刻捕获，否则会全局异常退出。
-    if (be_catch) {
-        // 存在异常时顺便添加调用栈信息, 这样 catch 错误时可以更加准确的添加相关信息
-        n_trace_t trace = {
-            .path = string_new(path, strlen(path)),
-            .ident = string_new(fn_name, strlen(fn_name)),
-            .line = line,
-            .column = column,
-        };
-
-        rt_vec_push(&co->traces, errort_trace_rtype.hash, &trace);
-        return 1;
-    }
-
-    assert(co->has_error);
 
     // 在 runtime 调用 nature 代码， rti_error_msg 会让 gc scan_stack 异常，不过马上就要退出了，问题不大
     // 可以考虑增加 safepoint_lock, 避免进入 safepoint 状态
@@ -1000,9 +966,13 @@ void rt_vec_to_string_out(n_string_t *out, n_vec_t *src) {
     *out = vec_to_string(src);
 }
 
-void rt_vec_slice_out(n_vec_t *out, n_vec_t *vec, int64_t start, int64_t end) {
+// caught: a catch right after the slice takes an out of range failure, reported by returning false
+bool rt_vec_slice_out(n_vec_t *out, n_vec_t *vec, int64_t start, int64_t end, bool caught) {
     assert(out);
+    int64_t last = end == -1 ? vec->length : end;
+    if (caught && (start < 0 || last < 0 || last > vec->length || start > last)) return false;
     *out = rt_vec_slice(vec, start, end);
+    return true;
 }
 
 n_string_t rt_strerror() {

@@ -145,14 +145,14 @@ panic: 'index out of range [8] with length 4' at nature-test/main.n:3:16
 fn main():void! {
     var list = [1, 2, 3, 4]
     var a = list[8] catch e {
-        println('catch vec error:', e.msg())
+        println('catch vec error:', e == INDEX_OUT_OF_RANGE)
         12
     }
     println(a)
 }
 
 --- output.txt
-catch vec error: index out of range [8] with length 4
+catch vec error: true
 12
 
 === test_global_vec
