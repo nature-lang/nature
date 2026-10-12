@@ -481,8 +481,10 @@ static inline bool is_errable_type(type_t type) {
     return type.kind == TYPE_TAGGED_UNION && str_equal(type.ident, ERRABLE_IDENT);
 }
 
-static inline bool is_x_errable(type_fn_t *fn) {
-    return fn && fn->is_x && fn->is_errable && is_errable_type(fn->return_type);
+// The fn hands its error back in the errable<T,E> it returns: a T! fn in .x, or an errable<T,E>
+// return in either mode. A T! fn in .n keeps its error on the coroutine.
+static inline bool is_errable_return(type_fn_t *fn) {
+    return fn && fn->is_errable && is_errable_type(fn->return_type);
 }
 
 // The builtin definition fixes the variant order; derive T and E instead of

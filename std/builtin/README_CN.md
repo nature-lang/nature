@@ -213,7 +213,29 @@ type errable<T,E> = union{
 }
 ```
 
-`.x` 中可能出错的函数返回 `errable<T,E>`：`T!` 就是 `errable<T,errset_t>`。不支持把 `errable<T,E>` 直接写成返回类型，带不带 `!` 都不行。`return T` 保存值，`throw` 保存错误。调用可能出错的函数时，错误会传播给外层的 `T!` 函数。和 `.n` 一样，`expr catch e { ... }` 处理 `expr` 中任何一个调用的错误，包括参数中的调用。`.x` 中越界之类的 panic 不会被 catch。`.n` 的错误模型后续单独处理。
+返回 `errable<T,E>` 的函数是可出错函数，`.x` 和 `.n` 都支持：`return` 给出 `T`，`throw` 给出 `E`，错误通过返回值带回。`.x` 中 `T!` 是 `errable<T,errset_t>` 的简写；`.n` 中 `T!` 仍然把错误挂在协程上。`errable<T,E>` 后面再写 `!` 会被拒绝。
+
+错误只能传播给错误类型相同的函数。错误类型不同的调用必须 catch 后转换，编译器会检查：
+
+```nature
+// .x 中
+errset BAD
+
+fn parse(string s):errable<int,string> {
+    if s == '' {
+        throw 'empty input'
+    }
+    return 1
+}
+
+fn load(string s):int! {
+    return parse(s) catch msg {
+        throw BAD
+    }
+}
+```
+
+跟在返回 `errable<T,E>` 的函数调用后面的 catch 只处理这个调用的错误，`e` 的类型就是它的错误类型。参数中的调用不在范围内：它们的错误照常向外传播，错误类型由编译器检查，所以 `check(parse(1)) catch e { ... }` 只处理 `check`。这样的 catch 也不会接住 panic。`.n` 中其他的 catch 仍然覆盖整个表达式，包括 `T!` 错误和 panic。`go` 暂不支持返回 `errable<T,E>` 的函数。
 
 ## errset
 
