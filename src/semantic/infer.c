@@ -37,8 +37,6 @@ static list_t *infer_struct_properties(module_t *m, type_struct_t *type_struct, 
 
 static type_t infer_call(module_t *m, ast_call_t *call, type_t target_type, bool check_errable);
 
-static type_t infer_call_with_fn(module_t *m, ast_call_t *call, type_fn_t *type_fn, bool check_errable);
-
 static void infer_call_args(module_t *m, ast_call_t *call, type_fn_t *target_type_fn);
 
 static void infer_fndef(module_t *m, ast_fndef_t *fn);
@@ -1561,35 +1559,31 @@ static type_t infer_fn_error_type(module_t *m, type_fn_t *fn) {
 }
 
 static type_t infer_catch(module_t *m, ast_catch_t *catch_expr) {
+    // A catch takes the error of the errable<T,E> call it follows: that call is inferred with its
+    // error check off, and the calls in its arguments propagate as usual. As in infer_async,
+    // infer_call_left runs first to see the fn and again in infer_call; a tagged union constructor
+    // is not a call.
     ast_expr_t *try_expr = &catch_expr->try_expr;
-    type_t unknown = type_kind_new(TYPE_UNKNOWN);
-
-    // A call is inferred here rather than by infer_right_expr, so the error check of the call this
-    // catch follows can be turned off; a tagged union constructor goes through infer_right_expr.
     type_fn_t *type_fn = NULL;
-    if (try_expr->assert_type == AST_CALL && !try_rewrite_tagged_union_call(m, try_expr, unknown)) {
-        SET_LINE_COLUMN(try_expr);
-        type_fn = infer_call_left(m, try_expr->value, unknown);
+    if (try_expr->assert_type == AST_CALL && !try_rewrite_tagged_union_call(m, try_expr, type_kind_new(TYPE_UNKNOWN))) {
+        type_fn = infer_call_left(m, try_expr->value, type_kind_new(TYPE_UNKNOWN));
     }
-
-    // A catch takes the error of the errable<T,E> call it follows; errors of the calls in its
-    // arguments propagate as usual. In .n a catch over anything else takes .n T! errors and panics
-    // of the whole expression from the coroutine.
     bool by_value = type_fn && is_errable_return(type_fn);
-    bool on_coroutine = !by_value && !m->current_fn->is_x;
-    if (on_coroutine) m->be_caught += 1;
-    type_t t = type_fn ? reduction_type(m, infer_call_with_fn(m, try_expr->value, type_fn, !by_value))
-                       : infer_right_expr(m, try_expr, unknown);
-    if (on_coroutine) m->be_caught -= 1;
-    try_expr->type = t;
 
-    // nothing reaches a catch in .x that does not follow an errable call, its error is just errset_t
-    type_t error_type = interface_throwable();
+    type_t t;
     if (by_value) {
-        error_type = errable_error_type(type_fn->return_type);
-    } else if (m->current_fn->is_x) {
-        error_type = type_ident_new(ERRSET_IDENT, TYPE_IDENT_DEF);
+        t = infer_call(m, try_expr->value, type_kind_new(TYPE_UNKNOWN), false);
+        try_expr->type = t;
+    } else {
+        // in .n a catch over anything else takes .n T! errors and panics of the whole expression
+        m->be_caught += 1;
+        t = infer_right_expr(m, try_expr, type_kind_new(TYPE_UNKNOWN));
+        m->be_caught -= 1;
     }
+
+    // an .x error is an errset value, an .n error is throwable
+    type_t error_type = m->current_fn->is_x ? type_ident_new(ERRSET_IDENT, TYPE_IDENT_DEF) : interface_throwable();
+    if (by_value) error_type = errable_error_type(type_fn->return_type);
     catch_expr->catch_err.type = reduction_type(m, error_type);
 
     rewrite_var_decl(m, &catch_expr->catch_err);
@@ -2916,7 +2910,9 @@ static type_fn_t *infer_call_left(module_t *m, ast_call_t *call, type_t target_t
  * @param call
  * @return
  */
-static type_t infer_call_with_fn(module_t *m, ast_call_t *call, type_fn_t *type_fn, bool check_errable) {
+static type_t infer_call(module_t *m, ast_call_t *call, type_t target_type, bool check_errable) {
+    type_fn_t *type_fn = infer_call_left(m, call, target_type);
+    assert(type_fn);
     infer_call_args(m, call, type_fn);
 
     call->return_type = type_fn->return_type;
@@ -2927,29 +2923,23 @@ static type_t infer_call_with_fn(module_t *m, ast_call_t *call, type_fn_t *type_
     }
 
     // An .n T! call inside a catch that takes errors from the coroutine is caught there. Any other
-    // error propagates into the current fn, which must fail with the same type; the call a catch
-    // over an errable<T,E> fn follows comes in with check_errable off.
+    // error propagates into the current fn, which must fail with the same type.
     bool caught = m->be_caught > 0 && !is_errable_return(type_fn);
     if (type_fn->is_errable && check_errable && !caught) {
-        char *fn_name = type_fn->fn_name ? type_fn->fn_name : "lambda";
         INFER_ASSERTF(m->current_fn->is_errable,
                       "calling an errable! fn `%s` requires the current `fn %s` errable! as well or be caught.",
-                      fn_name, m->current_fn->fn_name);
+                      type_fn->fn_name ? type_fn->fn_name : "lambda",
+                      m->current_fn->fn_name);
 
         type_t error_type = infer_fn_error_type(m, type_fn);
         type_t fn_error_type = infer_fn_error_type(m, m->current_fn->type.fn);
         INFER_ASSERTF(type_compare(fn_error_type, error_type),
                       "`%s` fails with %s, which cannot propagate into `fn %s` that fails with %s, catch and convert it",
-                      fn_name, type_format(error_type), m->current_fn->fn_name, type_format(fn_error_type));
+                      type_fn->fn_name ? type_fn->fn_name : "lambda", type_format(error_type),
+                      m->current_fn->fn_name, type_format(fn_error_type));
     }
 
     return is_errable_return(type_fn) ? errable_value_type(type_fn->return_type) : type_fn->return_type;
-}
-
-static type_t infer_call(module_t *m, ast_call_t *call, type_t target_type, bool check_errable) {
-    type_fn_t *type_fn = infer_call_left(m, call, target_type);
-    assert(type_fn);
-    return infer_call_with_fn(m, call, type_fn, check_errable);
 }
 
 static void infer_tagged_union_element(module_t *m, ast_expr_t *expr, type_t target_type) {

@@ -248,7 +248,7 @@ linear_inline_arr_element_addr(module_t *m, lir_operand_t *arr_target, lir_opera
     // TODO 共用 index out error handle label, 也就是有错误直接 goto 到这个地方，而不需要生成成百上千个
     char *error_label_ident = m->current_closure->error_label;
     uint16_t catch_depth = m->current_closure->catch_error_labels->count;
-    bool be_catch = catch_depth > 0;
+    bool be_catch = catch_depth > 0 && !m->current_closure->fndef->is_x; // a panic in .x is never caught
     if (be_catch) {
         error_label_ident = stack_top(m->current_closure->catch_error_labels);
     }
@@ -353,7 +353,7 @@ linear_inline_vec_element_addr(module_t *m, lir_operand_t *vec_target, lir_opera
 
     char *error_label_ident = m->current_closure->error_label;
     uint16_t catch_depth = m->current_closure->catch_error_labels->count;
-    bool be_catch = catch_depth > 0;
+    bool be_catch = catch_depth > 0 && !m->current_closure->fndef->is_x; // a panic in .x is never caught
     if (be_catch) {
         error_label_ident = stack_top(m->current_closure->catch_error_labels);
     }
@@ -909,7 +909,7 @@ static void linear_has_panic(module_t *m) {
 
     // panic 必须被立刻 catch, 判断当前表达式是否被 catch, 如果被 catch, 则走正常的 error 流程, 也就是有错误跳转到 catch label
     uint16_t catch_depth = m->current_closure->catch_error_labels->count;
-    bool be_catch = catch_depth > 0;
+    bool be_catch = catch_depth > 0 && !m->current_closure->fndef->is_x; // a panic in .x is never caught
     if (be_catch) {
         error_target_label = stack_top(m->current_closure->catch_error_labels);
     }
@@ -2228,8 +2228,7 @@ static lir_operand_t *linear_call_impl(module_t *m, ast_expr_t expr, lir_operand
     // call base_target,params -> target
     OP_PUSH(lir_op_new(LIR_OPCODE_CALL, fn_target, operand_new(LIR_OPERAND_ARGS, args), temp));
 
-    // A catch over this call branches on the errable it returns; the calls in its arguments went
-    // through linear_call and handled their own errors.
+    // a catch over this call branches on the errable it returns
     if (!check_error) return temp;
 
     // 目标函数可能会产生错误才需要进行错误判断，并跳转到对应的 error label 或者 continue label
@@ -3823,9 +3822,8 @@ static lir_operand_t *linear_catch_expr(module_t *m, ast_expr_t expr, lir_operan
         target = temp_var_operand_with_alloc(m, expr.type);
     }
 
-    // A catch over an errable<T,E> call branches on the errable that call returns. In .n a catch over
-    // anything else takes .n T! errors and panics of the whole expression from the coroutine; in .x
-    // nothing reaches it.
+    // A catch over an errable<T,E> call branches on the errable that call returns. A catch over
+    // anything else takes .n T! errors and panics of the whole expression from the coroutine.
     ast_expr_t try_expr = catch_expr->try_expr;
     lir_operand_t *errable = NULL;
     if (try_expr.assert_type == AST_CALL && is_errable_type(((ast_call_t *) try_expr.value)->return_type)) {
@@ -3833,11 +3831,9 @@ static lir_operand_t *linear_catch_expr(module_t *m, ast_expr_t expr, lir_operan
         OP_PUSH(lir_op_new(LIR_OPCODE_BEE, int_operand(hash_string(ERRABLE_ERROR_TAG)),
                            indirect_addr_operand(m, type_kind_new(TYPE_UINT64), errable, 0), lir_label_operand(catch_start_label, true)));
         linear_super_move(m, expr.type, target, linear_errable_payload(m, errable, expr.type));
-    } else if (m->current_closure->fndef->is_x) {
-        linear_expr(m, try_expr, target);
     } else {
         stack_push(m->current_closure->catch_error_labels, catch_start_label);
-        linear_expr(m, try_expr, target);
+        linear_expr(m, catch_expr->try_expr, target);
         stack_pop(m->current_closure->catch_error_labels);
     }
 
@@ -3866,7 +3862,7 @@ static lir_operand_t *linear_catch_expr(module_t *m, ast_expr_t expr, lir_operan
         linear_super_move(m, catch_expr->catch_err.type, err_operand,
                           linear_errable_payload(m, errable, catch_expr->catch_err.type));
     } else if (m->current_closure->fndef->is_x) {
-        OP_PUSH(lir_op_nop_def(err_operand));
+        OP_PUSH(lir_op_nop_def(err_operand)); // nothing reaches this catch in .x
     } else {
         push_rt_call(m, RT_CALL_CO_REMOVE_ERROR, err_operand, 0);
     }
