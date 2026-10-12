@@ -128,9 +128,11 @@ void rt_map_new_out(n_map_t *out, uint64_t rtype_hash, uint64_t key_rhash, uint6
  * @param m
  * @param key_ref
  * @return false 表示没有找到响应的值，也就是值不存在, true 表示相关值已经 copy 到了 value_ref 中
+ * caught: a catch right after the access takes a missing key, reported by returning 0
  */
-n_anyptr_t rt_map_access(n_map_t *m, void *key_ref) {
+n_anyptr_t rt_map_access(n_map_t *m, void *key_ref, bool caught) {
     if (m->capacity == 0) {
+        if (caught) return 0;
         rtype_t *key_rtype = rt_find_rtype(m->key_rtype_hash);
         assert(key_rtype);
         char *key_str = rtype_value_to_str(key_rtype, key_ref);
@@ -154,6 +156,10 @@ n_anyptr_t rt_map_access(n_map_t *m, void *key_ref) {
                hash_value_empty(hash_value),
                hash_value_deleted(hash_value));
 
+        if (caught) {
+            free((void *) key_str);
+            return 0;
+        }
         char *msg = tlsprintf("key '%s' not found in map", key_str);
         rti_throw(msg, true);
         return 0;

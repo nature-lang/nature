@@ -578,6 +578,7 @@ typedef struct closure_t {
     char *error_label; // 遇到表达式错误时需要调整到的目标 label
 
     ct_stack_t *catch_error_labels;
+    char *catch_panic_label; // the catch right after the expression being linearized takes its panic
     lir_operand_t *errable_storage; // the errable<T,E> this fn returns, in its stack frame
 
     ct_stack_t *continue_labels; // 用于 for continue lir_operand*

@@ -1569,20 +1569,25 @@ static type_t infer_catch(module_t *m, ast_catch_t *catch_expr) {
         type_fn = infer_call_left(m, try_expr->value, type_kind_new(TYPE_UNKNOWN));
     }
     bool by_value = type_fn && is_errable_return(type_fn);
+    // an index, map access, slice or `as` hands its panic to the catch right after it as a builtin errset
+    bool by_panic = try_expr->assert_type == AST_EXPR_ACCESS || try_expr->assert_type == AST_EXPR_VEC_SLICE ||
+                    try_expr->assert_type == AST_EXPR_AS;
 
     type_t t;
     if (by_value) {
         t = infer_call(m, try_expr->value, type_kind_new(TYPE_UNKNOWN), false);
         try_expr->type = t;
+    } else if (by_panic) {
+        t = infer_right_expr(m, try_expr, type_kind_new(TYPE_UNKNOWN));
     } else {
-        // in .n a catch over anything else takes .n T! errors and panics of the whole expression
+        // in .n a catch over anything else takes .n T! errors of the whole expression
         m->be_caught += 1;
         t = infer_right_expr(m, try_expr, type_kind_new(TYPE_UNKNOWN));
         m->be_caught -= 1;
     }
 
     // an .x error is an errset value, an .n error is throwable
-    type_t error_type = m->current_fn->is_x ? type_ident_new(ERRSET_IDENT, TYPE_IDENT_DEF) : interface_throwable();
+    type_t error_type = m->current_fn->is_x || by_panic ? type_ident_new(ERRSET_IDENT, TYPE_IDENT_DEF) : interface_throwable();
     if (by_value) error_type = errable_error_type(type_fn->return_type);
     catch_expr->catch_err.type = reduction_type(m, error_type);
 

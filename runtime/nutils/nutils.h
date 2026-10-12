@@ -13,11 +13,11 @@ extern char **command_argv;
 
 #define ASSERT_ADDR(_addr) assertf((addr_t) _addr > 0xa000 && (addr_t) _addr <= 0x1000000000000, "addr '%p' cannot valid", _addr)
 
-void union_assert(n_union_t *mu, int64_t target_rtype_hash, void *value_ref);
+bool union_assert(n_union_t *mu, int64_t target_rtype_hash, void *value_ref, bool caught);
 
-void any_assert(n_any_t *mu, int64_t target_rtype_hash, void *value_ref);
+bool any_assert(n_any_t *mu, int64_t target_rtype_hash, void *value_ref, bool caught);
 
-void interface_assert(n_interface_t *mu, int64_t target_rtype_hash, void *value_ref);
+bool interface_assert(n_interface_t *mu, int64_t target_rtype_hash, void *value_ref, bool caught);
 
 bool union_is(n_union_t *mu, int64_t target_rtype_hash);
 
@@ -49,13 +49,13 @@ void iterator_take_value(void *iterator, int64_t hash, int64_t cursor, void *val
 
 void co_throw_error(n_interface_t *error, char *path, char *fn_name, n_int_t line, n_int_t column);
 
-void throw_index_out_error(n_int_t *index, n_int_t *len, n_bool_t be_catch);
+void throw_index_out_error(n_int_t *index, n_int_t *len);
 
 n_interface_t co_remove_error();
 
 uint8_t co_has_error(char *path, char *fn_name, n_int_t line, n_int_t column);
 
-uint8_t co_has_panic(bool be_catch, char *path, char *fn_name, n_int_t line, n_int_t column);
+uint8_t co_has_panic(char *path, char *fn_name, n_int_t line, n_int_t column);
 
 n_anyptr_t anyptr_casting(value_casting v);
 
@@ -102,7 +102,7 @@ n_string_t rt_string_new(n_anyptr_t raw_string);
 void rt_string_concat_out(n_string_t *out, n_string_t *a, n_string_t *b);
 void rt_string_to_vec_out(n_vec_t *out, n_string_t *src);
 void rt_vec_to_string_out(n_string_t *out, n_vec_t *src);
-void rt_vec_slice_out(n_vec_t *out, n_vec_t *vec, int64_t start, int64_t end);
+bool rt_vec_slice_out(n_vec_t *out, n_vec_t *vec, int64_t start, int64_t end, bool caught);
 
 bool rt_in_heap(n_anyptr_t addr);
 

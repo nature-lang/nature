@@ -42,6 +42,25 @@ fn assert(bool cond)
 
 Assert that the condition is true, panic if false.
 
+## errset INDEX_OUT_OF_RANGE, KEY_NOT_FOUND, TYPE_ASSERT_FAILED
+
+```
+errset INDEX_OUT_OF_RANGE
+errset KEY_NOT_FOUND
+errset TYPE_ASSERT_FAILED
+```
+
+An index or slice out of range, a missing map key and a failed `as` panic. A catch right after such an expression gets the panic as one of these errsets instead, in `.x` and `.n`:
+
+```nature
+var a = list[5] catch e {
+    // e == INDEX_OUT_OF_RANGE
+    -1
+}
+```
+
+Only the expression the catch follows is covered: in `list[list[5]] catch e { ... }` the inner index still panics. A panic inside a called function, `panic()` and `assert()` always end the program.
+
 # [chan](https://github.com/nature-lang/nature/blob/master/std/builtin/chan.n)
 
 ## fn chan<T>.new
@@ -235,7 +254,7 @@ fn load(string s):int! {
 }
 ```
 
-A catch after a call of a function that returns `errable<T,E>` handles only that call's error, and `e` has its error type. The calls in its arguments are not covered: their errors propagate as usual and the compiler checks their error types, so in `check(parse(1)) catch e { ... }` only `check` is caught. Such a catch does not catch a panic either. In `.n`, any other catch still covers the whole expression, `T!` errors and panics included. `go` does not support a function that returns `errable<T,E>` yet.
+A catch after a call of a function that returns `errable<T,E>` handles only that call's error, and `e` has its error type. The calls in its arguments are not covered: their errors propagate as usual and the compiler checks their error types, so in `check(parse(1)) catch e { ... }` only `check` is caught. In `.n`, any other catch still covers the `T!` errors of the whole expression. `go` does not support a function that returns `errable<T,E>` yet.
 
 ## errset
 
