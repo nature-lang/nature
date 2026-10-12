@@ -3,6 +3,7 @@ mod process
 import io
 import co
 import fs
+import runtime
 
 type state_t = struct{
     string stdout
@@ -60,6 +61,9 @@ pub fn command(string name, [string] args):ref<command_t>! {
 
 pub fn command_t.spawn(&self):ref<process_t>! {
     var p = self.uv_spawn(self)
+    if runtime.has_error() {
+        throw runtime.take_error()
+    }
 
     // Scheduling in the current thread will not cause competition
     go p.handle_stdout()
@@ -71,7 +75,7 @@ pub fn command_t.spawn(&self):ref<process_t>! {
 
 
 #linkid rt_uv_process_spawn
-fn command_t.uv_spawn(&self, ref<command_t> cmd):ref<process_t>!
+fn command_t.uv_spawn(&self, ref<command_t> cmd):ref<process_t>
 
 fn process_t.handle_stdin(&self):void! {
     defer self.close_stdin()
@@ -86,21 +90,25 @@ fn process_t.handle_stdin(&self):void! {
             return
         }
 
-        self.write_stdin(buf.slice(0, n)) catch e {
+        self.write_stdin(buf.slice(0, n))
+        if runtime.has_error() {
+            runtime.take_error()
             return
         }
     }
 }
 
 #linkid rt_uv_process_write_stdin
-fn process_t.write_stdin(&self, [u8] buf):int!
+fn process_t.write_stdin(&self, [u8] buf):int
 
 #linkid rt_uv_process_close_stdin
 fn process_t.close_stdin(&self):void
 
 fn process_t.handle_stdout(&self):void! {
     for true {
-        string buf = self.read_stdout() catch e {
+        string buf = self.read_stdout()
+        if runtime.has_error() {
+            runtime.take_error()
             return
         }
 
@@ -110,7 +118,9 @@ fn process_t.handle_stdout(&self):void! {
 
 fn process_t.handle_stderr(&self):void! {
     for true {
-        string buf = self.read_stderr() catch e {
+        string buf = self.read_stderr()
+        if runtime.has_error() {
+            runtime.take_error()
             return
         }
 
@@ -119,10 +129,17 @@ fn process_t.handle_stderr(&self):void! {
 }
 
 #linkid rt_uv_process_wait
-pub fn process_t.wait(&self):void!
+fn process_t.uv_wait(&self):void
+
+pub fn process_t.wait(&self):void! {
+    self.uv_wait()
+    if runtime.has_error() {
+        throw runtime.take_error()
+    }
+}
 
 #linkid rt_uv_process_read_stdout
-fn process_t.read_stdout(&self):string!
+fn process_t.read_stdout(&self):string
 
 #linkid rt_uv_process_read_stderr
-fn process_t.read_stderr(&self):string!
+fn process_t.read_stderr(&self):string

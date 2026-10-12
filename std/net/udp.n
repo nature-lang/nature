@@ -27,10 +27,10 @@ pub type conn_t:io.reader, io.writer = struct{
 }
 
 #linkid rt_uv_udp_bind
-fn uv_udp_bind(ref<socket_t> s):void!
+fn uv_udp_bind(ref<socket_t> s):void
 
 #linkid rt_uv_udp_recvfrom
-fn uv_udp_recvfrom(ref<socket_t> s, [u8] buf, ptr<addr_t> addr):int!
+fn uv_udp_recvfrom(ref<socket_t> s, [u8] buf, ptr<addr_t> addr):int
 
 pub fn bind(string host):ref<socket_t>! {
     var (ip, port) = utils.split_host(host)
@@ -45,6 +45,9 @@ pub fn bind(string host):ref<socket_t>! {
     libc.inet_pton(family, ip.ref(), &addr.data as anyptr)
     var s = new socket_t(addr)
     uv_udp_bind(s)
+    if runtime.has_error() {
+        throw runtime.take_error()
+    }
 
     return s
 }
@@ -59,11 +62,14 @@ pub fn socket_t.recvfrom(&self, [u8] buf):(int, addr_t)! {
 
     var addr = addr_t{}
     var len = uv_udp_recvfrom(self, buf, &addr)
+    if runtime.has_error() {
+        throw runtime.take_error()
+    }
     return (len, addr)
 }
 
 #linkid rt_uv_udp_sendto
-fn uv_sendto(ref<socket_t> s, [u8] buf, addr_t addr):int!
+fn uv_sendto(ref<socket_t> s, [u8] buf, addr_t addr):int
 
 pub fn socket_t.sendto(&self, [u8] buf, string host):int! {
     if self.closed {
@@ -79,7 +85,11 @@ pub fn socket_t.sendto(&self, [u8] buf, string host):int! {
     }
     libc.inet_pton(family, ip.ref(), &addr.data as anyptr)
 
-    return uv_sendto(self, buf, addr)
+    var n = uv_sendto(self, buf, addr)
+    if runtime.has_error() {
+        throw runtime.take_error()
+    }
+    return n
 }
 
 pub fn socket_t.connect(&self, string host):ref<conn_t>! {
@@ -113,7 +123,11 @@ pub fn conn_t.write(&self, [u8] buf):int! {
         throw errorf('socket closed')
     }
 
-    return uv_sendto(self.socket, buf, self.remote_addr)
+    var n = uv_sendto(self.socket, buf, self.remote_addr)
+    if runtime.has_error() {
+        throw runtime.take_error()
+    }
+    return n
 }
 
 pub fn conn_t.read(&self, [u8] buf):int! {

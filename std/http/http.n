@@ -160,6 +160,9 @@ fn server_t.find_callback(&self, u8 method, string path):callback_fn {
 pub fn server_t.listen(&self, int port):void! {
     self.port = port
     uv.http_listen(self as anyptr)
+    if runtime.has_error() {
+        throw runtime.take_error()
+    }
 }
 
 pub fn server_t.close(&self) {

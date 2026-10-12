@@ -111,9 +111,9 @@ pub fn string.find(self, string sub):int {
 pub fn string.slice(self, int start, int end):string {
     // Reuse vec slicing for the view, then copy only the selected bytes so the
     // resulting string remains NUL-terminated.
-    var sliced = runtime.vec_slice<u8>(&self as anyptr, start, end) catch e {
-        panic(e.msg())
-        []
+    var sliced = runtime.vec_slice<u8>(&self as anyptr, start, end)
+    if runtime.has_error() {
+        panic(runtime.take_error().msg())
     }
     return runtime.string_ref_new(sliced.ref(), sliced.len())
 }

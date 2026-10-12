@@ -2,6 +2,7 @@ mod fs
 
 import syscall
 import io
+import runtime
 
 type timespec_t = struct {
     u64 sec 
@@ -38,10 +39,26 @@ pub type file_t:io.reader, io.writer, io.seeker = struct{
 }
 
 #linkid rt_uv_fs_from
-fn from(int fd, string name):ref<file_t>!
+fn uv_from(int fd, string name):ref<file_t>
+
+fn from(int fd, string name):ref<file_t>! {
+    var f = uv_from(fd, name)
+    if runtime.has_error() {
+        throw runtime.take_error()
+    }
+    return f
+}
 
 #linkid rt_uv_fs_open
-pub fn open(string path, int flags, int mode):ref<file_t>!
+fn uv_open(string path, int flags, int mode):ref<file_t>
+
+pub fn open(string path, int flags, int mode):ref<file_t>! {
+    var f = uv_open(path, flags, mode)
+    if runtime.has_error() {
+        throw runtime.take_error()
+    }
+    return f
+}
 
 #linkid rt_uv_fs_content
 pub fn file_t.content(&self):string! {
@@ -56,26 +73,66 @@ pub fn file_t.content(&self):string! {
 }
 
 #linkid rt_uv_fs_read
-pub fn file_t.read(&self, [u8] buf):int!
+fn file_t.uv_read(&self, [u8] buf):int
+
+pub fn file_t.read(&self, [u8] buf):int! {
+    var n = self.uv_read(buf)
+    if runtime.has_error() {
+        throw runtime.take_error()
+    }
+    return n
+}
 
 #linkid rt_uv_fs_write
-pub fn file_t.write(&self, [u8] buf):int!
+fn file_t.uv_write(&self, [u8] buf):int
+
+pub fn file_t.write(&self, [u8] buf):int! {
+    var n = self.uv_write(buf)
+    if runtime.has_error() {
+        throw runtime.take_error()
+    }
+    return n
+}
 
 pub fn file_t.seek(&self, int offset, int whence):int! {
     return syscall.seek(self.fd as int, offset, whence)
 }
 
 #linkid rt_uv_fs_read_at
-pub fn file_t.read_at(&self, [u8] buf, int offset):int!
+fn file_t.uv_read_at(&self, [u8] buf, int offset):int
+
+pub fn file_t.read_at(&self, [u8] buf, int offset):int! {
+    var n = self.uv_read_at(buf, offset)
+    if runtime.has_error() {
+        throw runtime.take_error()
+    }
+    return n
+}
 
 #linkid rt_uv_fs_write_at
-pub fn file_t.write_at(&self, [u8] buf, int offset):int!
+fn file_t.uv_write_at(&self, [u8] buf, int offset):int
+
+pub fn file_t.write_at(&self, [u8] buf, int offset):int! {
+    var n = self.uv_write_at(buf, offset)
+    if runtime.has_error() {
+        throw runtime.take_error()
+    }
+    return n
+}
 
 #linkid rt_uv_fs_close
 pub fn file_t.close(&self):void
 
 #linkid rt_uv_fs_stat
-pub fn file_t.stat(&self):stat_t!
+fn file_t.uv_stat(&self):stat_t
+
+pub fn file_t.stat(&self):stat_t! {
+    var st = self.uv_stat()
+    if runtime.has_error() {
+        throw runtime.take_error()
+    }
+    return st
+}
 
 // io
 pub fn stdout():ref<file_t>! {

@@ -578,7 +578,15 @@ int AT_RECURSIVE = 0x8000
 int AT_EACCESS = 0x200
 
 #linkid syscall_call6
-pub fn call6(int number, anyptr a1, anyptr a2, anyptr a3, anyptr a4, anyptr a5, anyptr a6):int!
+fn syscall_call6(int number, anyptr a1, anyptr a2, anyptr a3, anyptr a4, anyptr a5, anyptr a6):int
+
+pub fn call6(int number, anyptr a1, anyptr a2, anyptr a3, anyptr a4, anyptr a5, anyptr a6):int! {
+    var result = syscall_call6(number, a1, a2, a3, a4, a5, a6)
+    if runtime.has_error() {
+        throw runtime.take_error()
+    }
+    return result
+}
 
 #linkid syscall_getcwd
 fn syscall_getcwd():string
@@ -624,7 +632,14 @@ pub fn fork():int! {
 // path is full path
 // argv[0] = /proc/:pid/comm
 #linkid syscall_exec
-pub fn exec(string path, [string] argv, [string] envp):void!
+fn syscall_exec(string path, [string] argv, [string] envp):void
+
+pub fn exec(string path, [string] argv, [string] envp):void! {
+    syscall_exec(path, argv, envp)
+    if runtime.has_error() {
+        throw runtime.take_error()
+    }
+}
 
 type timespec_t = struct {
     i64 sec

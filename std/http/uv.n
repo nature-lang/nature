@@ -31,13 +31,7 @@ pub type conn_t = struct{
 }
 
 #linkid rt_uv_http_listen
-pub fn http_listen(anyptr server):void!
-
-#linkid rt_uv_read
-pub fn read(anyptr client):string!
-
-#linkid rt_uv_write
-pub fn write(anyptr client, string data):void!
+pub fn http_listen(anyptr server):void
 
 #linkid rt_uv_conn_resp
 pub fn conn_resp(ptr<conn_t> ctx, string data)

@@ -2,10 +2,33 @@
 
 Runtime system utilities for memory management, garbage collection, and core data structures
 
+## fn has_error
+
+```
+fn has_error():bool
+```
+
+A C binding reports its error on the current coroutine instead of throwing it. The std fn that calls a binding that can fail checks `has_error` right after the call.
+
+## fn take_error
+
+```
+fn take_error():throwable
+```
+
+Take the error a C binding reported, clearing it, so the caller can throw it:
+
+```nature
+var n = uv_read(buf)
+if runtime.has_error() {
+    throw runtime.take_error()
+}
+```
+
 ## fn vec_new
 
 ```
-fn vec_new<T>(int hash, int element_hash, int len, anyptr value_ref):vec<T>!
+fn vec_new<T>(int hash, int element_hash, int len, anyptr value_ref):vec<T>
 ```
 
 Create a new vector with specified hash, element hash, length and initial value reference
@@ -13,7 +36,7 @@ Create a new vector with specified hash, element hash, length and initial value 
 ## fn vec_cap
 
 ```
-fn vec_cap<T>(int hash, int element_hash, int cap):vec<T>!
+fn vec_cap<T>(int hash, int element_hash, int cap):vec<T>
 ```
 
 Create a new vector with specified capacity
@@ -37,7 +60,7 @@ Grow vector capacity to the specified size
 ## fn vec_slice
 
 ```
-fn vec_slice<T>(anyptr list, int start, int end):vec<T>!
+fn vec_slice<T>(anyptr list, int start, int end):vec<T>
 ```
 
 Create a slice of the vector from start to end index

@@ -1,13 +1,18 @@
 mod runtime
 
+// A C binding reports its error on the coroutine. The std fn calling it checks has_error right after
+// the call and throws take_error.
+#linkid rt_has_error
+pub fn has_error():bool
+
+#linkid co_remove_error
+pub fn take_error():throwable
+
 #linkid rt_vec_new
-pub fn vec_new<T>(int hash, int element_hash, int len, anyptr value_ref):vec<T>!
+pub fn vec_new<T>(int hash, int element_hash, int len, anyptr value_ref):vec<T>
 
 #linkid rt_vec_cap
-pub fn vec_cap<T>(int hash, int element_hash, int cap):vec<T>!
-
-#linkid rt_vec_alloc
-fn vec_alloc(int hash, int element_hash, int cap):anyptr!
+pub fn vec_cap<T>(int hash, int element_hash, int cap):vec<T>
 
 #linkid rt_vec_new_out
 pub fn vec_new_out(anyptr out, int hash, int element_hash, int cap)
@@ -19,7 +24,7 @@ pub fn vec_push(anyptr list, int element_hash, anyptr val)
 pub fn vec_grow(anyptr list, int element_hash, int custom_capacity)
 
 #linkid rt_vec_slice
-pub fn vec_slice<T>(anyptr list, int start, int end):vec<T>!
+pub fn vec_slice<T>(anyptr list, int start, int end):vec<T>
 
 #linkid rt_vec_append
 pub fn vec_append(anyptr list1, anyptr list2, int element_hash)

@@ -3,6 +3,7 @@ import strings
 import io
 import co.cross
 import net.types
+import runtime
 
 pub type server_t = struct{
     string ip
@@ -19,22 +20,38 @@ pub type conn_t:types.connable = struct{
 }
 
 #linkid rt_uv_tcp_listen
-fn uv_tcp_listen(ref<server_t> s):void!
+fn uv_tcp_listen(ref<server_t> s):void
 
 #linkid rt_uv_tcp_connect
-fn uv_tcp_connect(ref<conn_t> conn, string ip, int port, int timeout):void!
+fn uv_tcp_connect(ref<conn_t> conn, string ip, int port, int timeout):void
 
 #linkid rt_uv_tcp_server_close
 pub fn server_t.close(&self)
 
 #linkid rt_uv_tcp_accept
-fn uv_tcp_accept(ref<server_t> server, ref<conn_t> conn):void!
+fn uv_tcp_accept(ref<server_t> server, ref<conn_t> conn):void
 
 #linkid rt_uv_tcp_read
-pub fn conn_t.read(&self, [u8] buf):int!
+fn conn_t.uv_read(&self, [u8] buf):int
+
+pub fn conn_t.read(&self, [u8] buf):int! {
+    var n = self.uv_read(buf)
+    if runtime.has_error() {
+        throw runtime.take_error()
+    }
+    return n
+}
 
 #linkid rt_uv_tcp_write
-pub fn conn_t.write(&self, [u8] buf):int!
+fn conn_t.uv_write(&self, [u8] buf):int
+
+pub fn conn_t.write(&self, [u8] buf):int! {
+    var n = self.uv_write(buf)
+    if runtime.has_error() {
+        throw runtime.take_error()
+    }
+    return n
+}
 
 #linkid rt_uv_tcp_conn_close
 pub fn conn_t.close(&self)
@@ -54,6 +71,9 @@ pub fn server_t.accept(&self):ref<conn_t>! {
 
     var conn = new conn_t()
     uv_tcp_accept(self, conn)
+    if runtime.has_error() {
+        throw runtime.take_error()
+    }
     return conn
 }
 
@@ -63,6 +83,9 @@ pub fn listen(string host):ref<server_t>! {
 
     var s = new server_t(ip, port)
     uv_tcp_listen(s)
+    if runtime.has_error() {
+        throw runtime.take_error()
+    }
 
     return s
 }
@@ -76,5 +99,8 @@ pub fn connect_timeout(string host, int timeout):ref<conn_t>! {
     var (ip, port) = utils.split_host(host)
     var conn = new conn_t()
     uv_tcp_connect(conn, ip, port, timeout)
+    if runtime.has_error() {
+        throw runtime.take_error()
+    }
     return conn
 }

@@ -2,10 +2,33 @@
 
 运行时系统工具库，提供内存管理、垃圾回收和核心数据结构功能
 
+## fn has_error
+
+```
+fn has_error():bool
+```
+
+C 绑定出错时不直接抛出，而是把错误记在当前协程上。调用可能出错的绑定的 std 函数，在调用后立刻用 `has_error` 检查。
+
+## fn take_error
+
+```
+fn take_error():throwable
+```
+
+取出并清除 C 绑定记下的错误，调用方再把它抛出：
+
+```nature
+var n = uv_read(buf)
+if runtime.has_error() {
+    throw runtime.take_error()
+}
+```
+
 ## fn vec_new
 
 ```
-fn vec_new<T>(int hash, int element_hash, int len, anyptr value_ref):vec<T>!
+fn vec_new<T>(int hash, int element_hash, int len, anyptr value_ref):vec<T>
 ```
 
 创建一个新的向量，指定哈希值、元素哈希值、长度和初始值引用
@@ -13,7 +36,7 @@ fn vec_new<T>(int hash, int element_hash, int len, anyptr value_ref):vec<T>!
 ## fn vec_cap
 
 ```
-fn vec_cap<T>(int hash, int element_hash, int cap):vec<T>!
+fn vec_cap<T>(int hash, int element_hash, int cap):vec<T>
 ```
 
 创建一个指定容量的新向量
@@ -37,7 +60,7 @@ fn vec_grow(anyptr list, int element_hash, int custom_capacity)
 ## fn vec_slice
 
 ```
-fn vec_slice<T>(anyptr list, int start, int end):vec<T>!
+fn vec_slice<T>(anyptr list, int start, int end):vec<T>
 ```
 
 从开始索引到结束索引创建向量的切片

@@ -53,6 +53,8 @@ void throw_index_out_error(n_int_t *index, n_int_t *len);
 
 n_interface_t co_remove_error();
 
+bool rt_has_error();
+
 uint8_t co_has_error(char *path, char *fn_name, n_int_t line, n_int_t column);
 
 uint8_t co_has_panic(char *path, char *fn_name, n_int_t line, n_int_t column);
