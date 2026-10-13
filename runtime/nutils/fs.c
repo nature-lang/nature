@@ -63,10 +63,10 @@ static void on_write_cb(uv_fs_t *req) {
                 uv_fs_req_cleanup(&ctx->req);
                 return;
             }
-            rti_co_throw(co, strerror(errno), false);
+            rti_co_throw(co, rti_uv_errset(uv_translate_sys_error(errno)));
         } else {
             // 文件写入异常，设置错误并返回
-            rti_co_throw(co, (char *) uv_strerror(req->result), false);
+            rti_co_throw(co, rti_uv_errset(req->result));
         }
         co_ready(co);
         uv_fs_req_cleanup(&ctx->req);
@@ -86,7 +86,7 @@ static inline void on_open_cb(uv_fs_t *req) {
     if (req->result < 0) {
         DEBUGF("[on_open_cb] open file failed: %s, co: %p", uv_strerror(req->result), req->data);
 
-        rti_co_throw(req->data, (char *) uv_strerror(req->result), false);
+        rti_co_throw(req->data, rti_uv_errset(req->result));
 
         co_ready(req->data);
         uv_fs_req_cleanup(&ctx->req);
@@ -119,10 +119,10 @@ static void on_read_cb(uv_fs_t *req) {
                 uv_fs_req_cleanup(&ctx->req);
                 return;
             }
-            rti_co_throw(co, strerror(errno), false);
+            rti_co_throw(co, rti_uv_errset(uv_translate_sys_error(errno)));
         } else {
             // 文件读取异常，设置错误并返回，不需要关闭 fd, fd 由外部控制
-            rti_co_throw(co, (char *) uv_strerror(req->result), false);
+            rti_co_throw(co, rti_uv_errset(req->result));
         }
         co_ready(co);
         uv_fs_req_cleanup(&ctx->req);
@@ -144,7 +144,7 @@ fs_context_t *rt_uv_fs_from(n_int_t fd, n_string_t name) {
     fs_context_t *ctx = rti_gc_malloc(sizeof(fs_context_t), NULL);
     if (fd < 0) {
         coroutine_t *co = coroutine_get();
-        rti_co_throw(co, "invalid fd", false);
+        rti_co_throw(co, "io.CLOSED");
         return NULL;
     }
 
@@ -159,7 +159,7 @@ static void uv_async_fs_open(fs_context_t *ctx, char *path) {
 #ifdef __WINDOWS
     int fd = rt_windows_open_utf8(path, (int) ctx->flags, (int) ctx->mode);
     if (fd < 0) {
-        rti_co_throw(ctx->req.data, strerror(errno), false);
+        rti_co_throw(ctx->req.data, rti_uv_errset(uv_translate_sys_error(errno)));
     } else {
         ctx->fd = fd;
     }
@@ -168,7 +168,7 @@ static void uv_async_fs_open(fs_context_t *ctx, char *path) {
     int result = uv_fs_open(&global_loop, &ctx->req, path, (int) ctx->flags,
                             (int) ctx->mode, on_open_cb);
     if (result) {
-        rti_co_throw(ctx->req.data, (char *) uv_strerror(result), false);
+        rti_co_throw(ctx->req.data, rti_uv_errset(result));
         co_ready(ctx->req.data);
     }
 #endif
@@ -184,9 +184,8 @@ fs_context_t *rt_uv_fs_open(n_string_t path, int64_t flags, int64_t mode) {
     ctx->req.data = co;
 
     global_waiting_send(uv_async_fs_open, ctx, rt_string_ref(&path), 0);
-    if (co->has_error) {
-        n_string_t msg = rti_error_msg(&co->error);
-        DEBUGF("[fs_open] open file failed: %s", (char *) rt_string_ref(&msg));
+    if (co->errset) {
+        DEBUGF("[fs_open] open file failed: %s", ERRSET_NAME(co->errset));
         return NULL;
     } else {
         DEBUGF("[fs_open] open file success: %s", (char *) rt_string_ref(&path));
@@ -209,7 +208,7 @@ n_int_t rt_uv_fs_read_at(fs_context_t *ctx, n_vec_t buf, int offset) {
     DEBUGF("[rt_uv_fs_read] read file: %ld", ctx->fd);
 
     if (ctx->closed) {
-        rti_co_throw(co, "fd already closed", false);
+        rti_co_throw(co, "io.CLOSED");
         return 0;
     }
 
@@ -224,9 +223,8 @@ n_int_t rt_uv_fs_read_at(fs_context_t *ctx, n_vec_t buf, int offset) {
     // 基于 fd offset 进行读取
     global_waiting_send(uv_async_fs_read_at, ctx, (void *) offset, 0);
 
-    if (co->has_error) {
-        n_string_t msg = rti_error_msg(&co->error);
-        DEBUGF("[rt_uv_fs_read] read file failed: %s", (char *) rt_string_ref(&msg));
+    if (co->errset) {
+        DEBUGF("[rt_uv_fs_read] read file failed: %s", ERRSET_NAME(co->errset));
         return 0;
     } else {
         DEBUGF("[rt_uv_fs_read] read file success");
@@ -250,7 +248,7 @@ n_int_t rt_uv_fs_write_at(fs_context_t *ctx, n_vec_t buf, int offset) {
     n_processor_t *p = processor_get();
 
     if (ctx->closed) {
-        rti_co_throw(co, "fd already closed", false);
+        rti_co_throw(co, "io.CLOSED");
         return 0;
     }
 
@@ -259,9 +257,8 @@ n_int_t rt_uv_fs_write_at(fs_context_t *ctx, n_vec_t buf, int offset) {
 
     global_waiting_send(uv_async_fs_write_at, ctx, &buf, (void *) (int64_t) offset);
 
-    if (co->has_error) {
-        n_string_t msg = rti_error_msg(&co->error);
-        DEBUGF("[fs_write_at] write file failed: %s", (char *) rt_string_ref(&msg));
+    if (co->errset) {
+        DEBUGF("[fs_write_at] write file failed: %s", ERRSET_NAME(co->errset));
     } else {
         DEBUGF("[fs_write_at] write file success");
     }
@@ -308,7 +305,7 @@ static void on_stat_cb(uv_fs_t *req) {
 
     if (req->result < 0) {
         // File stat operation failed, set error and return
-        rti_co_throw(co, (char *) uv_strerror(req->result), false);
+        rti_co_throw(co, rti_uv_errset(req->result));
         co_ready(co);
         uv_fs_req_cleanup(&ctx->req);
         return;
@@ -325,7 +322,7 @@ static void uv_async_fs_stat(fs_context_t *ctx, coroutine_t *co) {
     // Initiate async stat request
     int result = uv_fs_fstat(&global_loop, &ctx->req, ctx->fd, on_stat_cb);
     if (result < 0) {
-        rti_co_throw(co, (char *) uv_strerror(result), false);
+        rti_co_throw(co, rti_uv_errset(result));
         co_ready(co);
     }
 }
@@ -336,7 +333,7 @@ uv_stat_t rt_uv_fs_stat(fs_context_t *ctx) {
     uv_stat_t stat_result = {0};
 
     if (ctx->closed) {
-        rti_co_throw(co, "fd already closed", false);
+        rti_co_throw(co, "io.CLOSED");
         return stat_result;
     }
 
@@ -347,9 +344,8 @@ uv_stat_t rt_uv_fs_stat(fs_context_t *ctx) {
 
     global_waiting_send(uv_async_fs_stat, ctx, co, 0);
 
-    if (co->has_error) {
-        n_string_t msg = rti_error_msg(&co->error);
-        DEBUGF("[rt_uv_fs_stat] stat file failed: %s", (char *) rt_string_ref(&msg));
+    if (co->errset) {
+        DEBUGF("[rt_uv_fs_stat] stat file failed: %s", ERRSET_NAME(co->errset));
     } else {
         DEBUGF("[rt_uv_fs_stat] stat file success");
         // Copy stat result from request

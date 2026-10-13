@@ -385,7 +385,7 @@ static void uv_async_http_listen(inner_http_server_t *inner) {
 
     int result = uv_listen((uv_stream_t *) &inner->handle, DEFAULT_BACKLOG, on_http_conn_cb);
     if (result) {
-        rti_co_throw(inner->listen_co, tlsprintf("listen failed: %s", uv_strerror(result)), false);
+        rti_co_throw(inner->listen_co, rti_uv_errset(result));
         co_ready(inner->listen_co);
     }
 }
