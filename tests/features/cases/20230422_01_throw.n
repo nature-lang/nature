@@ -1,6 +1,8 @@
+errset WORLD_ERROR
+
 fn hello():void! {
     println('hello nature')
-    throw errorf('world error')
+    throw WORLD_ERROR
 }
 
 fn main():void! {

@@ -5,12 +5,12 @@
 static void test_basic() {
     char *raw = exec_output();
     char *str = "hello nature\n"
-                "catch err: hello error\n"
-                "catch err: world error\n"
+                "catch err: main.HELLO_ERROR\n"
+                "catch err: main.WORLD_ERROR\n"
                 "foo = 12\n"
                 "foo = 233\n"
                 "hello nature\n"
-                "coroutine 'main' uncaught error: '??hello error' at cases/20230422_02_catch.n:34:30\n";
+                "coroutine 'main' uncaught error: main.WRAPPED_ERROR at cases/20230422_02_catch.n:38:27\n";
 
     assert_string_equal(raw, str);
 }

@@ -28,14 +28,14 @@ fn main():void! {
 
     var buf = vec<u8>.new(0, 5)
     br.read(buf) catch err {
-        assert(err.msg() == 'EOF')
-        println(err.msg())
+        assert(err == io.EOF)
+        println(err)
         0
     }
 }
 
 --- output.txt
-EOF
+io.EOF
 
 === test_read_until
 --- main.n
@@ -131,15 +131,15 @@ fn main():void! {
     assert(buf as string == " worl")
 
     br.read_exact(buf) catch e {
-        println("expected error: " + e.msg())
-        assert(e.msg() == "EOF")
+        println("expected error:", e)
+        assert(e == io.EOF)
     }
 }
 
 --- output.txt
 read data: hello
 second read data:  worl
-expected error: EOF
+expected error: io.EOF
 
 === test_read_exact_empty
 --- main.n
@@ -154,13 +154,13 @@ fn main():void! {
 
     var buf = vec<u8>.new(0, 5)
     br.read_exact(buf) catch e {
-        println("expected error: " + e.msg())
-        assert(e.msg() == "EOF")
+        println("expected error:", e)
+        assert(e == io.EOF)
     }
 }
 
 --- output.txt
-expected error: EOF
+expected error: io.EOF
 
 
 === test_partial_read
@@ -177,13 +177,13 @@ fn main():void! {
 
     var buf = vec<u8>.new(0, 5)
     br.read_exact(buf) catch e {
-        println("expected error: " + e.msg())
-        assert(e.msg() == "EOF")
+        println("expected error:", e)
+        assert(e == io.EOF)
     }
 }
 
 --- output.txt
-expected error: EOF
+expected error: io.EOF
 
 === test_read_zero_length
 --- main.n
@@ -235,8 +235,8 @@ fn main():void! {
     }
 
     b = br.read_byte() catch e {
-        println("expected err: " + e.msg())
-        assert(e.msg() == "EOF")
+        println("expected err:", e)
+        assert(e == io.EOF)
         0
     }
 }
@@ -245,7 +245,7 @@ fn main():void! {
 l
 l
 o
-expected err: EOF
+expected err: io.EOF
 
 === test_read_line
 --- main.n
@@ -276,7 +276,7 @@ fn main():void! {
 
     // Test EOF
     line = br.read_line() catch e {
-        println("catch e: " + e.msg())
+        println("catch e:", e)
         ''
     }
 }
@@ -285,7 +285,7 @@ fn main():void! {
 Line 1: 'Hello'
 Line 2: 'World'
 Line 3: 'Test\rEnd'
-catch e: EOF
+catch e: io.EOF
 
 === test_read_empty_line
 --- main.n
@@ -305,7 +305,7 @@ fn main():void! {
     }
 
     br.read_line() catch e {
-        println("catch e: " + e.msg())
+        println("catch e:", e)
         ''
     }
 }
@@ -316,4 +316,4 @@ Read line: ''
 Read line: ''
 Read line: 'Hello'
 Read line: ''
-catch e: EOF
+catch e: io.EOF

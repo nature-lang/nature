@@ -13,12 +13,14 @@ fn main():void! {
 }
 
 --- output.txt
-nature-test/main.n:2:22: type 'string' cannot casting to interface 'throwable'
+nature-test/main.n:2:22: type inconsistency, expect=errset_t(u32), actual=string
 
 === test_throw
 --- main.n
+errset BAR_ERROR
+
 fn bar():void! {
-    throw errorf('error in bar')
+    throw BAR_ERROR
 }
 
 fn foo():void! {
@@ -30,14 +32,14 @@ fn main():void! {
 }
 
 --- output.txt
-coroutine 'main' uncaught error: 'error in bar' at nature-test/main.n:2:29
+coroutine 'main' uncaught error: main.BAR_ERROR at nature-test/main.n:4:19
 stack backtrace:
 0:	main.bar
-		at nature-test/main.n:2:29
+		at nature-test/main.n:4:19
 1:	main.foo
-		at nature-test/main.n:6:8
+		at nature-test/main.n:8:8
 2:	main.main
-		at nature-test/main.n:10:8
+		at nature-test/main.n:12:8
 
 === test_panic
 --- main.n
@@ -52,7 +54,7 @@ fn foo():void! {
 
 fn main():void! {
     foo() catch err {
-        println('catch err:', err.msg())
+        println('catch err:', err)
     }
 }
 
@@ -75,7 +77,7 @@ fn foo():void! {
 
 fn main():void! {
     foo() catch err {
-        println('catch err:', err.msg())
+        println('catch err:', err)
     }
 }
 

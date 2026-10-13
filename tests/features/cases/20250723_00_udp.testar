@@ -173,6 +173,7 @@ import net.udp
 import co
 import runtime
 import time
+import fmt
 
 var count = 0
 
@@ -197,7 +198,7 @@ fn send():void! {
     conn.close()
 
     conn.read(buf) catch e {
-        panic(e.msg())
+        panic(fmt.sprintf('%v', e))
         0
     }
 }
@@ -216,7 +217,7 @@ fn main() {
 
 --- output.txt
 send success, recv msg hello world!!
-panic: 'socket closed' at nature-test/main.n:29:15
+panic: 'io.CLOSED' at nature-test/main.n:30:31
 
 === test_dns[exclude_os=windows]
 --- main.n
@@ -238,10 +239,11 @@ fn main() {
 import co
 import runtime
 import net.dns
+import fmt
 
 fn main() {
     var ips = dns.lookup('www.notfoundanything.com') catch e {
-        panic(e.msg())
+        panic(fmt.sprintf('%v', e))
         []
     }
     for ip in ips {
@@ -251,7 +253,7 @@ fn main() {
 }
 
 --- output.txt
-panic: 'unknown node or service' at nature-test/main.n:7:15
+panic: 'io.NOT_FOUND' at nature-test/main.n:8:31
 
 === test_sendto_speed[exclude_os=windows]
 --- main.n

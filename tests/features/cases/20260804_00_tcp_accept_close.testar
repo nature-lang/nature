@@ -2,15 +2,16 @@
 --- main.n
 import net.tcp
 import co
+import io
 
 type state_t = struct{
     bool done
-    string error
+    errset_t error
 }
 
 fn wait_accept(ref<tcp.server_t> server, ref<state_t> state) {
     var accepted = server.accept() catch e {
-        state.error = e.msg()
+        state.error = e
         state.done = true
         return
     }
@@ -29,8 +30,8 @@ fn main() {
     for !state_a.done || !state_b.done {
         co.sleep(1)
     }
-    assert(state_a.error == 'server closed')
-    assert(state_b.error == 'server closed')
+    assert(state_a.error == io.CLOSED)
+    assert(state_b.error == io.CLOSED)
 }
 
 === test_close_without_accept

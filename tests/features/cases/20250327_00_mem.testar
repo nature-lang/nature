@@ -65,22 +65,22 @@ fn main():void! {
 
     // test u32 with small buffer
     mem.read_u32_le(buf) catch err {
-        assert(err.msg() == 'buffer too small')
-        println('test u32 buffer too small: ' + err.msg())
+        assert(err == mem.BUFFER_TOO_SMALL)
+        println('test u32 buffer too small:', err)
         0
     }
 
     // test u64 with small buffer
     mem.read_u64_le(buf) catch err {
-        assert(err.msg() == 'buffer too small')
-        println('test u64 buffer too small: ' + err.msg())
+        assert(err == mem.BUFFER_TOO_SMALL)
+        println('test u64 buffer too small:', err)
         0
     }
 }
 
 --- output.txt
-test u32 buffer too small: buffer too small
-test u64 buffer too small: buffer too small
+test u32 buffer too small: mem.BUFFER_TOO_SMALL
+test u64 buffer too small: mem.BUFFER_TOO_SMALL
 
 === test_empty_buffer
 --- main.n
@@ -90,14 +90,14 @@ fn main():void! {
     [u8] buf = []
 
     mem.read_u8_le(buf) catch err {
-        assert(err.msg() == 'buffer too small')
-        println('test empty buffer: ' + err.msg())
+        assert(err == mem.BUFFER_TOO_SMALL)
+        println('test empty buffer:', err)
         0
     }
 }
 
 --- output.txt
-test empty buffer: buffer too small
+test empty buffer: mem.BUFFER_TOO_SMALL
 
 === test_copy_scalar
 --- main.n
@@ -114,14 +114,14 @@ fn main():void! {
     // test buffer too small
     [u8] small_buf = [1, 2]
     mem.copy(small_buf, &v) catch err {
-        assert(err.msg() == 'buffer too small')
-        println('test copy buffer too small: ' + err.msg())
+        assert(err == mem.BUFFER_TOO_SMALL)
+        println('test copy buffer too small:', err)
     }
 }
 
 --- output.txt
 test copy success: 67305985
-test copy buffer too small: buffer too small
+test copy buffer too small: mem.BUFFER_TOO_SMALL
 
 
 === test_copy_struct

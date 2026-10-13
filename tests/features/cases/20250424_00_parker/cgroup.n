@@ -7,6 +7,10 @@ import strings
 import parker.log as *
 import fs
 
+errset INVALID_PID
+errset CGROUP_NOT_FOUND
+errset UNKNOWN_CGROUP_VERSION
+
 u8 version1 = 1
 u8 version2 = 2
 const v1_default_system = 'freezer'
@@ -38,7 +42,7 @@ fn cgroup_t.clear(*self):void! {
     logf('s.procs_path is "%s"', self.procs_path)
 
     var f = fs.open(self.procs_path, syscall.O_RDONLY, 0) catch e {
-        throw errorf('open procs path="%s" failed: %s', self.procs_path, e.msg())
+        throw e
     }
 
     var pids_str = f.content()
@@ -52,12 +56,12 @@ fn cgroup_t.clear(*self):void! {
             // str to int
             var pid = pid_str.to_int()
             if pid == 0 {
-                throw errorf('pid str %s to int failed', pid_str)
+                throw INVALID_PID
             }
             
             // kill by pid
             syscall.kill(pid, syscall.SIGKILL) catch e {
-                logf('kill pid %d failed %s', pid, e.msg())
+                logf('kill pid %d failed %v', pid, e)
             }
         }
     }
@@ -68,7 +72,7 @@ fn cgroup_t.clear(*self):void! {
 
 pub fn init():cgroup_t! {
     if !path.exists('/sys/fs/cgroup') {
-        throw errorf('cgroup new err=' + 'path /sys/fs/cgroup not found')
+        throw CGROUP_NOT_FOUND
     }
     
     u8 version = 0
@@ -78,7 +82,7 @@ pub fn init():cgroup_t! {
     }  else if path.exists(path.join("/sys/fs/cgroup", v1_default_system)) {
         version = version1
     } else {
-        throw errorf('cannot detect cgroup version')
+        throw UNKNOWN_CGROUP_VERSION
     }
 
     var id = util.rand_letter(32)

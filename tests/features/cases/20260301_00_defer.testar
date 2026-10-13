@@ -130,22 +130,24 @@ done
 
 === test_throw_unwind
 --- main.n
+errset X
+
 fn boom():void! {
     defer {
         println('cleanup')
     }
-    throw errorf('x')
+    throw X
 }
 
 fn main() {
     boom() catch e {
-        println('caught', e.msg())
+        println('caught', e)
     }
 }
 
 --- output.txt
 cleanup
-caught x
+caught main.X
 
 === test_defer_eval_time_like_zig
 --- main.n
@@ -176,6 +178,8 @@ nature-test/main.n:3:14: return/break/continue/throw/ret are not allowed inside 
 // An errable call inside a defer body emits its own unwind, which walks the defer scope stack
 // again. Without a re-entrancy guard that re-enters the scope currently being emitted and
 // recurses until the compiler's own stack runs out.
+errset BOOM
+
 fn cleanup():int! {
     return 1
 }
@@ -184,17 +188,17 @@ fn work():int! {
     defer {
         cleanup()
     }
-    throw errorf('boom')
+    throw BOOM
 }
 
 fn main() {
     var v = work() catch e {
-        println('caught:', e.msg())
+        println('caught:', e)
         -1
     }
     println(v)
 }
 
 --- output.txt
-caught: boom
+caught: main.BOOM
 -1

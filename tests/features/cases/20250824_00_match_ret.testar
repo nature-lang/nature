@@ -1,8 +1,10 @@
 === test_basic
 --- main.n
+errset ZERO_DIVISOR
+
 fn div(int a, int b):int! {
     if b == 0 {
-        throw errorf('b cannot zero')
+        throw ZERO_DIVISOR
     }
 
     return a / b
@@ -39,7 +41,7 @@ fn main() {
 
     var a2 = div(10, 0) catch e {
         10
-        println('in div catch', e.msg())
+        println('in div catch', e)
         100
         10000
     }
@@ -57,9 +59,11 @@ fn main() {
 
 === test_break_failed
 --- main.n
+errset ZERO_DIVISOR
+
 fn div(int a, int b):int! {
     if b == 0 {
-        throw errorf('b cannot zero')
+        throw ZERO_DIVISOR
     }
 
     return a / b
@@ -75,13 +79,15 @@ fn main() {
 }
 
 --- output.txt
-nature-test/main.n:12:17: excepted ';' or '}' at end of statement
+nature-test/main.n:14:17: excepted ';' or '}' at end of statement
 
 === test_break_failed2
 --- main.n
+errset ZERO_DIVISOR
+
 fn div(int a, int b):int! {
     if b == 0 {
-        throw errorf('b cannot zero')
+        throw ZERO_DIVISOR
     }
 
     return a / b
@@ -97,5 +103,5 @@ fn main() {
 }
 
 --- output.txt
-nature-test/main.n:12:17: break must use in for stmt body
+nature-test/main.n:14:17: break must use in for stmt body
 

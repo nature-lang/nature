@@ -7,7 +7,7 @@ static void test_basic() {
     char *raw = exec_output();
     printf("%s", raw);
     char *str = "child process will run\n"
-                "first exec err: No such file or directory\n"
+                "first exec err: io.NOT_FOUND\n"
                 "hello world\n"
                 "start child process complete, will exit\n";
 
