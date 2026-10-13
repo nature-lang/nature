@@ -55,6 +55,9 @@ typedef struct {
 
 #define SYMBOL_RTYPE_COUNT "rt_rtype_count"
 #define SYMBOL_RTYPE_DATA "rt_rtype_data"
+
+#define SYMBOL_ERRSET_COUNT "rt_errset_count"
+#define SYMBOL_ERRSET_OFFSET "rt_errset_offset"
 #define SYMBOL_MAIN_IS_FN "main_is_fn"
 
 
@@ -85,6 +88,12 @@ extern struct sc_map_64v rt_caller_map;
 
 extern uint64_t rt_rtype_count;
 extern rtype_t rt_rtype_data;
+
+// the errset table in rt_data: the strtable offset of each errset's display name, id 1 first
+extern uint64_t rt_errset_count;
+extern uint64_t rt_errset_offset;
+
+#define ERRSET_NAME(_id) STRTABLE(((uint64_t *) RTDATA(rt_errset_offset))[(_id) - 1])
 
 // - strtable
 extern uint64_t ct_strtable_len;
@@ -121,6 +130,9 @@ extern uint8_t *ct_rtype_data;
 extern uint64_t ct_rtype_size; // rtype + gc_bits + element_kinds 的总数据量大小, sh_size 预申请需要该值，已经在 reflect_type 时计算完毕
 extern list_t *ct_rtype_list;
 extern table_t *ct_rtype_table; // 避免 rtype_vec 重复写入
+
+// - errset
+extern slice_t *ct_errset_names; // display names, the errset with id i + 1 at index i
 
 // 主要是需要处理 gc_bits 数据
 static inline uint8_t *fndefs_serialize() {
@@ -214,6 +226,18 @@ static inline uint64_t strtable_put(char *str) {
     // 更新字符串表长度
     ct_strtable_len += str_len;
 
+    return offset;
+}
+
+static inline uint64_t data_put(uint8_t *data, uint64_t len);
+
+// Puts the errset table into the data section and returns its offset there.
+static inline uint64_t errsets_put() {
+    data_put(NULL, align_up(ct_data_len, sizeof(uint64_t)) - ct_data_len);
+    uint64_t offset = data_put(NULL, ct_errset_names->count * sizeof(uint64_t));
+    for (int i = 0; i < ct_errset_names->count; ++i) {
+        ((uint64_t *) CTDATA(offset))[i] = strtable_put(ct_errset_names->take[i]);
+    }
     return offset;
 }
 

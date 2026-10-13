@@ -82,8 +82,6 @@ void rtypes_deserialize() {
             os_env_rtype = *r;
         } else if (r->kind == TYPE_VEC) {
             vec_rtype = *r;
-        } else if (str_equal(STRTABLE(r->ident_offset), THROWABLE_IDENT)) {
-            throwable_rtype = *r;
         }
 
         // rtype 已经组装完毕，现在加入到 rtype table 中
@@ -117,6 +115,22 @@ void register_const_str_pool() {
         //        TDEBUGF("[register_const_str_pool] str = %p, str %s", str, (char *) s.base);
     }
 };
+
+// errset ids by display name, for the errsets C fns report
+static struct sc_map_s64 errset_map;
+
+void errsets_deserialize() {
+    sc_map_init_s64(&errset_map, rt_errset_count * 2, 0);
+    for (uint32_t id = 1; id <= rt_errset_count; ++id) {
+        sc_map_put_s64(&errset_map, ERRSET_NAME(id), id);
+    }
+}
+
+uint32_t rt_find_errset(char *name) {
+    uint32_t id = sc_map_get_s64(&errset_map, name);
+    assertf(sc_map_found(&errset_map), "errset '%s' is not in the program", name);
+    return id;
+}
 
 void symdefs_deserialize() {
     rt_symdef_ptr = &rt_symdef_data;
