@@ -31,10 +31,19 @@ pub fn server_t.close(&self)
 fn uv_tcp_accept(ref<server_t> server, ref<conn_t> conn):void!
 
 #linkid rt_uv_tcp_read
-pub fn conn_t.read(&self, [u8] buf):int!
+fn conn_t.uv_read(&self, [u8] buf):int!
 
 #linkid rt_uv_tcp_write
-pub fn conn_t.write(&self, [u8] buf):int!
+fn conn_t.uv_write(&self, [u8] buf):int!
+
+// connable calls these through a method table, so they return the errable a C fn can't
+pub fn conn_t.read(&self, [u8] buf):int! {
+    return self.uv_read(buf)
+}
+
+pub fn conn_t.write(&self, [u8] buf):int! {
+    return self.uv_write(buf)
+}
 
 #linkid rt_uv_tcp_conn_close
 pub fn conn_t.close(&self)
@@ -49,7 +58,7 @@ pub fn conn_t.read_timeout(&self):int {
 
 pub fn server_t.accept(&self):ref<conn_t>! {
     if self.closed {
-        throw errorf('server closed')
+        throw io.CLOSED
     }
 
     var conn = new conn_t()
