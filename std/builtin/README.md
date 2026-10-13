@@ -73,6 +73,8 @@ Create a new channel with optional buffer size.
 
 ## type chan
 
+A send, receive or close on a closed channel fails with the builtin `errset CHAN_CLOSED`.
+
 ### chan.send
 
 ```
@@ -153,7 +155,7 @@ Check if the last operation was successful.
 type future_t<T> = struct{
     i64 size
     ptr<T> result
-    throwable? error
+    errset_t error
     anyptr co
 }
 ```
@@ -194,35 +196,6 @@ Return a result from a coroutine.
 
 # [error](https://github.com/nature-lang/nature/blob/master/std/builtin/error.n)
 
-## type throwable
-
-```
-type throwable = interface{
-    fn msg():string
-}
-```
-
-Interface for throwable objects.
-
-## type errort
-
-```
-type errort:throwable = struct{
-    string message
-    bool is_panic
-}
-```
-
-Error type implementing throwable interface.
-
-### errort.msg
-
-```
-fn errort.msg():string
-```
-
-Get the error message.
-
 ## type errable
 
 ```
@@ -232,7 +205,7 @@ type errable<T,E> = union{
 }
 ```
 
-A function that returns `errable<T,E>` is errable, in `.x` and `.n`: `return` gives a `T`, `throw` gives an `E`, and the error comes back in the return value. In `.x`, `T!` is shorthand for `errable<T,errset_t>`; in `.n`, `T!` still keeps its error on the coroutine. A `!` after `errable<T,E>` is rejected.
+A function that returns `errable<T,E>` is errable, in `.x` and `.n`: `return` gives a `T`, `throw` gives an `E`, and the error comes back in the return value. `T!` is shorthand for `errable<T,errset_t>`. A `T!` function bound to C, declared without a body, can't return that, so it leaves its errset on the coroutine and the compiler takes it after the call. A `!` after `errable<T,E>` is rejected.
 
 An error propagates only into a function that fails with the same type. A call that fails with another type has to be caught and converted, which the compiler checks:
 
@@ -254,7 +227,7 @@ fn load(string s):int! {
 }
 ```
 
-A catch after a call of a function that returns `errable<T,E>` handles only that call's error, and `e` has its error type. The calls in its arguments are not covered: their errors propagate as usual and the compiler checks their error types, so in `check(parse(1)) catch e { ... }` only `check` is caught. In `.n`, any other catch still covers the `T!` errors of the whole expression. `go` does not support a function that returns `errable<T,E>` yet.
+A catch after a call of a function that returns `errable<T,E>` handles only that call's error, and `e` has its error type. The calls in its arguments are not covered: their errors propagate as usual and the compiler checks their error types, so in `check(parse(1)) catch e { ... }` only `check` is caught. Nothing else reaches a catch. `go` runs a function that fails with an errset; await fails with the errset the coroutine failed with.
 
 ## errset
 
@@ -285,15 +258,16 @@ fn main() {
 
 An `errset` declaration registers a named error. Its identity is the declaration itself: the compiler gives it a program-wide id, so `io.TIMEOUT` and `fmt.TIMEOUT` are different errors even though they share a name. An errset carries no message and no data, so it is compared with `==` and `!=`, or matched with `match e { TIMEOUT -> ... _ -> ... }`. The set of errsets is open, so a `match` needs a `_` arm.
 
-Declarations are module-level only and always public, so `pub` is not needed; a `pub` before `errset` is accepted and ignored. An errset value has the builtin type `errset_t` and is stored as a `u32` id at run time. Only an errset name produces an `errset_t` value: neither an integer literal nor a `u32` value converts to it, so `throw 5` and comparing `u32 a = 12` with an errset are type errors. An `.n` module may declare an errset, but `.n` functions cannot throw one.
-
-## fn errorf
+Declarations are module-level only and always public, so `pub` is not needed; a `pub` before `errset` is accepted and ignored. An errset value has the builtin type `errset_t` and is stored as a `u32` id at run time. Only an errset name produces an `errset_t` value: neither an integer literal nor a `u32` value converts to it, so `throw 5` and comparing `u32 a = 12` with an errset are type errors. `print`, `println` and `%v` in `fmt` print an `errset_t` as its name, such as `io.EOF`. An error nothing catches ends the program with its name and the trace of the functions it passed through:
 
 ```
-fn errorf(string format, ...[any] args):ref<errort>
+coroutine 'main' uncaught error: io.NOT_FOUND at main.n:5:42
+stack backtrace:
+0:	main.load
+		at main.n:5:42
+1:	main.main
+		at main.n:9:9
 ```
-
-Create a formatted error.
 
 # [map](https://github.com/nature-lang/nature/blob/master/std/builtin/map.n)
 
