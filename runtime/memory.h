@@ -187,8 +187,6 @@ void callers_deserialize();
 
 void symdefs_deserialize();
 
-void errsets_deserialize();
-
 uint32_t rt_find_errset(char *name);
 
 void register_const_str_pool();

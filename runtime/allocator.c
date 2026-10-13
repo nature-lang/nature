@@ -1269,7 +1269,6 @@ void runtime_deserialize_init() {
     callers_deserialize();
     rtypes_deserialize();
     symdefs_deserialize();
-    errsets_deserialize();
     DEBUGF("[runtime_deserialize_init] deserialize success");
 }
 

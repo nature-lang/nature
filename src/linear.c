@@ -3847,7 +3847,7 @@ static lir_operand_t *linear_catch_expr(module_t *m, ast_expr_t expr, lir_operan
     ast_expr_t try_expr = catch_expr->try_expr;
     ast_call_t *call = try_expr.assert_type == AST_CALL ? try_expr.value : NULL;
     lir_operand_t *errable = NULL;
-    lir_operand_t *errset = NULL;
+    lir_operand_t *co_errset = NULL;
     char *panic_errset = linear_panic_errset(try_expr);
     if (call && is_errable_type(call->return_type)) {
         errable = linear_call_impl(m, try_expr, NULL, false);
@@ -3856,8 +3856,8 @@ static lir_operand_t *linear_catch_expr(module_t *m, ast_expr_t expr, lir_operan
         linear_super_move(m, expr.type, target, linear_errable_payload(m, errable, expr.type));
     } else if (call && call->left.type.fn->is_errable) {
         lir_operand_t *result = linear_call_impl(m, try_expr, NULL, false);
-        errset = linear_take_errset(m);
-        OP_PUSH(lir_op_new(LIR_OPCODE_BNE, integer_operand(0, TYPE_UINT32), errset, lir_label_operand(catch_start_label, true)));
+        co_errset = linear_take_errset(m);
+        OP_PUSH(lir_op_new(LIR_OPCODE_BNE, integer_operand(0, TYPE_UINT32), co_errset, lir_label_operand(catch_start_label, true)));
         if (result) {
             linear_super_move(m, expr.type, target, result);
         }
@@ -3893,11 +3893,11 @@ static lir_operand_t *linear_catch_expr(module_t *m, ast_expr_t expr, lir_operan
     if (errable) {
         linear_super_move(m, catch_expr->catch_err.type, err_operand,
                           linear_errable_payload(m, errable, catch_expr->catch_err.type));
-    } else if (errset) {
-        OP_PUSH(lir_op_move(err_operand, errset));
+    } else if (co_errset) {
+        OP_PUSH(lir_op_move(err_operand, co_errset));
     } else if (panic_errset) {
-        ast_errset_stmt_t *panic_errset_stmt = symbol_table_get(panic_errset)->ast_value;
-        OP_PUSH(lir_op_move(err_operand, integer_operand(panic_errset_stmt->id, TYPE_UINT32)));
+        ast_errset_stmt_t *errset = symbol_table_get(panic_errset)->ast_value;
+        OP_PUSH(lir_op_move(err_operand, integer_operand(errset->id, TYPE_UINT32)));
     } else {
         OP_PUSH(lir_op_nop_def(err_operand)); // nothing reaches this catch
     }

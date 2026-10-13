@@ -116,20 +116,13 @@ void register_const_str_pool() {
     }
 };
 
-// errset ids by display name, for the errsets C fns report
-static struct sc_map_s64 errset_map;
-
-void errsets_deserialize() {
-    sc_map_init_s64(&errset_map, rt_errset_count * 2, 0);
-    for (uint32_t id = 1; id <= rt_errset_count; ++id) {
-        sc_map_put_s64(&errset_map, ERRSET_NAME(id), id);
-    }
-}
-
+// the id of the errset a C fn reports by its display name
 uint32_t rt_find_errset(char *name) {
-    uint32_t id = sc_map_get_s64(&errset_map, name);
-    assertf(sc_map_found(&errset_map), "errset '%s' is not in the program", name);
-    return id;
+    for (uint32_t id = 1; id <= rt_errset_count; ++id) {
+        if (str_equal(ERRSET_NAME(id), name)) return id;
+    }
+    assertf(false, "errset '%s' is not in the program", name);
+    return 0;
 }
 
 void symdefs_deserialize() {

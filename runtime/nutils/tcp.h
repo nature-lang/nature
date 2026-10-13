@@ -270,10 +270,6 @@ int64_t rt_uv_tcp_read(n_tcp_conn_t *n_conn, n_vec_t buf) {
         rti_co_throw(co, "io.CLOSED");
         return 0;
     }
-    if (read_len == UV_ETIMEDOUT) {
-        rti_co_throw(co, "io.TIMEOUT");
-        return 0;
-    }
     if (read_len < 0) {
         rti_co_throw(co, rti_uv_errset(read_len));
         return 0;

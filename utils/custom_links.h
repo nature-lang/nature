@@ -229,18 +229,6 @@ static inline uint64_t strtable_put(char *str) {
     return offset;
 }
 
-static inline uint64_t data_put(uint8_t *data, uint64_t len);
-
-// Puts the errset table into the data section and returns its offset there.
-static inline uint64_t errsets_put() {
-    data_put(NULL, align_up(ct_data_len, sizeof(uint64_t)) - ct_data_len);
-    uint64_t offset = data_put(NULL, ct_errset_names->count * sizeof(uint64_t));
-    for (int i = 0; i < ct_errset_names->count; ++i) {
-        ((uint64_t *) CTDATA(offset))[i] = strtable_put(ct_errset_names->take[i]);
-    }
-    return offset;
-}
-
 static inline uint64_t data_put(uint8_t *data, uint64_t len) {
     if (ct_data == NULL) {
         ct_data_cap = 1024;
@@ -269,6 +257,15 @@ static inline uint64_t data_put(uint8_t *data, uint64_t len) {
     uint64_t offset = ct_data_len;
     ct_data_len += len;
 
+    return offset;
+}
+
+// Puts the errset table into the data section and returns its offset there.
+static inline uint64_t errsets_put() {
+    uint64_t offset = data_put(NULL, ct_errset_names->count * sizeof(uint64_t));
+    for (int i = 0; i < ct_errset_names->count; ++i) {
+        ((uint64_t *) CTDATA(offset))[i] = strtable_put(ct_errset_names->take[i]);
+    }
     return offset;
 }
 
