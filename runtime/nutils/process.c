@@ -275,9 +275,6 @@ n_errable_t rt_uv_process_write_stdin(process_context_t *ctx, n_vec_t buf) {
     ctx->stdin_pipe.pipe.data = co;
     global_waiting_send(uv_async_process_write_stdin, ctx, 0, 0);
 
-    if (co->errset) {
-        return rti_errable(0);
-    }
     return rti_errable(buf.length);
 }
 

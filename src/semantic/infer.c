@@ -1558,11 +1558,6 @@ static type_t infer_match(module_t *m, ast_match_t *match, type_t target_type) {
     return target_type;
 }
 
-// The type of the error a call of fn fails with: E of the errable<T,E> it returns.
-static type_t infer_fn_error_type(module_t *m, type_fn_t *fn) {
-    return errable_error_type(fn->return_type);
-}
-
 static type_t infer_catch(module_t *m, ast_catch_t *catch_expr) {
     // A catch takes the error of the errable<T,E> call it follows: that call is inferred with its
     // error check off, and the calls in its arguments propagate as usual. As in infer_async,
@@ -1573,10 +1568,10 @@ static type_t infer_catch(module_t *m, ast_catch_t *catch_expr) {
     if (try_expr->assert_type == AST_CALL && !try_rewrite_tagged_union_call(m, try_expr, type_kind_new(TYPE_UNKNOWN))) {
         type_fn = infer_call_left(m, try_expr->value, type_kind_new(TYPE_UNKNOWN));
     }
-    bool by_call = type_fn && type_fn->is_errable;
+    bool by_value = type_fn && is_errable_return(type_fn);
 
     type_t t;
-    if (by_call) {
+    if (by_value) {
         t = infer_call(m, try_expr->value, type_kind_new(TYPE_UNKNOWN), false);
         try_expr->type = t;
     } else {
@@ -1584,7 +1579,7 @@ static type_t infer_catch(module_t *m, ast_catch_t *catch_expr) {
     }
 
     // an index, map access, slice or `as` hands its panic to the catch right after it as a builtin errset
-    type_t error_type = by_call ? infer_fn_error_type(m, type_fn) : type_ident_new(ERRSET_IDENT, TYPE_IDENT_DEF);
+    type_t error_type = by_value ? errable_error_type(type_fn->return_type) : type_ident_new(ERRSET_IDENT, TYPE_IDENT_DEF);
     catch_expr->catch_err.type = reduction_type(m, error_type);
 
     rewrite_var_decl(m, &catch_expr->catch_err);
@@ -2930,8 +2925,8 @@ static type_t infer_call(module_t *m, ast_call_t *call, type_t target_type, bool
                       type_fn->fn_name ? type_fn->fn_name : "lambda",
                       m->current_fn->fn_name);
 
-        type_t error_type = infer_fn_error_type(m, type_fn);
-        type_t fn_error_type = infer_fn_error_type(m, m->current_fn->type.fn);
+        type_t error_type = errable_error_type(type_fn->return_type);
+        type_t fn_error_type = errable_error_type(m->current_fn->type.fn->return_type);
         INFER_ASSERTF(type_compare(fn_error_type, error_type),
                       "`%s` fails with %s, which cannot propagate into `fn %s` that fails with %s, catch and convert it",
                       type_fn->fn_name ? type_fn->fn_name : "lambda", type_format(error_type),
@@ -3369,7 +3364,7 @@ static void infer_throw(module_t *m, ast_throw_stmt_t *throw_stmt) {
                   "can't use throw stmt in a fn without an errable! declaration. example: fn %s(...):%s!",
                   m->current_fn->fn_name, type_origin_format(m->current_fn->return_type));
 
-    infer_right_expr(m, &throw_stmt->error, infer_fn_error_type(m, m->current_fn->type.fn));
+    infer_right_expr(m, &throw_stmt->error, errable_error_type(m->current_fn->type.fn->return_type));
 }
 
 /**
