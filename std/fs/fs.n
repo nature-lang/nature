@@ -50,16 +50,25 @@ pub fn file_t.content(&self):string! {
     var buf = vec<u8>.new(0, file_size as int)
     int n = self.read_at(buf, 0)
     if n != file_size as int {
-        throw errorf('incomplete reading')
+        throw io.EOF
     }
     return buf as string
 }
 
 #linkid rt_uv_fs_read
-pub fn file_t.read(&self, [u8] buf):int!
+fn file_t.uv_read(&self, [u8] buf):int!
 
 #linkid rt_uv_fs_write
-pub fn file_t.write(&self, [u8] buf):int!
+fn file_t.uv_write(&self, [u8] buf):int!
+
+// io.reader and io.writer call these through a method table, so they return the errable a C fn can't
+pub fn file_t.read(&self, [u8] buf):int! {
+    return self.uv_read(buf)
+}
+
+pub fn file_t.write(&self, [u8] buf):int! {
+    return self.uv_write(buf)
+}
 
 pub fn file_t.seek(&self, int offset, int whence):int! {
     return syscall.seek(self.fd as int, offset, whence)

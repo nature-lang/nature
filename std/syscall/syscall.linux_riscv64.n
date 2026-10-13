@@ -2,6 +2,7 @@ mod syscall
 
 import runtime
 import libc
+import io
 
 pub u32 MS_ACTIVE = 0x40000000
 u32 MS_ASYNC = 0x1
@@ -737,7 +738,7 @@ pub fn wait(int pid, int option):(int, int)! {
     var status = 0
     int result = libc.waitpid(pid, &status, option)
     if result == -1 {
-        throw errorf(libc.error_string())
+        throw io.sys_errset(libc.errno())
     }
 
     return (result, status)
@@ -845,7 +846,7 @@ pub fn get_env(string key):string {
 pub fn set_env(string key, string value):void! {
     var result = setenv(key.ref(), value.ref(), 1)
     if result != 0 {
-        throw errorf('setenv error')
+        throw io.sys_errset(libc.errno())
     }
 }
 
