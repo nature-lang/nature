@@ -4,7 +4,7 @@ import libc
 
 pub fn vec_new<T>(ptr<T> p, int len):vec<T>! {
     if len < 0 {
-        throw errorf("invalid vec index '%d' (must be non-negative)", len)
+        throw INDEX_OUT_OF_RANGE
     }
 
     int hash = @reflect_hash(vec<T>)
