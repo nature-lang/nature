@@ -137,7 +137,7 @@ n_anyptr_t rt_map_access(n_map_t *m, void *key_ref, bool caught) {
         assert(key_rtype);
         char *key_str = rtype_value_to_str(key_rtype, key_ref);
         char *msg = tlsprintf("key '%s' not found in map", key_str);
-        rti_throw(msg, true);
+        rti_panic(msg);
         free((void *) key_str);
         return 0;
     }
@@ -161,7 +161,7 @@ n_anyptr_t rt_map_access(n_map_t *m, void *key_ref, bool caught) {
             return 0;
         }
         char *msg = tlsprintf("key '%s' not found in map", key_str);
-        rti_throw(msg, true);
+        rti_panic(msg);
         return 0;
     }
 

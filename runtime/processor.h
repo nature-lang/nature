@@ -5,9 +5,10 @@
 #include <stdint.h>
 
 #include "linkco.h"
-#include "nutils/errort.h"
 #include "nutils/vec.h"
 #include "runtime.h"
+#include "runtime/memory.h"
+#include "runtime/rtype.h"
 
 #define ASYNC_HANDLE_FREELIST_MAX 1000
 #define ASYNC_HANDLE_FREELIST_MIN 100
@@ -275,7 +276,7 @@ void co_migrate(aco_t *aco, aco_share_stack_t *new_st);
 
 void rt_coroutine_sleep(int64_t ms);
 
-void rt_coroutine_await(coroutine_t *co);
+void rt_coroutine_await(n_future_t *fu);
 
 void rt_coroutine_yield();
 

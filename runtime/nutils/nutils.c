@@ -4,7 +4,6 @@
 #include <string.h>
 
 #include "array.h"
-#include "errort.h"
 #include "runtime/memory.h"
 #include "runtime/processor.h"
 #include "runtime/rt_chan.h"
@@ -208,7 +207,7 @@ static inline void panic_dump(caller_t *caller, char *msg) {
 n_ptr_t *ptr_assert(n_ptr_t *ptr, bool caught) {
     if (ptr == 0) {
         DEBUGF("[ptr_assert] raw pointer");
-        if (!caught) rti_throw("ptr is null, cannot assert", true);
+        if (!caught) rti_panic("ptr is null, cannot assert");
         return 0;
     }
 
@@ -221,7 +220,7 @@ bool interface_assert(n_interface_t *mu, int64_t target_rtype_hash, void *value_
                type_kind_str[mu->rtype->kind],
                target_rtype_hash);
 
-        if (!caught) rti_throw("type assert failed", true);
+        if (!caught) rti_panic("type assert failed");
         return false;
     }
 
@@ -253,7 +252,7 @@ bool union_assert(n_union_t *mu, int64_t target_rtype_hash, void *value_ref, boo
                type_kind_str[mu->rtype->kind],
                target_rtype_hash);
 
-        if (!caught) rti_throw("type assert failed", true);
+        if (!caught) rti_panic("type assert failed");
         return false;
     }
 
@@ -276,7 +275,7 @@ bool any_assert(n_any_t *mu, int64_t target_rtype_hash, void *value_ref, bool ca
                type_kind_str[mu->rtype->kind],
                target_rtype_hash);
 
-        if (!caught) rti_throw("type assert failed", true);
+        if (!caught) rti_panic("type assert failed");
         return false;
     }
 
@@ -662,19 +661,13 @@ void iterator_take_value(void *iterator, int64_t hash, int64_t cursor, void *val
 }
 
 // 基于字符串到快速设置不太需要考虑内存泄漏的问题， raw_string 都是 .data 段中的字符串
-void co_throw_error(n_interface_t *error, char *path, char *fn_name, n_int_t line, n_int_t column) {
-    assert(error->method_count == 1);
+// An error passing through a fn adds a frame to the trace of the coroutine.
+void co_error_trace(char *path, char *fn_name, n_int_t line, n_int_t column) {
     coroutine_t *co = coroutine_get();
-
-    n_string_t err_msg = rti_error_msg(error);
-    DEBUGF("[runtime.co_throw_error] co=%p, error=%p, path=%s, fn_name=%s, line=%ld, column=%ld, msg=%s", co,
-           (void *) error, path, fn_name,
-           line,
-           column, (char *) rt_string_ref(&err_msg));
-
-    assert(co->traces.data == NULL);
-    n_vec_t traces = rti_vec_new(&errort_trace_rtype, 0, 0);
-    co->traces = traces;
+    DEBUGF("[runtime.co_error_trace] co=%p, path=%s, fn_name=%s, line=%ld, column=%ld", co, path, fn_name, line,
+           column);
+    assert(line >= 0 && line < 1000000);
+    assert(column >= 0 && column < 1000000);
 
     n_trace_t trace = {
         .path = string_new(path, strlen(path)),
@@ -683,9 +676,13 @@ void co_throw_error(n_interface_t *error, char *path, char *fn_name, n_int_t lin
         .column = column,
     };
     rt_vec_push(&co->traces, errort_trace_rtype.hash, &trace);
+}
 
-    rti_write_barrier_rtype(&co->error, error, &throwable_rtype);
-    co->has_error = true;
+// a thrown error starts a new trace, any earlier one belongs to an error that was caught
+void co_throw_error(char *path, char *fn_name, n_int_t line, n_int_t column) {
+    coroutine_t *co = coroutine_get();
+    co->traces = rti_vec_new(&errort_trace_rtype, 0, 0);
+    co_error_trace(path, fn_name, line, column);
 }
 
 // a catch right after the access never gets here, the compiled code jumps to it instead
@@ -704,68 +701,35 @@ void throw_index_out_error(n_int_t *index, n_int_t *len) {
     free(copy_msg);
 }
 
-n_interface_t co_remove_error() {
+// After a call of a T! fn bound to C: the errset it reported, which starts its trace at the call, or 0
+uint32_t co_take_errset(char *path, char *fn_name, n_int_t line, n_int_t column) {
     coroutine_t *co = coroutine_get();
+    uint32_t errset = co->errset;
+    if (!errset) {
+        return 0;
+    }
 
-    assert(co->has_error);
-    co->has_error = false;
-
-    n_interface_t error = co->error;
-
-    n_interface_t empty = {0};
-    rti_write_barrier_rtype(&co->error, &empty, &throwable_rtype);
-    co->traces = (n_vec_t){0};
-    return error;
+    co->errset = 0;
+    co_throw_error(path, fn_name, line, column);
+    return errset;
 }
 
 // a panic a catch takes never gets here, the runtime call reports it by its return value instead
 uint8_t co_has_panic(char *path, char *fn_name, n_int_t line, n_int_t column) {
     coroutine_t *co = coroutine_get();
-    if (!co->has_error) {
+    if (!co->panic_msg) {
         return 0;
     }
 
 
     assert(line >= 0 && line < 1000000);
     assert(column >= 0 && column < 1000000);
-    assert(co->traces.data);
 
-    // 在 runtime 调用 nature 代码， rti_error_msg 会让 gc scan_stack 异常，不过马上就要退出了，问题不大
-    // 可以考虑增加 safepoint_lock, 避免进入 safepoint 状态
-    n_string_t msg = rti_error_msg(&co->error);
-
-    char *dump_msg = tlsprintf("panic: '%s' at %s:%d:%d\n", (char *) rt_string_ref(&msg),
-                             path, line, column);
+    char *dump_msg = tlsprintf("panic: '%s' at %s:%d:%d\n", co->panic_msg, path, line, column);
 
     VOID write(STDOUT_FILENO, dump_msg, strlen(dump_msg));
     // panic msg
     exit(EXIT_FAILURE);
-}
-
-uint8_t co_has_error(char *path, char *fn_name, n_int_t line, n_int_t column) {
-    coroutine_t *co = coroutine_get();
-    if (!co->has_error) {
-        return 0;
-    }
-
-
-    DEBUGF("[runtime.co_has_error] error has, fn_name: %s, line: %ld, column: %ld",
-           fn_name, line, column)
-    assert(line >= 0 && line < 1000000);
-    assert(column >= 0 && column < 1000000);
-    assert(co->traces.data);
-
-    // 存在异常时顺便添加调用栈信息, 这样 catch 错误时可以更加准确的添加相关信息
-    n_trace_t trace = {
-        .path = string_new(path, strlen(path)),
-        .ident = string_new(fn_name, strlen(fn_name)),
-        .line = line,
-        .column = column,
-    };
-
-    rt_vec_push(&co->traces, errort_trace_rtype.hash, &trace);
-
-    return 1;
 }
 
 n_anyptr_t anyptr_casting(value_casting v) {
@@ -903,10 +867,15 @@ void ptr_valid(void *ptr) {
     // 修改状态避免抢占
     DEBUGF("[ptr_valid] ptr=%p", ptr);
     if (ptr <= 0) {
-        rti_throw("invalid memory address or nil pointer dereference", true);
+        rti_panic("invalid memory address or nil pointer dereference");
     }
 }
 
+
+// A C fn bound in std panics at the nature code calling it, ret_addr is CALLER_RET_ADDR() in that fn.
+void rti_panic_at(addr_t ret_addr, char *msg) {
+    panic_dump(caller_from_return_address(ret_addr), msg);
+}
 
 void rt_panic(n_string_t msg) {
     addr_t ret_addr = CALLER_RET_ADDR();
@@ -918,6 +887,16 @@ void rt_panic(n_string_t msg) {
 
 bool rt_in_heap(n_anyptr_t addr) {
     return in_heap(addr);
+}
+
+n_string_t rt_errset_name(uint32_t errset) {
+    char *name = ERRSET_NAME(errset);
+    return string_new(name, strlen(name));
+}
+
+// the io errset of an errno or, on windows, a GetLastError code
+uint32_t rt_sys_errset(n_int_t code) {
+    return rt_find_errset(rti_uv_errset(uv_translate_sys_error((int) code)));
 }
 
 
@@ -943,8 +922,8 @@ typedef struct {
 
 n_string_t rt_string_new(n_anyptr_t raw_string) {
     if (!raw_string) {
-        rti_throw("raw string is empty", false);
-        return (n_string_t){0};
+        addr_t ret_addr = CALLER_RET_ADDR();
+        rti_panic_at(ret_addr, "raw string is empty");
     }
 
     char *str = (char *) raw_string;
@@ -969,8 +948,11 @@ void rt_vec_to_string_out(n_string_t *out, n_vec_t *src) {
 // caught: a catch right after the slice takes an out of range failure, reported by returning false
 bool rt_vec_slice_out(n_vec_t *out, n_vec_t *vec, int64_t start, int64_t end, bool caught) {
     assert(out);
-    int64_t last = end == -1 ? vec->length : end;
-    if (caught && (start < 0 || last < 0 || last > vec->length || start > last)) return false;
+    char *msg = rti_vec_slice_error(vec, start, end);
+    if (msg) {
+        if (!caught) rti_panic(msg);
+        return false;
+    }
     *out = rt_vec_slice(vec, start, end);
     return true;
 }
@@ -1006,7 +988,7 @@ n_int_t rt_errno() {
 
 n_anyptr_t rt_array_new(int64_t element_hash, int64_t length) {
     if (length < 0) {
-        rti_throw("array_new length must be non-negative", true);
+        rti_panic("array_new length must be non-negative");
         return 0;
     }
 
@@ -1041,8 +1023,8 @@ n_vec_t unsafe_vec_new(int64_t hash, int64_t element_hash, int64_t len, void *da
 
 n_string_t rt_string_ref_new(void *raw_string, int64_t length) {
     if (length < 0) {
-        rti_throw("string_ref_new length must be non-negative", false);
-        return (n_string_t){0};
+        addr_t ret_addr = CALLER_RET_ADDR();
+        rti_panic_at(ret_addr, "string_ref_new length must be non-negative");
     }
     n_string_t str = string_new(raw_string, length);
     DEBUGF("[rt_string_ref_new] create, str: %p", raw_string);
@@ -1051,8 +1033,8 @@ n_string_t rt_string_ref_new(void *raw_string, int64_t length) {
 
 n_string_t rt_string_alloc(int64_t length) {
     if (length < 0 || length == INT64_MAX) {
-        rti_throw("string_alloc length is out of range", false);
-        return (n_string_t){0};
+        addr_t ret_addr = CALLER_RET_ADDR();
+        rti_panic_at(ret_addr, "string_alloc length is out of range");
     }
 
     mutator_safepoint_yield_if_needed();

@@ -47,13 +47,13 @@ int64_t iterator_next_value(void *iterator, int64_t hash, int64_t cursor, void *
 
 void iterator_take_value(void *iterator, int64_t hash, int64_t cursor, void *value_ref);
 
-void co_throw_error(n_interface_t *error, char *path, char *fn_name, n_int_t line, n_int_t column);
+void co_error_trace(char *path, char *fn_name, n_int_t line, n_int_t column);
+
+void co_throw_error(char *path, char *fn_name, n_int_t line, n_int_t column);
 
 void throw_index_out_error(n_int_t *index, n_int_t *len);
 
-n_interface_t co_remove_error();
-
-uint8_t co_has_error(char *path, char *fn_name, n_int_t line, n_int_t column);
+uint32_t co_take_errset(char *path, char *fn_name, n_int_t line, n_int_t column);
 
 uint8_t co_has_panic(char *path, char *fn_name, n_int_t line, n_int_t column);
 
@@ -73,7 +73,13 @@ void write_barrier(void *slot, void *new_obj);
 
 void ptr_valid(void *ptr);
 
+void rti_panic_at(addr_t ret_addr, char *msg);
+
 void rt_panic(n_string_t msg);
+
+n_string_t rt_errset_name(uint32_t errset);
+
+uint32_t rt_sys_errset(n_int_t code);
 
 void rt_dump_stack_backtrace(void);
 

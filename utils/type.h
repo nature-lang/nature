@@ -16,7 +16,6 @@
 #define POINTER_SIZE sizeof(void *)
 #endif
 
-#define THROWABLE_IDENT "throwable"
 #define ERRABLE_IDENT "errable"
 #define ERRSET_IDENT "errset_t" // builtin type of an errset value, a u32 id at run time
 #define ERRABLE_VALUE_TAG "value"
@@ -632,11 +631,6 @@ typedef struct {
     n_int_t column;
 } n_trace_t;
 
-typedef struct {
-    n_string_t msg;
-    uint8_t panic;
-} n_errort;
-
 /**
  * 将 ct_rtypes 填入到 ct_rtypes 中并返回索引
  * @param rtype
@@ -770,10 +764,6 @@ static inline type_t type_array_new(type_kind element_type_kind, uint64_t length
     t->length = length;
     t->element_type = type_kind_new(element_type_kind);
     return type_new(TYPE_ARR, t);
-}
-
-static inline type_t interface_throwable() {
-    return type_ident_new(THROWABLE_IDENT, TYPE_IDENT_INTERFACE);
 }
 
 static inline bool must_assign_value(type_t t) {

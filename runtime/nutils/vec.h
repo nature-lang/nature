@@ -73,6 +73,8 @@ n_anyptr_t rt_vec_iterator(n_vec_t *l, int64_t element_hash);
  * @param end
  * @return 返回切片后的数据
  */
+char *rti_vec_slice_error(n_vec_t *l, int64_t start, int64_t end);
+
 n_vec_t rt_vec_slice(n_vec_t *l, int64_t start, int64_t end);
 
 /**

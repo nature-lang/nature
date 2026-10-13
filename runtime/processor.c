@@ -5,7 +5,6 @@
 #include <ucontext.h>
 #endif
 
-#include "nutils/errort.h"
 #include "nutils/rt_signal.h"
 #include "runtime.h"
 #include "runtime/nutils/http.h"
@@ -246,24 +245,33 @@ NO_OPTIMIZE static void coroutine_wrapper() {
 
     assert((addr_t) co->fn > 0);
 
-    // 调用到用户函数
-    if (co->flag & FLAG(CO_FLAG_DIRECT)) {
-        ((void_fn_t) co->fn)();
+    // 调用到用户函数, a nature fn returns errable<void,errset_t>
+    n_errable_void_t result = {0};
+    if (co->flag & FLAG(CO_FLAG_RTFN)) {
+        if (co->flag & FLAG(CO_FLAG_DIRECT)) {
+            ((void_fn_t) co->fn)();
+        } else {
+            n_fn_t *runtime_fn = co->fn;
+            ((env_fn_t) runtime_fn->fn_addr)(runtime_fn->envs);
+        }
+    } else if (co->flag & FLAG(CO_FLAG_DIRECT)) {
+        result = ((errable_fn_t) co->fn)();
     } else {
         n_fn_t *runtime_fn = co->fn;
-        ((env_fn_t) runtime_fn->fn_addr)(runtime_fn->envs);
+        result = ((env_errable_fn_t) runtime_fn->fn_addr)(runtime_fn->envs);
     }
+    uint32_t errset = result.tag == hash_string(ERRABLE_ERROR_TAG) ? result.errset : 0;
 
 
     DEBUGF(
-            "[runtime.coroutine_wrapper] user fn completed, p_index=%d co=%p, main=%d, rt_fn=%d,has_error=%d",
+            "[runtime.coroutine_wrapper] user fn completed, p_index=%d co=%p, main=%d, rt_fn=%d,errset=%d",
             p->index, co,
-            co->main, co->flag & FLAG(CO_FLAG_RTFN), co->has_error);
+            co->main, co->flag & FLAG(CO_FLAG_RTFN), errset);
 
 
-    // coroutine 即将退出，避免被 gc 清理，所以将 error保存在 co->future 中?
-    if (co->has_error && co->future) {
-        union_casting(&co->future->error, throwable_rtype.hash, &co->error); // 将 co error 赋值给 co->future 避免被 gc
+    // the future outlives the coroutine, so the error is kept there for await
+    if (errset && co->future) {
+        co->future->error = errset;
     }
 
     // co->await_co 可能是随时写入的，所以需要 dead_locker 保证同步
@@ -274,8 +282,8 @@ NO_OPTIMIZE static void coroutine_wrapper() {
         co_set_status(p, await_co, CO_STATUS_RUNNABLE);
         rt_linked_fixalloc_push(&await_co->p->runnable_list, await_co);
     } else {
-        if (co->has_error) {
-            coroutine_dump_error(co);
+        if (errset) {
+            coroutine_dump_error(co, errset);
             exit(EXIT_FAILURE);
         }
     }
@@ -621,34 +629,52 @@ coroutine_t *coroutine_get() {
     return uv_key_get(&tls_coroutine_key);
 }
 
-void rti_throw(char *msg, bool panic) {
-    DEBUGF("[runtime.rti_throw] msg=%s", msg);
-    coroutine_t *co = coroutine_get();
-    n_interface_t error = n_error_new(string_new(msg, strlen(msg)), panic);
-
-    co->has_error = true;
-    if (co->traces.data == NULL) {
-        n_vec_t traces = rti_vec_new(&errort_trace_rtype, 0, 0);
-        co->traces = traces;
-    }
-    rti_write_barrier_rtype(&co->error, &error, &throwable_rtype);
+// a panic msg can live in a reused tls buffer, so it is copied until co_has_panic reports it
+void rti_panic(char *msg) {
+    DEBUGF("[runtime.rti_panic] msg=%s", msg);
+    coroutine_get()->panic_msg = strdup(msg);
 }
 
-void rti_co_throw(coroutine_t *co, char *msg, bool panic) {
-    n_interface_t error = n_error_new(string_new(msg, strlen(msg)), panic);
-    co->has_error = true;
-    if (co->traces.data == NULL) {
-        n_vec_t traces = rti_vec_new(&errort_trace_rtype, 0, 0);
-        co->traces = traces;
-    }
-    rti_write_barrier_rtype(&co->error, &error, &throwable_rtype);
+void rti_throw(char *errset_name) {
+    rti_co_throw(coroutine_get(), errset_name);
 }
 
-void coroutine_dump_error(coroutine_t *co) {
-    DEBUGF("[runtime.coroutine_dump_error] co=%p, errort base=%p", co, &co->error);
+void rti_co_throw(coroutine_t *co, char *errset_name) {
+    DEBUGF("[runtime.rti_co_throw] co=%p, errset=%s", co, errset_name);
+    co->errset = rt_find_errset(errset_name);
+}
 
-    n_string_t msg = rti_error_msg(&co->error);
-    DEBUGF("[runtime.coroutine_dump_error] memory_string len: %lu, base: %p", msg.length, msg.data);
+// the io errset of a libuv error code, errno is translated with uv_translate_sys_error first
+char *rti_uv_errset(int code) {
+    switch (code) {
+        case UV_EOF:
+            return "io.EOF";
+        case UV_ENOENT:
+        case UV_EAI_NONAME:
+            return "io.NOT_FOUND";
+        case UV_EACCES:
+        case UV_EPERM:
+            return "io.PERMISSION_DENIED";
+        case UV_EEXIST:
+            return "io.ALREADY_EXISTS";
+        case UV_EBADF:
+        case UV_EPIPE:
+            return "io.CLOSED";
+        case UV_ETIMEDOUT:
+            return "io.TIMEOUT";
+        case UV_ECONNREFUSED:
+            return "io.CONNECTION_REFUSED";
+        case UV_ECONNRESET:
+            return "io.CONNECTION_RESET";
+        case UV_EADDRINUSE:
+            return "io.ADDR_IN_USE";
+        default:
+            return "io.OTHER";
+    }
+}
+
+void coroutine_dump_error(coroutine_t *co, uint32_t errset) {
+    DEBUGF("[runtime.coroutine_dump_error] co=%p, errset=%d", co, errset);
 
     assert(co->traces.length > 0);
 
@@ -656,11 +682,11 @@ void coroutine_dump_error(coroutine_t *co) {
     rti_vec_access(&co->traces, 0, &first_trace);
     char *dump_msg;
     if (co->main) {
-        dump_msg = tlsprintf("coroutine 'main' uncaught error: '%s' at %s:%d:%d\n", (char *) rt_string_ref(&msg),
+        dump_msg = tlsprintf("coroutine 'main' uncaught error: %s at %s:%d:%d\n", ERRSET_NAME(errset),
                              (char *) first_trace.path.data, first_trace.line,
                              first_trace.column);
     } else {
-        dump_msg = tlsprintf("coroutine %ld uncaught error: '%s' at %s:%d:%d\n", co->id, (char *) rt_string_ref(&msg),
+        dump_msg = tlsprintf("coroutine %ld uncaught error: %s at %s:%d:%d\n", co->id, ERRSET_NAME(errset),
                              (char *) first_trace.path.data, first_trace.line,
                              first_trace.column);
     }
@@ -735,8 +761,8 @@ coroutine_t *rt_coroutine_new(void *fn, int64_t flag, n_future_t *fu, void *arg)
     co->status = CO_STATUS_RUNNABLE;
     co->p = NULL;
     co->next = NULL;
-    co->has_error = false;
-    co->error = (n_interface_t){0};
+    co->errset = 0;
+    co->panic_msg = NULL;
     co->traces = (n_vec_t){0};
     co->await_co = NULL;
     co->aco.inited = 0; // 标记为为初始化
@@ -1029,11 +1055,14 @@ void rt_coroutine_return(void *result_ptr) {
            *(int64_t *) co->future->result, co->future->size);
 }
 
-void rt_coroutine_await(coroutine_t *target_co) {
+// the errset the awaited coroutine failed with is left for the compiled code to take
+void rt_coroutine_await(n_future_t *fu) {
+    coroutine_t *target_co = fu->await_co;
     mutex_lock(&target_co->dead_locker);
     coroutine_t *src_co = coroutine_get();
     if (target_co->status == CO_STATUS_DEAD) {
         mutex_unlock(&target_co->dead_locker);
+        src_co->errset = fu->error;
         return;
     }
     target_co->await_co = src_co;
@@ -1045,6 +1074,7 @@ void rt_coroutine_await(coroutine_t *target_co) {
 
     // waiting -> syscall
     co_set_status(src_co->p, src_co, CO_STATUS_TPLCALL);
+    src_co->errset = fu->error;
 }
 
 // global_loop_run 的超时回调函数
