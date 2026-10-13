@@ -19,7 +19,12 @@ static lir_operand_t *linear_errable_address(module_t *m) {
 static lir_operand_t *linear_errable_payload(module_t *m, lir_operand_t *errable, type_t type) {
     if (type.kind == TYPE_VOID) return NULL;
     lir_operand_t *payload = indirect_addr_operand(m, type, errable, POINTER_SIZE);
-    return type.storage_kind == STORAGE_KIND_IND ? lea_operand_pointer(m, payload) : payload;
+    if (type.storage_kind != STORAGE_KIND_IND) return payload;
+
+    // an IND value is a var of its own type holding its address, so it can be passed as an argument
+    lir_operand_t *value = temp_var_operand(m, type);
+    OP_PUSH(lir_op_lea(value, payload));
+    return value;
 }
 
 lir_opcode_t ast_op_convert[] = {
@@ -69,7 +74,6 @@ typedef struct {
     uint16_t continue_depth;
     uint16_t break_depth;
     uint16_t ret_depth;
-    uint16_t catch_depth;
     // set while this scope's defer bodies are being emitted. an errable call inside a defer
     // body emits its own unwind, which walks the scope stack again and would re-enter the scope
     // that is emitting it, recursing until the compiler's stack runs out.
@@ -81,7 +85,6 @@ typedef enum {
     LINEAR_UNWIND_MODE_BREAK,
     LINEAR_UNWIND_MODE_CONTINUE,
     LINEAR_UNWIND_MODE_RET,
-    LINEAR_UNWIND_MODE_CATCH,
 } linear_unwind_mode_t;
 
 static linear_defer_scope_t *linear_defer_scope_new(module_t *m) {
@@ -90,7 +93,6 @@ static linear_defer_scope_t *linear_defer_scope_new(module_t *m) {
     scope->continue_depth = m->current_closure->continue_labels->count;
     scope->break_depth = m->current_closure->break_labels->count;
     scope->ret_depth = m->current_closure->ret_labels->count;
-    scope->catch_depth = m->current_closure->catch_error_labels->count;
     return scope;
 }
 
@@ -146,9 +148,6 @@ static bool linear_scope_need_unwind(linear_defer_scope_t *scope, linear_unwind_
         case LINEAR_UNWIND_MODE_RET: {
             return scope->ret_depth >= depth;
         }
-        case LINEAR_UNWIND_MODE_CATCH: {
-            return scope->catch_depth >= depth;
-        }
         default: {
             return false;
         }
@@ -186,15 +185,6 @@ static void linear_unwind_to_ret_depth(module_t *m, uint16_t depth) {
     linear_unwind_scopes(m, LINEAR_UNWIND_MODE_RET, depth);
 }
 
-static void linear_unwind_to_catch_depth(module_t *m, uint16_t depth) {
-    linear_unwind_scopes(m, LINEAR_UNWIND_MODE_CATCH, depth);
-}
-
-static void linear_bal_error(module_t *m, char *error_target_label, uint16_t catch_depth) {
-    linear_unwind_to_catch_depth(m, catch_depth);
-    OP_PUSH(lir_op_bal(lir_label_operand(error_target_label, true)));
-}
-
 // An index out of range jumps to the catch right after the access, or ends the program in the runtime.
 static void linear_index_out(module_t *m, lir_operand_t *index_target, lir_operand_t *length_target, char *catch_label) {
     if (catch_label) {
@@ -203,7 +193,7 @@ static void linear_index_out(module_t *m, lir_operand_t *index_target, lir_opera
     }
 
     push_rt_call(m, RT_CALL_THROW_INDEX_OUT_ERROR, NULL, 2, index_target, length_target);
-    linear_bal_error(m, m->current_closure->error_label, m->current_closure->catch_error_labels->count);
+    OP_PUSH(lir_op_bal(lir_label_operand(m->current_closure->error_label, true)));
 }
 
 static lir_operand_t *
@@ -932,18 +922,10 @@ static void linear_check_panic(module_t *m, char *catch_label, lir_operand_t *re
 }
 
 
-static void linear_has_error(module_t *m) {
-    char *error_target_label = m->current_closure->error_label;
+// Calls a runtime fn with where the current expression is: its path, fn name, line and column.
+static void linear_rt_call_at(module_t *m, char *rt_call, lir_operand_t *result) {
     assertf(m->current_line < 1000000, "line '%d' exception", m->current_line);
     assertf(m->current_column < 1000000, "column '%d' exception", m->current_line);
-
-    // 存在 catch error
-    uint16_t catch_depth = m->current_closure->catch_error_labels->count;
-    if (catch_depth > 0) {
-        error_target_label = stack_top(m->current_closure->catch_error_labels);
-    }
-
-    lir_operand_t *has_error = temp_var_operand(m, type_kind_new(TYPE_BOOL));
 
     char *error_path = m->current_closure->fndef->rel_path ? m->current_closure->fndef->rel_path : m->rel_path;
     lir_operand_t *path_operand = string_operand(error_path, strlen(error_path));
@@ -953,16 +935,15 @@ static void linear_has_error(module_t *m) {
     lir_operand_t *column_operand = int_operand(m->current_column);
 
     // 不可抢占，也不 yield，所以不需要添加任何勾子。
-    push_rt_call(m, RT_CALL_CO_HAS_ERROR, has_error, 4, path_operand, fn_name_operand, line_operand,
-                 column_operand);
+    push_rt_call(m, rt_call, result, 4, path_operand, fn_name_operand, line_operand, column_operand);
+}
 
-    char *error_ident = label_ident_with_unique(".error");
-    char *error_end_ident = str_connect(error_ident, LABEL_END_SUFFIX);
-    OP_PUSH(lir_op_new(LIR_OPCODE_BEE, bool_operand(true), has_error, lir_label_operand(error_ident, true)));
-    OP_PUSH(lir_op_bal(lir_label_operand(error_end_ident, true)));
-    OP_PUSH(lir_op_label(error_ident, true));
-    linear_bal_error(m, error_target_label, catch_depth);
-    OP_PUSH(lir_op_label(error_end_ident, true));
+// The errset a T! fn bound to C left on the coroutine, 0 when it succeeded. A taken errset starts its
+// trace at this call.
+static lir_operand_t *linear_take_errset(module_t *m) {
+    lir_operand_t *errset = temp_var_operand(m, type_kind_new(TYPE_UINT32));
+    linear_rt_call_at(m, RT_CALL_CO_TAKE_ERRSET, errset);
+    return errset;
 }
 
 /**
@@ -2229,12 +2210,21 @@ static lir_operand_t *linear_call_impl(module_t *m, ast_expr_t expr, lir_operand
         char *end = label_ident_with_unique(".result.value");
         OP_PUSH(lir_op_new(LIR_OPCODE_BNE, int_operand(hash_string(ERRABLE_ERROR_TAG)),
                            indirect_addr_operand(m, type_kind_new(TYPE_UINT64), temp, 0), lir_label_operand(end, true)));
+        // an .n error gets a trace frame in each fn it passes through; an .x fn keeps no trace, so its
+        // error starts one here
+        if (!m->current_closure->fndef->is_x) {
+            linear_rt_call_at(m, type_fn->is_x ? RT_CALL_CO_THROW_ERROR : RT_CALL_CO_ERROR_TRACE, NULL);
+        }
         type_t error_type = errable_error_type(type_fn->return_type);
         linear_return_error(m, error_type, linear_errable_payload(m, temp, error_type));
         OP_PUSH(lir_op_label(end, true));
         temp = linear_errable_payload(m, temp, errable_value_type(type_fn->return_type));
     } else if (type_fn->is_errable) {
-        linear_has_error(m);
+        char *end = label_ident_with_unique(".errset.none");
+        lir_operand_t *errset = linear_take_errset(m);
+        OP_PUSH(lir_op_new(LIR_OPCODE_BEE, integer_operand(0, TYPE_UINT32), errset, lir_label_operand(end, true)));
+        linear_return_error(m, type_kind_new(TYPE_UINT32), errset);
+        OP_PUSH(lir_op_label(end, true));
     }
 
     if (temp) {
@@ -3851,25 +3841,32 @@ static lir_operand_t *linear_catch_expr(module_t *m, ast_expr_t expr, lir_operan
         target = temp_var_operand_with_alloc(m, expr.type);
     }
 
-    // A catch over an errable<T,E> call branches on the errable that call returns. A catch over an
-    // index, map access, slice or `as` takes the panic of that expression as a builtin errset. A catch
-    // over anything else takes .n T! errors of the whole expression from the coroutine.
+    // A catch over an errable<T,E> call branches on the errable that call returns, and a catch over a
+    // T! fn bound to C on the errset it leaves on the coroutine. A catch over an index, map access,
+    // slice or `as` takes the panic of that expression as a builtin errset. Nothing else reaches a catch.
     ast_expr_t try_expr = catch_expr->try_expr;
+    ast_call_t *call = try_expr.assert_type == AST_CALL ? try_expr.value : NULL;
     lir_operand_t *errable = NULL;
+    lir_operand_t *errset = NULL;
     char *panic_errset = linear_panic_errset(try_expr);
-    if (try_expr.assert_type == AST_CALL && is_errable_type(((ast_call_t *) try_expr.value)->return_type)) {
+    if (call && is_errable_type(call->return_type)) {
         errable = linear_call_impl(m, try_expr, NULL, false);
         OP_PUSH(lir_op_new(LIR_OPCODE_BEE, int_operand(hash_string(ERRABLE_ERROR_TAG)),
                            indirect_addr_operand(m, type_kind_new(TYPE_UINT64), errable, 0), lir_label_operand(catch_start_label, true)));
         linear_super_move(m, expr.type, target, linear_errable_payload(m, errable, expr.type));
+    } else if (call && call->left.type.fn->is_errable) {
+        lir_operand_t *result = linear_call_impl(m, try_expr, NULL, false);
+        errset = linear_take_errset(m);
+        OP_PUSH(lir_op_new(LIR_OPCODE_BNE, integer_operand(0, TYPE_UINT32), errset, lir_label_operand(catch_start_label, true)));
+        if (result) {
+            linear_super_move(m, expr.type, target, result);
+        }
     } else if (panic_errset) {
         m->current_closure->catch_panic_label = catch_start_label;
         linear_expr(m, try_expr, target);
         m->current_closure->catch_panic_label = NULL;
     } else {
-        stack_push(m->current_closure->catch_error_labels, catch_start_label);
-        linear_expr(m, catch_expr->try_expr, target);
-        stack_pop(m->current_closure->catch_error_labels);
+        linear_expr(m, try_expr, target);
     }
 
     // 跳过错误处理部分
@@ -3896,13 +3893,13 @@ static lir_operand_t *linear_catch_expr(module_t *m, ast_expr_t expr, lir_operan
     if (errable) {
         linear_super_move(m, catch_expr->catch_err.type, err_operand,
                           linear_errable_payload(m, errable, catch_expr->catch_err.type));
+    } else if (errset) {
+        OP_PUSH(lir_op_move(err_operand, errset));
     } else if (panic_errset) {
-        ast_errset_stmt_t *errset = symbol_table_get(panic_errset)->ast_value;
-        OP_PUSH(lir_op_move(err_operand, integer_operand(errset->id, TYPE_UINT32)));
-    } else if (m->current_closure->fndef->is_x) {
-        OP_PUSH(lir_op_nop_def(err_operand)); // nothing reaches this catch in .x
+        ast_errset_stmt_t *panic_errset_stmt = symbol_table_get(panic_errset)->ast_value;
+        OP_PUSH(lir_op_move(err_operand, integer_operand(panic_errset_stmt->id, TYPE_UINT32)));
     } else {
-        push_rt_call(m, RT_CALL_CO_REMOVE_ERROR, err_operand, 0);
+        OP_PUSH(lir_op_nop_def(err_operand)); // nothing reaches this catch
     }
 
     stack_push(m->current_closure->ret_labels, catch_end_label->output);
@@ -4133,37 +4130,12 @@ static lir_operand_t *linear_fn_decl(module_t *m, ast_expr_t expr, lir_operand_t
 }
 
 static void linear_throw(module_t *m, ast_throw_stmt_t *stmt) {
-    if (m->current_closure->errable_storage) {
-        lir_operand_t *value = linear_expr(m, stmt->error, NULL);
-        linear_return_error(m, stmt->error.type, value);
-        return;
+    lir_operand_t *value = linear_expr(m, stmt->error, NULL);
+    // the trace of an .n error starts where it is thrown
+    if (!m->current_closure->fndef->is_x) {
+        linear_rt_call_at(m, RT_CALL_CO_THROW_ERROR, NULL);
     }
-    // msg to errort
-    assert(str_equal(stmt->error.type.ident, THROWABLE_IDENT));
-    lir_operand_t *error_operand = linear_expr(m, stmt->error, NULL);
-    lir_operand_t *error_ptr = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
-    OP_PUSH(lir_op_move(error_ptr, error_operand));
-
-    char *error_path = m->current_closure->fndef->rel_path ? m->current_closure->fndef->rel_path : m->rel_path;
-    lir_operand_t *path_operand = string_operand(error_path, strlen(error_path));
-    assert(m->current_closure->fndef->fn_name_with_pkg);
-    lir_operand_t *fn_name_operand = string_operand(m->current_closure->fndef->fn_name_with_pkg,
-                                                    strlen(m->current_closure->fndef->fn_name_with_pkg));
-    lir_operand_t *line_operand = int_operand(m->current_line);
-    lir_operand_t *column_operand = int_operand(m->current_column);
-
-    // attach errort to processor
-    push_rt_call(m, RT_CALL_CO_THROW_ERROR, NULL, 5, error_ptr, path_operand, fn_name_operand,
-                 line_operand,
-                 column_operand);
-
-    linear_unwind_all(m);
-
-    // 插入 return 标识(用来做 return check 的，check 完会清除的)
-    OP_PUSH(lir_op_new(LIR_OPCODE_RETURN, NULL, NULL, NULL));
-
-    // bal to end label
-    OP_PUSH(lir_op_bal(lir_label_operand(m->current_closure->end_label, false)));
+    linear_return_error(m, stmt->error.type, value);
 }
 
 static void linear_stmt(module_t *m, ast_stmt_t *stmt) {

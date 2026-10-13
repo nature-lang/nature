@@ -50,9 +50,6 @@
 #define TERNARY_IDENT ".TERNARY"
 
 
-#define ERRORT_MSG_IDENT "msg"
-#define ERRORT_IS_IDENT "is"
-
 #define F64_NEG_MASK_IDENT "f64_neg_mask" // -0
 #define F32_NEG_MASK_IDENT "f32_neg_mask" // -0
 
@@ -147,8 +144,8 @@
 #define RT_CALL_THROW_INDEX_OUT_ERROR "throw_index_out_error"
 #define RT_CALL_CO_THROW_ERROR "co_throw_error"
 
-#define RT_CALL_CO_REMOVE_ERROR "co_remove_error"
-#define RT_CALL_CO_HAS_ERROR "co_has_error"
+#define RT_CALL_CO_ERROR_TRACE "co_error_trace"
+#define RT_CALL_CO_TAKE_ERRSET "co_take_errset"
 #define RT_CALL_CO_HAS_PANIC "co_has_panic"
 
 #define RT_CALL_SELECT_BLOCK "rt_select_block"
@@ -268,7 +265,7 @@ static inline bool is_rtcall(string target) {
            str_equal(target, RT_CALL_STRING_GT) || str_equal(target, RT_CALL_STRING_GE) ||
            str_equal(target, RT_CALL_GC_MALLOC) ||
            str_equal(target, RT_CALL_RUNTIME_EVAL_GC) || str_equal(target, RT_CALL_COROUTINE_ASYNC2) || str_equal(target, RT_CALL_CO_THROW_ERROR) ||
-           str_equal(target, RT_CALL_CO_REMOVE_ERROR) || str_equal(target, RT_CALL_CO_HAS_ERROR) ||
+           str_equal(target, RT_CALL_CO_ERROR_TRACE) || str_equal(target, RT_CALL_CO_TAKE_ERRSET) ||
            str_equal(target, RT_CALL_CO_HAS_PANIC) || str_equal(target, RT_CALL_PROCESSOR_SET_EXIT) ||
            str_equal(target, RT_CALL_UNION_TO_ANY);
 }

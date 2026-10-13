@@ -151,21 +151,6 @@ static ast_stmt_t *test_assign_sub_one_stmt(char *ident) {
     return test_assign_expr_stmt(ident, right);
 }
 
-static ast_expr_t test_method_call_expr(char *ident, char *method) {
-    ast_expr_select_t *select = NEW(ast_expr_select_t);
-    select->left = test_ident_literal(ident);
-    select->key = method;
-    select->type_args = NULL;
-
-    ast_expr_t select_expr = {0};
-    select_expr.assert_type = AST_EXPR_SELECT;
-    select_expr.value = select;
-    select_expr.line = 0;
-    select_expr.column = 0;
-
-    return test_call_expr(select_expr, NULL);
-}
-
 static slice_t *test_collect_main_tests(module_t *main_package, int *total, int *skipped) {
     slice_t *tests = slice_new();
     if (total) {
@@ -235,7 +220,7 @@ static slice_t *test_runner_body(slice_t *tests, int total, int skipped) {
 
     // Each test runs as:
     //   ok = true
-    //   test_fn() catch e { ok = false; println('FAILED'); println(e.msg()); failed += 1; passed -= 1 }
+    //   test_fn() catch e { ok = false; println('FAILED'); println(e); failed += 1; passed -= 1 }
     //   if ok { println('OK') }
     for (int i = 0; i < tests->count; ++i) {
         ast_fndef_t *test_fn = tests->take[i];
@@ -248,7 +233,7 @@ static slice_t *test_runner_body(slice_t *tests, int total, int skipped) {
         slice_t *catch_body = slice_new();
         slice_push(catch_body, test_assign_expr_stmt("ok", *ast_bool_expr(0, 0, false)));
         slice_push(catch_body, test_print_stmt("println", "FAILED"));
-        slice_push(catch_body, test_print_expr_stmt("println", test_method_call_expr("e", "msg")));
+        slice_push(catch_body, test_print_expr_stmt("println", test_ident_literal("e")));
         slice_push(catch_body, test_assign_add_one_stmt("failed"));
         slice_push(catch_body, test_assign_sub_one_stmt("passed"));
 

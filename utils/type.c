@@ -493,7 +493,13 @@ static char *_type_format_visited(type_t t, struct sc_map_s64 *visited) {
     } else if (t.kind == TYPE_FN) {
         if (t.fn) {
             char *fn_prefix = t.fn->is_x ? "xfn" : "fn";
-            if (t.fn->is_errable) {
+            type_t return_type = t.fn->return_type;
+            // errable<T,errset_t> is written as T!, any other errable<T,E> as itself
+            if (is_errable_return(t.fn) && str_equal(errable_error_type(return_type).ident, ERRSET_IDENT)) {
+                result = dsprintf("%s(...):%s!", fn_prefix, type_format_visited(errable_value_type(return_type), visited));
+            } else if (is_errable_return(t.fn)) {
+                result = dsprintf("%s(...):%s", fn_prefix, type_format_visited(return_type, visited));
+            } else if (t.fn->is_errable) {
                 result = dsprintf("%s(...):%s!", fn_prefix, type_format_visited(t.fn->return_type, visited));
             } else {
                 result = dsprintf("%s(...):%s", fn_prefix, type_format_visited(t.fn->return_type, visited));
