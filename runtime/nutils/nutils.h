@@ -53,8 +53,6 @@ void co_throw_error(char *path, char *fn_name, n_int_t line, n_int_t column);
 
 void throw_index_out_error(n_int_t *index, n_int_t *len);
 
-uint32_t co_take_errset(char *path, char *fn_name, n_int_t line, n_int_t column);
-
 uint8_t co_has_panic(char *path, char *fn_name, n_int_t line, n_int_t column);
 
 n_anyptr_t anyptr_casting(value_casting v);

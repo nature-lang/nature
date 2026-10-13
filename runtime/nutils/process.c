@@ -185,7 +185,7 @@ static void uv_async_process_spawn(process_context_t *ctx, coroutine_t *co) {
     co_ready(co);
 }
 
-process_context_t *rt_uv_process_spawn(command_t *cmd) {
+n_errable_t rt_uv_process_spawn(command_t *cmd) {
     DEBUGF("[rt_uv_process_spawn] start")
 
 
@@ -228,7 +228,7 @@ process_context_t *rt_uv_process_spawn(command_t *cmd) {
     global_waiting_send(uv_async_process_spawn, ctx, co, 0);
 
     DEBUGF("[rt_uv_process_spawn] end, ctx: %p", ctx)
-    return ctx;
+    return rti_errable((uint64_t) ctx);
 }
 
 static inline void on_write_stdin_cb(uv_write_t *req, int status) {
@@ -259,15 +259,15 @@ static void uv_async_process_write_stdin(process_context_t *ctx) {
     }
 }
 
-n_int_t rt_uv_process_write_stdin(process_context_t *ctx, n_vec_t buf) {
+n_errable_t rt_uv_process_write_stdin(process_context_t *ctx, n_vec_t buf) {
     coroutine_t *co = coroutine_get();
     if (ctx->stdin_pipe.closed) {
         rti_co_throw(co, "io.CLOSED");
-        return 0;
+        return rti_errable(0);
     }
     if (buf.length > sizeof(ctx->stdin_pipe.buffer)) {
         rti_co_throw(co, "io.OTHER");
-        return 0;
+        return rti_errable(0);
     }
 
     memcpy(ctx->stdin_pipe.buffer, buf.data, buf.length);
@@ -276,9 +276,9 @@ n_int_t rt_uv_process_write_stdin(process_context_t *ctx, n_vec_t buf) {
     global_waiting_send(uv_async_process_write_stdin, ctx, 0, 0);
 
     if (co->errset) {
-        return 0;
+        return rti_errable(0);
     }
-    return buf.length;
+    return rti_errable(buf.length);
 }
 
 void rt_uv_process_close_stdin(process_context_t *ctx) {
@@ -306,7 +306,7 @@ void uv_async_process_wait(process_context_t *ctx, coroutine_t *co) {
 /**
  * uv_loop 和当前 coroutine 必须在同一个 processor 中运行, 基于此可以避免 race 问题，判断 exited 也不需要加锁。
  */
-void rt_uv_process_wait(process_context_t *ctx) {
+n_errable_t rt_uv_process_wait(process_context_t *ctx) {
     assert(ctx);
     n_processor_t *p = processor_get();
     coroutine_t *co = coroutine_get();
@@ -314,19 +314,20 @@ void rt_uv_process_wait(process_context_t *ctx) {
     global_waiting_send(uv_async_process_wait, ctx, co, 0);
 
     DEBUGF("[rt_uv_process_wait] process %ld exited", ctx->pid);
+    return rti_errable(0);
 }
 
 static void uv_async_process_read_stdout(process_context_t *ctx) {
     uv_read_start((uv_stream_t *) &ctx->stdout_pipe.pipe, process_alloc_buffer_cb, on_read_stdout_cb);
 }
 
-n_string_t rt_uv_process_read_stdout(process_context_t *ctx) {
+n_errable_vec_t rt_uv_process_read_stdout(process_context_t *ctx) {
     n_processor_t *p = processor_get();
     coroutine_t *co = coroutine_get();
 
     if (ctx->stdout_pipe.closed) {
         rti_co_throw(co, "io.CLOSED");
-        return (n_string_t) {0};
+        return rti_errable_vec((n_string_t) {0});
     }
 
     ctx->stdout_pipe.pipe.data = co;
@@ -334,24 +335,24 @@ n_string_t rt_uv_process_read_stdout(process_context_t *ctx) {
 
     if (co->errset) {
         DEBUGF("[rt_uv_process_read_stdout] co has err, will return NULL")
-        return (n_string_t) {0};
+        return rti_errable_vec((n_string_t) {0});
     }
 
     n_string_t buf_string = rt_string_ref_new(ctx->stdout_pipe.buffer, ctx->stdout_pipe.buffer_count);
     DEBUGF("[rt_uv_process_read_stdout] read buf len: %d", buf_string.length);
-    return buf_string;
+    return rti_errable_vec(buf_string);
 }
 
 static void uv_async_process_read_stderr(process_context_t *ctx) {
     uv_read_start((uv_stream_t *) &ctx->stderr_pipe.pipe, process_alloc_buffer_cb, on_read_stderr_cb);
 }
 
-n_string_t rt_uv_process_read_stderr(process_context_t *ctx) {
+n_errable_vec_t rt_uv_process_read_stderr(process_context_t *ctx) {
     n_processor_t *p = processor_get();
     coroutine_t *co = coroutine_get();
     if (ctx->stderr_pipe.closed) {
         rti_co_throw(co, "io.CLOSED");
-        return (n_string_t) {0};
+        return rti_errable_vec((n_string_t) {0});
     }
 
     ctx->stderr_pipe.pipe.data = co;
@@ -359,11 +360,11 @@ n_string_t rt_uv_process_read_stderr(process_context_t *ctx) {
 
     if (co->errset) {
         DEBUGF("[rt_uv_process_read_stderr] co has err, will return NULL")
-        return (n_string_t) {0};
+        return rti_errable_vec((n_string_t) {0});
     }
 
     // 提取 buf 并返回
     n_string_t buf_string = rt_string_ref_new(ctx->stderr_pipe.buffer, ctx->stderr_pipe.buffer_count);
     DEBUGF("[rt_uv_process_read_stderr] read buf len: %ld", buf_string.length);
-    return buf_string;
+    return rti_errable_vec(buf_string);
 }

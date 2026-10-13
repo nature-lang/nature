@@ -24,7 +24,7 @@
  * @param argv
  * @param envp
  */
-void syscall_exec(n_string_t path, n_vec_t argv, n_vec_t envp) {
+n_errable_t syscall_exec(n_string_t path, n_vec_t argv, n_vec_t envp) {
     char *p_str = rt_string_ref(&path);
 
     // args 转换成 char* 格式并给到 execve
@@ -65,10 +65,11 @@ void syscall_exec(n_string_t path, n_vec_t argv, n_vec_t envp) {
 #endif
     if (result == -1) {
         rti_throw(rti_uv_errset(uv_translate_sys_error(errno)));
-        return;
+        return rti_errable(0);
     }
 
     rti_throw("io.OTHER");
+    return rti_errable(0);
 }
 
 // 使用 waitpid, 返回值为 exit status
@@ -87,7 +88,7 @@ n_u32_t syscall_wait(n_int_t pid) {
     return (n_u32_t) status;
 }
 
-n_int_t syscall_call6(n_int_t number, n_uint_t a1, n_uint_t a2, n_uint_t a3, n_uint_t a4, n_uint_t a5, n_uint_t a6) {
+n_errable_t syscall_call6(n_int_t number, n_uint_t a1, n_uint_t a2, n_uint_t a3, n_uint_t a4, n_uint_t a5, n_uint_t a6) {
 #ifdef __WINDOWS
     (void) number;
     (void) a1;
@@ -97,14 +98,14 @@ n_int_t syscall_call6(n_int_t number, n_uint_t a1, n_uint_t a2, n_uint_t a3, n_u
     (void) a5;
     (void) a6;
     rti_throw("io.OTHER");
-    return 0;
+    return rti_errable(0);
 #else
     int64_t result = syscall(number, a1, a2, a3, a4, a5, a6);
 
     if (result == -1) {
         rti_throw(rti_uv_errset(uv_translate_sys_error(errno)));
-        return 0;
+        return rti_errable(0);
     }
-    return (n_int_t) result;
+    return rti_errable((n_int_t) result);
 #endif
 }

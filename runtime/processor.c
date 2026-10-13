@@ -246,7 +246,7 @@ NO_OPTIMIZE static void coroutine_wrapper() {
     assert((addr_t) co->fn > 0);
 
     // 调用到用户函数, a nature fn returns errable<void,errset_t>
-    n_errable_void_t result = {0};
+    n_errable_t result = {0};
     if (co->flag & FLAG(CO_FLAG_RTFN)) {
         if (co->flag & FLAG(CO_FLAG_DIRECT)) {
             ((void_fn_t) co->fn)();
@@ -642,6 +642,34 @@ void rti_throw(char *errset_name) {
 void rti_co_throw(coroutine_t *co, char *errset_name) {
     DEBUGF("[runtime.rti_co_throw] co=%p, errset=%s", co, errset_name);
     co->errset = rt_find_errset(errset_name);
+}
+
+// the errset rti_throw reported for the C fn returning now, 0 if none. The error starts a new trace, any
+// earlier one belongs to an error that was caught.
+uint32_t rti_take_errset() {
+    coroutine_t *co = coroutine_get();
+    uint32_t errset = co->errset;
+    if (errset) {
+        co->errset = 0;
+        co->traces = rti_vec_new(&errort_trace_rtype, 0, 0);
+    }
+    return errset;
+}
+
+n_errable_t rti_errable(uint64_t value) {
+    uint32_t errset = rti_take_errset();
+    if (errset) {
+        return (n_errable_t) {.tag = hash_string(ERRABLE_ERROR_TAG), .errset = errset};
+    }
+    return (n_errable_t) {.tag = hash_string(ERRABLE_VALUE_TAG), .value = value};
+}
+
+n_errable_vec_t rti_errable_vec(n_vec_t value) {
+    uint32_t errset = rti_take_errset();
+    if (errset) {
+        return (n_errable_vec_t) {.tag = hash_string(ERRABLE_ERROR_TAG), .errset = errset};
+    }
+    return (n_errable_vec_t) {.tag = hash_string(ERRABLE_VALUE_TAG), .value = value};
 }
 
 // the io errset of a libuv error code, errno is translated with uv_translate_sys_error first
@@ -1055,15 +1083,15 @@ void rt_coroutine_return(void *result_ptr) {
            *(int64_t *) co->future->result, co->future->size);
 }
 
-// the errset the awaited coroutine failed with is left for the compiled code to take
-void rt_coroutine_await(n_future_t *fu) {
+// fails with the errset the awaited coroutine failed with
+n_errable_t rt_coroutine_await(n_future_t *fu) {
     coroutine_t *target_co = fu->await_co;
     mutex_lock(&target_co->dead_locker);
     coroutine_t *src_co = coroutine_get();
     if (target_co->status == CO_STATUS_DEAD) {
         mutex_unlock(&target_co->dead_locker);
         src_co->errset = fu->error;
-        return;
+        return rti_errable(0);
     }
     target_co->await_co = src_co;
     co_set_status(src_co->p, src_co, CO_STATUS_WAITING);
@@ -1075,6 +1103,7 @@ void rt_coroutine_await(n_future_t *fu) {
     // waiting -> syscall
     co_set_status(src_co->p, src_co, CO_STATUS_TPLCALL);
     src_co->errset = fu->error;
+    return rti_errable(0);
 }
 
 // global_loop_run 的超时回调函数

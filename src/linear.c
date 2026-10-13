@@ -938,14 +938,6 @@ static void linear_rt_call_at(module_t *m, char *rt_call, lir_operand_t *result)
     push_rt_call(m, rt_call, result, 4, path_operand, fn_name_operand, line_operand, column_operand);
 }
 
-// The errset a T! fn bound to C left on the coroutine, 0 when it succeeded. A taken errset starts its
-// trace at this call.
-static lir_operand_t *linear_take_errset(module_t *m) {
-    lir_operand_t *errset = temp_var_operand(m, type_kind_new(TYPE_UINT32));
-    linear_rt_call_at(m, RT_CALL_CO_TAKE_ERRSET, errset);
-    return errset;
-}
-
 /**
  * 当 local var 被 child fn 引用时, 需要将原本在栈中分配的 var 改成堆分配, 并对 ast_var_decl 中的 heap_ident 赋值
  * 避免可能的在 child fn 中产生的协程操作导致的 stack var 无法访问。当然这不是一个好的方式，并不是所有的 capture var 都会被协程
@@ -2219,12 +2211,6 @@ static lir_operand_t *linear_call_impl(module_t *m, ast_expr_t expr, lir_operand
         linear_return_error(m, error_type, linear_errable_payload(m, temp, error_type));
         OP_PUSH(lir_op_label(end, true));
         temp = linear_errable_payload(m, temp, errable_value_type(type_fn->return_type));
-    } else if (type_fn->is_errable) {
-        char *end = label_ident_with_unique(".errset.none");
-        lir_operand_t *errset = linear_take_errset(m);
-        OP_PUSH(lir_op_new(LIR_OPCODE_BEE, integer_operand(0, TYPE_UINT32), errset, lir_label_operand(end, true)));
-        linear_return_error(m, type_kind_new(TYPE_UINT32), errset);
-        OP_PUSH(lir_op_label(end, true));
     }
 
     if (temp) {
@@ -3841,26 +3827,17 @@ static lir_operand_t *linear_catch_expr(module_t *m, ast_expr_t expr, lir_operan
         target = temp_var_operand_with_alloc(m, expr.type);
     }
 
-    // A catch over an errable<T,E> call branches on the errable that call returns, and a catch over a
-    // T! fn bound to C on the errset it leaves on the coroutine. A catch over an index, map access,
-    // slice or `as` takes the panic of that expression as a builtin errset. Nothing else reaches a catch.
+    // A catch over an errable<T,E> call branches on the errable that call returns. A catch over an
+    // index, map access, slice or `as` takes the panic of that expression as a builtin errset. Nothing
+    // else reaches a catch.
     ast_expr_t try_expr = catch_expr->try_expr;
-    ast_call_t *call = try_expr.assert_type == AST_CALL ? try_expr.value : NULL;
     lir_operand_t *errable = NULL;
-    lir_operand_t *co_errset = NULL;
     char *panic_errset = linear_panic_errset(try_expr);
-    if (call && is_errable_type(call->return_type)) {
+    if (try_expr.assert_type == AST_CALL && is_errable_type(((ast_call_t *) try_expr.value)->return_type)) {
         errable = linear_call_impl(m, try_expr, NULL, false);
         OP_PUSH(lir_op_new(LIR_OPCODE_BEE, int_operand(hash_string(ERRABLE_ERROR_TAG)),
                            indirect_addr_operand(m, type_kind_new(TYPE_UINT64), errable, 0), lir_label_operand(catch_start_label, true)));
         linear_super_move(m, expr.type, target, linear_errable_payload(m, errable, expr.type));
-    } else if (call && call->left.type.fn->is_errable) {
-        lir_operand_t *result = linear_call_impl(m, try_expr, NULL, false);
-        co_errset = linear_take_errset(m);
-        OP_PUSH(lir_op_new(LIR_OPCODE_BNE, integer_operand(0, TYPE_UINT32), co_errset, lir_label_operand(catch_start_label, true)));
-        if (result) {
-            linear_super_move(m, expr.type, target, result);
-        }
     } else if (panic_errset) {
         m->current_closure->catch_panic_label = catch_start_label;
         linear_expr(m, try_expr, target);
@@ -3893,8 +3870,6 @@ static lir_operand_t *linear_catch_expr(module_t *m, ast_expr_t expr, lir_operan
     if (errable) {
         linear_super_move(m, catch_expr->catch_err.type, err_operand,
                           linear_errable_payload(m, errable, catch_expr->catch_err.type));
-    } else if (co_errset) {
-        OP_PUSH(lir_op_move(err_operand, co_errset));
     } else if (panic_errset) {
         ast_errset_stmt_t *errset = symbol_table_get(panic_errset)->ast_value;
         OP_PUSH(lir_op_move(err_operand, integer_operand(errset->id, TYPE_UINT32)));

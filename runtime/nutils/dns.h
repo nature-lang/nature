@@ -63,7 +63,7 @@ void uv_async_getaddrinfo_register(uv_getaddrinfo_t *req, dns_ctx_t *ctx) {
     }
 }
 
-n_vec_t rt_uv_dns_lookup(n_string_t host) {
+n_errable_vec_t rt_uv_dns_lookup(n_string_t host) {
     n_processor_t *p = processor_get();
     coroutine_t *co = coroutine_get();
 
@@ -82,7 +82,7 @@ n_vec_t rt_uv_dns_lookup(n_string_t host) {
 
     n_vec_t result = ctx->ips;
     free(ctx);
-    return result;
+    return rti_errable_vec(result);
 }
 
 #endif //NATURE_RUNTIME_NUTILS_DNS_H_

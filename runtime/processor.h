@@ -276,7 +276,7 @@ void co_migrate(aco_t *aco, aco_share_stack_t *new_st);
 
 void rt_coroutine_sleep(int64_t ms);
 
-void rt_coroutine_await(n_future_t *fu);
+n_errable_t rt_coroutine_await(n_future_t *fu);
 
 void rt_coroutine_yield();
 

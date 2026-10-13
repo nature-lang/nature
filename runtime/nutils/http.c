@@ -398,7 +398,7 @@ void rt_uv_http_close(n_http_server_t *server) {
 /**
  * @param server
  */
-void rt_uv_http_listen(n_http_server_t *server) {
+n_errable_t rt_uv_http_listen(n_http_server_t *server) {
     n_processor_t *p = processor_get();
     coroutine_t *co = coroutine_get();
 
@@ -415,4 +415,5 @@ void rt_uv_http_listen(n_http_server_t *server) {
     global_waiting_send(uv_async_http_listen, inner, 0, 0);
 
     DEBUGF("[rt_uv_http_listen] listen resume, port=%ld, and return, p_index=%d", server->port, p->index);
+    return rti_errable(0);
 }

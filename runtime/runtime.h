@@ -170,14 +170,27 @@ static inline bool user_main_is_fn(void) {
 typedef void (*void_fn_t)();
 typedef void (*env_fn_t)(void *envs);
 
-// what a nature coroutine fn returns, errable<void,errset_t>: the tag, then the errset when it failed
+// errable<T,errset_t>, which a nature fn returns and so does a C fn bound as T!: the tag, then the value
+// or, when it failed, the errset. n_errable_t holds a value of up to 8 bytes, n_errable_vec_t a vec or a
+// string.
 typedef struct {
     uint64_t tag;
-    uint32_t errset;
-} n_errable_void_t;
+    union {
+        uint64_t value;
+        uint32_t errset;
+    };
+} n_errable_t;
 
-typedef n_errable_void_t (*errable_fn_t)();
-typedef n_errable_void_t (*env_errable_fn_t)(void *envs);
+typedef struct {
+    uint64_t tag;
+    union {
+        n_vec_t value;
+        uint32_t errset;
+    };
+} n_errable_vec_t;
+
+typedef n_errable_t (*errable_fn_t)();
+typedef n_errable_t (*env_errable_fn_t)(void *envs);
 
 /**
  * 参考 linux, 栈从上往下增长，所以在数学意义上 base > end
@@ -450,7 +463,7 @@ struct coroutine_t {
     //    uint64_t scan_offset;
     //    uint64_t scan_ret_addr;
 
-    uint32_t errset; // the errset a C fn reports for the compiled code to take, 0 if none
+    uint32_t errset; // the errset rti_throw reports for the C fn to return, 0 if none
     char *panic_msg; // the panic a runtime call reports for co_has_panic
     n_vec_t traces; // element is n_trace_t
 
@@ -514,6 +527,13 @@ void rti_panic(char *msg);
 void rti_throw(char *errset_name);
 
 void rti_co_throw(coroutine_t *co, char *errset_name);
+
+// A C fn bound as T! returns rti_errable(value): the errset rti_throw reported makes it the error.
+n_errable_t rti_errable(uint64_t value);
+
+n_errable_vec_t rti_errable_vec(n_vec_t value);
+
+uint32_t rti_take_errset();
 
 char *rti_uv_errset(int code);
 

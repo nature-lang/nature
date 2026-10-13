@@ -205,7 +205,7 @@ type errable<T,E> = union{
 }
 ```
 
-A function that returns `errable<T,E>` is errable, in `.x` and `.n`: `return` gives a `T`, `throw` gives an `E`, and the error comes back in the return value. `T!` is shorthand for `errable<T,errset_t>`. A `T!` function bound to C, declared without a body, can't return that, so it leaves its errset on the coroutine and the compiler takes it after the call. A `!` after `errable<T,E>` is rejected.
+A function that returns `errable<T,E>` is errable, in `.x` and `.n`: `return` gives a `T`, `throw` gives an `E`, and the error comes back in the return value. `T!` is shorthand for `errable<T,errset_t>`, and a `T!` function bound to C returns it too. A `!` after `errable<T,E>` is rejected.
 
 An error propagates only into a function that fails with the same type. A call that fails with another type has to be caught and converted, which the compiler checks:
 

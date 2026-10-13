@@ -140,19 +140,19 @@ static void on_read_cb(uv_fs_t *req) {
 /**
  * 主要用于 stdio/stdin/stderr 的创建, name 示例 "/dev/stdin"
  */
-fs_context_t *rt_uv_fs_from(n_int_t fd, n_string_t name) {
+n_errable_t rt_uv_fs_from(n_int_t fd, n_string_t name) {
     fs_context_t *ctx = rti_gc_malloc(sizeof(fs_context_t), NULL);
     if (fd < 0) {
         coroutine_t *co = coroutine_get();
         rti_co_throw(co, "io.CLOSED");
-        return NULL;
+        return rti_errable(0);
     }
 
     ctx->fd = fd;
     DEBUGF("[fs_from] create file context from fd: %ld, name: %s", fd,
            (char *) rt_string_ref(&name));
 
-    return ctx;
+    return rti_errable((uint64_t) ctx);
 }
 
 static void uv_async_fs_open(fs_context_t *ctx, char *path) {
@@ -174,7 +174,7 @@ static void uv_async_fs_open(fs_context_t *ctx, char *path) {
 #endif
 }
 
-fs_context_t *rt_uv_fs_open(n_string_t path, int64_t flags, int64_t mode) {
+n_errable_t rt_uv_fs_open(n_string_t path, int64_t flags, int64_t mode) {
     // 创建 context, 不需要主动销毁，后续由用户端接手该变量，并由 GC 进行销毁
     fs_context_t *ctx = rti_gc_malloc(sizeof(fs_context_t), NULL);
     n_processor_t *p = processor_get();
@@ -186,15 +186,15 @@ fs_context_t *rt_uv_fs_open(n_string_t path, int64_t flags, int64_t mode) {
     global_waiting_send(uv_async_fs_open, ctx, rt_string_ref(&path), 0);
     if (co->errset) {
         DEBUGF("[fs_open] open file failed: %s", ERRSET_NAME(co->errset));
-        return NULL;
+        return rti_errable(0);
     } else {
         DEBUGF("[fs_open] open file success: %s", (char *) rt_string_ref(&path));
     }
 
-    return ctx;
+    return rti_errable((uint64_t) ctx);
 }
 
-n_int_t rt_uv_fs_read(fs_context_t *ctx, n_vec_t buf) {
+n_errable_t rt_uv_fs_read(fs_context_t *ctx, n_vec_t buf) {
     return rt_uv_fs_read_at(ctx, buf, -1);
 }
 
@@ -202,14 +202,14 @@ static void uv_async_fs_read_at(fs_context_t *ctx, int offset) {
     uv_fs_read(&global_loop, &ctx->req, ctx->fd, &ctx->buf, 1, offset, on_read_cb);
 }
 
-n_int_t rt_uv_fs_read_at(fs_context_t *ctx, n_vec_t buf, int offset) {
+n_errable_t rt_uv_fs_read_at(fs_context_t *ctx, n_vec_t buf, int offset) {
     coroutine_t *co = coroutine_get();
     n_processor_t *p = processor_get();
     DEBUGF("[rt_uv_fs_read] read file: %ld", ctx->fd);
 
     if (ctx->closed) {
         rti_co_throw(co, "io.CLOSED");
-        return 0;
+        return rti_errable(0);
     }
 
     // 配置初始缓冲区，能够读取的最大程度受限于 buf.length
@@ -225,13 +225,13 @@ n_int_t rt_uv_fs_read_at(fs_context_t *ctx, n_vec_t buf, int offset) {
 
     if (co->errset) {
         DEBUGF("[rt_uv_fs_read] read file failed: %s", ERRSET_NAME(co->errset));
-        return 0;
+        return rti_errable(0);
     } else {
         DEBUGF("[rt_uv_fs_read] read file success");
     }
 
     ctx->req.data = NULL;
-    return ctx->data_len;
+    return rti_errable(ctx->data_len);
 }
 
 static void uv_async_fs_write_at(fs_context_t *ctx, n_vec_t *buf, int offset) {
@@ -243,13 +243,13 @@ static void uv_async_fs_write_at(fs_context_t *ctx, n_vec_t *buf, int offset) {
     uv_fs_write(&global_loop, &ctx->req, ctx->fd, &ctx->buf, 1, offset, on_write_cb);
 }
 
-n_int_t rt_uv_fs_write_at(fs_context_t *ctx, n_vec_t buf, int offset) {
+n_errable_t rt_uv_fs_write_at(fs_context_t *ctx, n_vec_t buf, int offset) {
     coroutine_t *co = coroutine_get();
     n_processor_t *p = processor_get();
 
     if (ctx->closed) {
         rti_co_throw(co, "io.CLOSED");
-        return 0;
+        return rti_errable(0);
     }
 
     DEBUGF("[fs_write_at] write file: %ld, offset: %d, data_len: %ld", ctx->fd, offset, buf.length);
@@ -263,10 +263,10 @@ n_int_t rt_uv_fs_write_at(fs_context_t *ctx, n_vec_t buf, int offset) {
         DEBUGF("[fs_write_at] write file success");
     }
 
-    return ctx->data_len;
+    return rti_errable(ctx->data_len);
 }
 
-n_int_t rt_uv_fs_write(fs_context_t *ctx, n_vec_t buf) {
+n_errable_t rt_uv_fs_write(fs_context_t *ctx, n_vec_t buf) {
     DEBUGF("[rt_uv_fs_write] buf len: %ld", buf.length);
     return rt_uv_fs_write_at(ctx, buf, -1);
 }
@@ -327,14 +327,23 @@ static void uv_async_fs_stat(fs_context_t *ctx, coroutine_t *co) {
     }
 }
 
-uv_stat_t rt_uv_fs_stat(fs_context_t *ctx) {
+// like rti_errable, for a stat
+static n_errable_stat_t rti_errable_stat(uv_stat_t value) {
+    uint32_t errset = rti_take_errset();
+    if (errset) {
+        return (n_errable_stat_t) {.tag = hash_string(ERRABLE_ERROR_TAG), .errset = errset};
+    }
+    return (n_errable_stat_t) {.tag = hash_string(ERRABLE_VALUE_TAG), .value = value};
+}
+
+n_errable_stat_t rt_uv_fs_stat(fs_context_t *ctx) {
     coroutine_t *co = coroutine_get();
     n_processor_t *p = processor_get();
     uv_stat_t stat_result = {0};
 
     if (ctx->closed) {
         rti_co_throw(co, "io.CLOSED");
-        return stat_result;
+        return rti_errable_stat(stat_result);
     }
 
     DEBUGF("[rt_uv_fs_stat] stat file: %d", ctx->fd);
@@ -355,5 +364,5 @@ uv_stat_t rt_uv_fs_stat(fs_context_t *ctx) {
     // Clean up request
     uv_fs_req_cleanup(&ctx->req);
 
-    return stat_result;
+    return rti_errable_stat(stat_result);
 }

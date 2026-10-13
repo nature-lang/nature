@@ -94,7 +94,7 @@ typedef struct {
 
 void rt_uv_conn_resp(http_conn_t *conn, n_string_t resp_data);
 
-void rt_uv_http_listen(n_http_server_t *server);
+n_errable_t rt_uv_http_listen(n_http_server_t *server);
 
 void rt_uv_http_close(n_http_server_t *server);
 

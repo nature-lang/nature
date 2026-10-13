@@ -205,7 +205,7 @@ type errable<T,E> = union{
 }
 ```
 
-返回 `errable<T,E>` 的函数是可出错函数，`.x` 和 `.n` 都支持：`return` 给出 `T`，`throw` 给出 `E`，错误通过返回值带回。`T!` 是 `errable<T,errset_t>` 的简写。绑定到 C 的 `T!` 函数没有函数体，没法返回 errable，所以它把 errset 留在协程上，由编译器在调用后取出。`errable<T,E>` 后面再写 `!` 会被拒绝。
+返回 `errable<T,E>` 的函数是可出错函数，`.x` 和 `.n` 都支持：`return` 给出 `T`，`throw` 给出 `E`，错误通过返回值带回。`T!` 是 `errable<T,errset_t>` 的简写，绑定到 C 的 `T!` 函数也返回它。`errable<T,E>` 后面再写 `!` 会被拒绝。
 
 错误只能传播给错误类型相同的函数。错误类型不同的调用必须 catch 后转换，编译器会检查：
 

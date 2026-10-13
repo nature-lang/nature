@@ -11,15 +11,14 @@
 
 static type_t reduction_type_visited(module_t *m, type_t t, struct sc_map_s64 *visited);
 
-// A fn returning errable<T,E> is errable with error type E. `T!` is shorthand for errable<T,errset_t>,
-// except on a fn bound to C, which leaves its errset on the coroutine.
+// A fn returning errable<T,E> is errable with error type E. `T!` is shorthand for errable<T,errset_t>.
 void infer_errable_return(module_t *m, type_fn_t *fn) {
     if (is_errable_type(fn->return_type)) {
         INFER_ASSERTF(!fn->is_errable, "a fn returning errable<T,E> is already errable, `!` is not needed");
         fn->is_errable = true;
         return;
     }
-    if (fn->is_tpl || !fn->is_errable) return;
+    if (!fn->is_errable) return;
 
     type_t errable = type_ident_new(ERRABLE_IDENT, TYPE_IDENT_DEF);
     errable.args = ct_list_new(sizeof(type_t));
@@ -1559,10 +1558,9 @@ static type_t infer_match(module_t *m, ast_match_t *match, type_t target_type) {
     return target_type;
 }
 
-// The type of the error a call of fn fails with: E of the errable<T,E> it returns, or the errset a
-// T! fn bound to C leaves on the coroutine.
+// The type of the error a call of fn fails with: E of the errable<T,E> it returns.
 static type_t infer_fn_error_type(module_t *m, type_fn_t *fn) {
-    return is_errable_return(fn) ? errable_error_type(fn->return_type) : reduction_type(m, type_ident_new(ERRSET_IDENT, TYPE_IDENT_DEF));
+    return errable_error_type(fn->return_type);
 }
 
 static type_t infer_catch(module_t *m, ast_catch_t *catch_expr) {

@@ -241,11 +241,11 @@ void uv_async_tcp_read(inner_conn_t *conn) {
 }
 
 // read once
-int64_t rt_uv_tcp_read(n_tcp_conn_t *n_conn, n_vec_t buf) {
+n_errable_t rt_uv_tcp_read(n_tcp_conn_t *n_conn, n_vec_t buf) {
     coroutine_t *co = coroutine_get();
     if (n_conn->closed) {
         rti_co_throw(co, "io.CLOSED");
-        return 0;
+        return rti_errable(0);
     }
 
     inner_conn_t *conn = n_conn->conn;
@@ -268,14 +268,14 @@ int64_t rt_uv_tcp_read(n_tcp_conn_t *n_conn, n_vec_t buf) {
 
     if (closed) {
         rti_co_throw(co, "io.CLOSED");
-        return 0;
+        return rti_errable(0);
     }
     if (read_len < 0) {
         rti_co_throw(co, rti_uv_errset(read_len));
-        return 0;
+        return rti_errable(0);
     }
 
-    return read_len;
+    return rti_errable(read_len);
 }
 
 static void uv_async_tcp_write(inner_conn_t *conn) {
@@ -293,11 +293,11 @@ static void uv_async_tcp_write(inner_conn_t *conn) {
     }
 }
 
-int64_t rt_uv_tcp_write(n_tcp_conn_t *n_conn, n_vec_t buf) {
+n_errable_t rt_uv_tcp_write(n_tcp_conn_t *n_conn, n_vec_t buf) {
     coroutine_t *co = coroutine_get();
     if (n_conn->closed) {
         rti_co_throw(co, "io.CLOSED");
-        return 0;
+        return rti_errable(0);
     }
 
     inner_conn_t *conn = n_conn->conn;
@@ -310,7 +310,7 @@ int64_t rt_uv_tcp_write(n_tcp_conn_t *n_conn, n_vec_t buf) {
     DEBUGF("[rt_uv_tcp_write] co=%p, waiting resume", co)
 
     // not need yield, return directly
-    return buf.length;
+    return rti_errable(buf.length);
 }
 
 static inline void on_tcp_connect_cb(uv_connect_t *conn_req, int status) {
@@ -368,7 +368,7 @@ static void uv_async_tcp_connect(inner_conn_t *conn, struct sockaddr_in *dest, n
     }
 }
 
-void rt_uv_tcp_connect(n_tcp_conn_t *n_conn, n_string_t ip, n_int64_t port, n_int64_t timeout_ms) {
+n_errable_t rt_uv_tcp_connect(n_tcp_conn_t *n_conn, n_string_t ip, n_int64_t port, n_int64_t timeout_ms) {
     DEBUGF("[rt_uv_tcp_connect] start, addr %s, port %ld, co=%p", (char *) rt_string_ref(&ip), port, coroutine_get())
 
     coroutine_t *co = coroutine_get();
@@ -388,6 +388,7 @@ void rt_uv_tcp_connect(n_tcp_conn_t *n_conn, n_string_t ip, n_int64_t port, n_in
     global_waiting_send(uv_async_tcp_connect, conn, dest, (void *) timeout_ms);
 
     DEBUGF("[rt_uv_tcp_connect] resume, connect success, will return conn=%p, co=%p", conn, co)
+    return rti_errable(0);
 }
 
 void uv_async_tcp_accept(inner_server_t *inner_server, coroutine_t *co) {
@@ -405,13 +406,13 @@ void uv_async_tcp_accept(inner_server_t *inner_server, coroutine_t *co) {
     inner_server->waiters_count += 1;
 }
 
-void rt_uv_tcp_accept(n_tcp_server_t *server, n_tcp_conn_t *n_conn) {
+n_errable_t rt_uv_tcp_accept(n_tcp_server_t *server, n_tcp_conn_t *n_conn) {
     coroutine_t *co = coroutine_get();
     DEBUGF("[rt_uv_tcp_accept] accept start, co=%p", co)
 
     if (server->closed) {
         rti_co_throw(co, "io.CLOSED");
-        return;
+        return rti_errable(0);
     }
     inner_server_t *inner_server = server->inner;
     inner_server->accept_waiters += 1;
@@ -428,7 +429,7 @@ void rt_uv_tcp_accept(n_tcp_server_t *server, n_tcp_conn_t *n_conn) {
                 free_conn(inner_server);
             }
             rti_co_throw(co, "io.CLOSED");
-            return;
+            return rti_errable(0);
         }
         if (inner_server->accept_head == NULL) {
             rt_coroutine_sleep(1);
@@ -454,6 +455,7 @@ void rt_uv_tcp_accept(n_tcp_server_t *server, n_tcp_conn_t *n_conn) {
     n_conn->conn = conn;
     // accept success, can read
     DEBUGF("[rt_uv_tcp_accept] accept success, inner_conn=%p, co=%p", conn, co);
+    return rti_errable(0);
 }
 
 void on_tcp_conn_cb(uv_stream_t *handle, int status) {
@@ -525,7 +527,7 @@ static void uv_async_tcp_listen(n_tcp_server_t *server) {
     co_ready(server->inner->listen_co);
 }
 
-void rt_uv_tcp_listen(n_tcp_server_t *server) {
+n_errable_t rt_uv_tcp_listen(n_tcp_server_t *server) {
     DEBUGF("[rt_uv_tcp_listen] start, addr %s, port %ld", (char *) rt_string_ref(&server->ip), server->port)
 
     n_processor_t *p = processor_get();
@@ -541,6 +543,7 @@ void rt_uv_tcp_listen(n_tcp_server_t *server) {
 
     init_conn(server->inner);
     DEBUGF("[rt_uv_tcp_listen] listen success, will return")
+    return rti_errable(0);
 }
 
 void uv_async_server_close(n_tcp_server_t *server) {
