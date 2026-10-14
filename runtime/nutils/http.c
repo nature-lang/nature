@@ -385,7 +385,7 @@ static void uv_async_http_listen(inner_http_server_t *inner) {
 
     int result = uv_listen((uv_stream_t *) &inner->handle, DEFAULT_BACKLOG, on_http_conn_cb);
     if (result) {
-        rti_co_throw(inner->listen_co, tlsprintf("listen failed: %s", uv_strerror(result)), false);
+        rti_co_throw(inner->listen_co, rti_uv_errset(result));
         co_ready(inner->listen_co);
     }
 }
@@ -398,7 +398,7 @@ void rt_uv_http_close(n_http_server_t *server) {
 /**
  * @param server
  */
-void rt_uv_http_listen(n_http_server_t *server) {
+n_errable_t rt_uv_http_listen(n_http_server_t *server) {
     n_processor_t *p = processor_get();
     coroutine_t *co = coroutine_get();
 
@@ -415,4 +415,5 @@ void rt_uv_http_listen(n_http_server_t *server) {
     global_waiting_send(uv_async_http_listen, inner, 0, 0);
 
     DEBUGF("[rt_uv_http_listen] listen resume, port=%ld, and return, p_index=%d", server->port, p->index);
+    return rti_errable(0);
 }

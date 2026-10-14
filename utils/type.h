@@ -16,7 +16,6 @@
 #define POINTER_SIZE sizeof(void *)
 #endif
 
-#define THROWABLE_IDENT "throwable"
 #define ERRABLE_IDENT "errable"
 #define ERRSET_IDENT "errset_t" // builtin type of an errset value, a u32 id at run time
 #define ERRABLE_VALUE_TAG "value"
@@ -481,8 +480,7 @@ static inline bool is_errable_type(type_t type) {
     return type.kind == TYPE_TAGGED_UNION && str_equal(type.ident, ERRABLE_IDENT);
 }
 
-// The fn hands its error back in the errable<T,E> it returns: a T! fn in .x, or an errable<T,E>
-// return in either mode. A T! fn in .n keeps its error on the coroutine.
+// The fn hands its error back in the errable<T,E> it returns: a T! fn, or an errable<T,E> return.
 static inline bool is_errable_return(type_fn_t *fn) {
     return fn && fn->is_errable && is_errable_type(fn->return_type);
 }
@@ -632,11 +630,6 @@ typedef struct {
     n_int_t column;
 } n_trace_t;
 
-typedef struct {
-    n_string_t msg;
-    uint8_t panic;
-} n_errort;
-
 /**
  * 将 ct_rtypes 填入到 ct_rtypes 中并返回索引
  * @param rtype
@@ -770,10 +763,6 @@ static inline type_t type_array_new(type_kind element_type_kind, uint64_t length
     t->length = length;
     t->element_type = type_kind_new(element_type_kind);
     return type_new(TYPE_ARR, t);
-}
-
-static inline type_t interface_throwable() {
-    return type_ident_new(THROWABLE_IDENT, TYPE_IDENT_INTERFACE);
 }
 
 static inline bool must_assign_value(type_t t) {

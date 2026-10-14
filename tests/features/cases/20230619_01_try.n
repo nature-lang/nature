@@ -1,3 +1,5 @@
+errset DIVISOR_ZERO
+
 fn main():void! {
     // list index
     var list = [1, 2, 3]
@@ -24,7 +26,7 @@ fn main():void! {
         list: [1, 2, 3, 4, 5],
         div: fn(int a, int b):int! {
             if b == 0 {
-                throw errorf('divisor cannot zero')
+                throw DIVISOR_ZERO
             }
             return a / b
         },
@@ -40,7 +42,7 @@ fn main():void! {
     }
 
     var a3 = foo.div(10, 0) catch err3 {
-        print("chain access call err=", err3.msg(), '\n')
+        print("chain access call err=", err3, '\n')
         0
     }
 

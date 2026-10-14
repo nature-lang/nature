@@ -187,6 +187,8 @@ void callers_deserialize();
 
 void symdefs_deserialize();
 
+uint32_t rt_find_errset(char *name);
+
 void register_const_str_pool();
 
 static inline uint64_t rt_rtype_stack_size(int64_t rhash) {

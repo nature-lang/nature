@@ -50,7 +50,7 @@ pub fn file_t.content(&self):string! {
     var buf = vec<u8>.new(0, file_size as int)
     int n = self.read_at(buf, 0)
     if n != file_size as int {
-        throw errorf('incomplete reading')
+        throw io.EOF
     }
     return buf as string
 }

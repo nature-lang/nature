@@ -50,16 +50,16 @@ typedef struct {
     uv_process_t req; // 程序启动成功后, pid 存储在 req 中
 } process_context_t;
 
-n_string_t rt_uv_process_read_stdout(process_context_t *ctx);
+n_errable_vec_t rt_uv_process_read_stdout(process_context_t *ctx);
 
-n_string_t rt_uv_process_read_stderr(process_context_t *ctx);
+n_errable_vec_t rt_uv_process_read_stderr(process_context_t *ctx);
 
-n_int_t rt_uv_process_write_stdin(process_context_t *ctx, n_vec_t buf);
+n_errable_t rt_uv_process_write_stdin(process_context_t *ctx, n_vec_t buf);
 
 void rt_uv_process_close_stdin(process_context_t *ctx);
 
-void rt_uv_process_wait(process_context_t *ctx);
+n_errable_t rt_uv_process_wait(process_context_t *ctx);
 
-process_context_t *rt_uv_process_spawn(command_t *cmd);
+n_errable_t rt_uv_process_spawn(command_t *cmd);
 
 #endif //NATURE_PROCESS_H

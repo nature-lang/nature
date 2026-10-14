@@ -9,6 +9,8 @@ import unsafe
 import io
 import io.buf
 
+errset INVALID_ARGS
+
 fn logf(string format, ...[any] args) {
     var msg = fmt.sprintf(format, ...args)
     var t = time.now()
@@ -815,7 +817,8 @@ fn error_usage():void! {
     str += '  -m <string> mode: generate|chat, default: generate\n'
     str += '  -y <string> (optional) system prompt in chat mode\n'
 
-    throw errorf(str)
+    print(str)
+    throw INVALID_ARGS
 }
 
 fn print_safe(string piece) {
@@ -971,6 +974,6 @@ fn main():void! {
     if mode == 'generate' {
         generate(tf, t, s, prompt, steps)
     } else {
-        throw errorf('unknown mode: %s', mode)
+        throw INVALID_ARGS
     }
 }

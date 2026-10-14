@@ -8,4 +8,4 @@ Testing helpers for test blocks
 fn assert(bool cond):void!
 ```
 
-Throw an error when cond is false
+Fail with `testing.ASSERTION_FAILED` when cond is false

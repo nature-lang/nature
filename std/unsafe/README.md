@@ -8,7 +8,7 @@ Unsafe operations that bypass normal safety checks, including raw pointer operat
 fn vec_new<T>(ptr<T> p, int len):vec<T>!
 ```
 
-Creates a new vector from a raw pointer and length. The length must be non-negative, otherwise throws an error
+Creates a new vector from a raw pointer and length. The length must be non-negative, otherwise it fails with `INDEX_OUT_OF_RANGE`
 
 ## fn ptr_to
 

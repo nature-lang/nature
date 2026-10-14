@@ -27,7 +27,7 @@ import net.tcp
 
 fn main() {
     var conn = tls.connect_timeout('220.181.7.203:443', 30) catch e {
-        println('in catch', e.msg())
+        println('in catch', e)
 
         co.sleep(1000)
         return

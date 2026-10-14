@@ -10,7 +10,7 @@ static void test_basic() {
         "catch type assert err=true\n"
         "22\n"
         "chain access vec err=true\n"
-        "chain access call err=divisor cannot zero\n"
+        "chain access call err=main.DIVISOR_ZERO\n"
         "hello world\n";
     assert_string_equal(raw, str);
 }

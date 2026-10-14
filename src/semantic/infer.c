@@ -11,15 +11,14 @@
 
 static type_t reduction_type_visited(module_t *m, type_t t, struct sc_map_s64 *visited);
 
-// A fn returning errable<T,E> is errable with error type E, in .x and .n. In .x `T!` is shorthand
-// for errable<T,errset_t>; in .n it keeps its error on the coroutine.
+// A fn returning errable<T,E> is errable with error type E. `T!` is shorthand for errable<T,errset_t>.
 void infer_errable_return(module_t *m, type_fn_t *fn) {
     if (is_errable_type(fn->return_type)) {
         INFER_ASSERTF(!fn->is_errable, "a fn returning errable<T,E> is already errable, `!` is not needed");
         fn->is_errable = true;
         return;
     }
-    if (!fn->is_x || !fn->is_errable) return;
+    if (!fn->is_errable) return;
 
     type_t errable = type_ident_new(ERRABLE_IDENT, TYPE_IDENT_DEF);
     errable.args = ct_list_new(sizeof(type_t));
@@ -1327,10 +1326,18 @@ static type_t infer_async(module_t *m, ast_expr_t *expr, type_t target_type) {
 
     assert(fn_type.kind == TYPE_FN);
     co_expr->return_type = fn_type.fn->return_type;
+    // the runtime takes the error of a coroutine from the errable<void,errset_t> its fn returns, so only
+    // a fn():void! runs without a wrapping closure
+    bool is_errable_void = false;
+    if (is_errable_return(fn_type.fn)) {
+        is_errable_void = errable_value_type(co_expr->return_type).kind == TYPE_VOID &&
+                          str_equal(errable_error_type(co_expr->return_type).ident, ERRSET_IDENT);
+        co_expr->return_type = errable_value_type(co_expr->return_type);
+    }
 
     // 快速线路: 无参数，无返回值处理，无挟持外部变量，可以作为纯函数进行快速 coroutine 触发
-    if (m->in_fake_stmt && co_expr->origin_call->args->length == 0 && co_expr->closure_fn_void->capture_exprs->length ==
-        0) {
+    if (m->in_fake_stmt && is_errable_void && co_expr->origin_call->args->length == 0 &&
+        co_expr->closure_fn_void->capture_exprs->length == 0) {
         // 清空两个 fn body, 避免 infer void 异常
         co_expr->closure_fn->body = slice_new();
         co_expr->closure_fn_void->body = slice_new();
@@ -1341,9 +1348,8 @@ static type_t infer_async(module_t *m, ast_expr_t *expr, type_t target_type) {
     ast_expr_t first_arg = {0};
 
     // 如果原有的 go xxx() 没有参数和返回值，则直接使用原有版本的 origin call 传递给 async, 不需要包裹
-    if (co_expr->return_type.kind == TYPE_VOID && co_expr->origin_call->args->length == 0) {
+    if (is_errable_void && co_expr->origin_call->args->length == 0) {
         first_arg = co_expr->origin_call->left; // 直接使用 left call fn ident, 而不是使用闭包
-        first_arg.type.fn->is_errable = true;
 
         // 清空两个 fn body, 避免 infer void 异常
         co_expr->closure_fn->body = slice_new();
@@ -1552,12 +1558,6 @@ static type_t infer_match(module_t *m, ast_match_t *match, type_t target_type) {
     return target_type;
 }
 
-// The type of the error a call of fn fails with: E of the errable<T,E> it returns, or throwable for
-// a T! fn in .n, whose error is on the coroutine.
-static type_t infer_fn_error_type(module_t *m, type_fn_t *fn) {
-    return is_errable_return(fn) ? errable_error_type(fn->return_type) : reduction_type(m, interface_throwable());
-}
-
 static type_t infer_catch(module_t *m, ast_catch_t *catch_expr) {
     // A catch takes the error of the errable<T,E> call it follows: that call is inferred with its
     // error check off, and the calls in its arguments propagate as usual. As in infer_async,
@@ -1569,26 +1569,17 @@ static type_t infer_catch(module_t *m, ast_catch_t *catch_expr) {
         type_fn = infer_call_left(m, try_expr->value, type_kind_new(TYPE_UNKNOWN));
     }
     bool by_value = type_fn && is_errable_return(type_fn);
-    // an index, map access, slice or `as` hands its panic to the catch right after it as a builtin errset
-    bool by_panic = try_expr->assert_type == AST_EXPR_ACCESS || try_expr->assert_type == AST_EXPR_VEC_SLICE ||
-                    try_expr->assert_type == AST_EXPR_AS;
 
     type_t t;
     if (by_value) {
         t = infer_call(m, try_expr->value, type_kind_new(TYPE_UNKNOWN), false);
         try_expr->type = t;
-    } else if (by_panic) {
-        t = infer_right_expr(m, try_expr, type_kind_new(TYPE_UNKNOWN));
     } else {
-        // in .n a catch over anything else takes .n T! errors of the whole expression
-        m->be_caught += 1;
         t = infer_right_expr(m, try_expr, type_kind_new(TYPE_UNKNOWN));
-        m->be_caught -= 1;
     }
 
-    // an .x error is an errset value, an .n error is throwable
-    type_t error_type = m->current_fn->is_x || by_panic ? type_ident_new(ERRSET_IDENT, TYPE_IDENT_DEF) : interface_throwable();
-    if (by_value) error_type = errable_error_type(type_fn->return_type);
+    // an index, map access, slice or `as` hands its panic to the catch right after it as a builtin errset
+    type_t error_type = by_value ? errable_error_type(type_fn->return_type) : type_ident_new(ERRSET_IDENT, TYPE_IDENT_DEF);
     catch_expr->catch_err.type = reduction_type(m, error_type);
 
     rewrite_var_decl(m, &catch_expr->catch_err);
@@ -2927,17 +2918,15 @@ static type_t infer_call(module_t *m, ast_call_t *call, type_t target_type, bool
                       type_fn->fn_name ? type_fn->fn_name : "lambda", m->current_fn->fn_name);
     }
 
-    // An .n T! call inside a catch that takes errors from the coroutine is caught there. Any other
-    // error propagates into the current fn, which must fail with the same type.
-    bool caught = m->be_caught > 0 && !is_errable_return(type_fn);
-    if (type_fn->is_errable && check_errable && !caught) {
+    // the error propagates into the current fn, which must fail with the same type
+    if (type_fn->is_errable && check_errable) {
         INFER_ASSERTF(m->current_fn->is_errable,
                       "calling an errable! fn `%s` requires the current `fn %s` errable! as well or be caught.",
                       type_fn->fn_name ? type_fn->fn_name : "lambda",
                       m->current_fn->fn_name);
 
-        type_t error_type = infer_fn_error_type(m, type_fn);
-        type_t fn_error_type = infer_fn_error_type(m, m->current_fn->type.fn);
+        type_t error_type = errable_error_type(type_fn->return_type);
+        type_t fn_error_type = errable_error_type(m->current_fn->type.fn->return_type);
         INFER_ASSERTF(type_compare(fn_error_type, error_type),
                       "`%s` fails with %s, which cannot propagate into `fn %s` that fails with %s, catch and convert it",
                       type_fn->fn_name ? type_fn->fn_name : "lambda", type_format(error_type),
@@ -3375,7 +3364,7 @@ static void infer_throw(module_t *m, ast_throw_stmt_t *throw_stmt) {
                   "can't use throw stmt in a fn without an errable! declaration. example: fn %s(...):%s!",
                   m->current_fn->fn_name, type_origin_format(m->current_fn->return_type));
 
-    infer_right_expr(m, &throw_stmt->error, infer_fn_error_type(m, m->current_fn->type.fn));
+    infer_right_expr(m, &throw_stmt->error, errable_error_type(m->current_fn->type.fn->return_type));
 }
 
 /**

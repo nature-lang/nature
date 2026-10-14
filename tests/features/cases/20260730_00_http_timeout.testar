@@ -3,6 +3,7 @@
 import http.client
 import net.tcp
 import co
+import io
 
 fn serve():void! {
     var server = tcp.listen('127.0.0.1:18992')
@@ -25,7 +26,7 @@ fn main() {
     var scratch = vec<u8>.new(0, 16)
     bool timed_out = false
     resp.read(scratch) catch e {
-        timed_out = e.msg() == 'HTTP response read timeout'
+        timed_out = e == io.TIMEOUT
         0
     }
     resp.close()
@@ -37,6 +38,7 @@ fn main() {
 import http.client
 import net.tcp
 import co
+import io
 
 fn serve():void! {
     var server = tcp.listen('127.0.0.1:18993')
@@ -58,7 +60,7 @@ fn main() {
     co.sleep(100)
     bool timed_out = false
     request_head() catch e {
-        timed_out = e.msg() == 'HTTP response read timeout'
+        timed_out = e == io.TIMEOUT
     }
     assert(timed_out)
 }
@@ -67,11 +69,12 @@ fn main() {
 --- main.n
 import net.tcp
 import co
+import io
 
 type read_state_t = struct{
     bool started
     bool done
-    string error
+    errset_t error
 }
 
 fn serve():void! {
@@ -86,7 +89,7 @@ fn read_pending(ref<tcp.conn_t> conn, ref<read_state_t> state) {
     state.started = true
     var scratch = vec<u8>.new(0, 16)
     conn.read(scratch) catch e {
-        state.error = e.msg()
+        state.error = e
         0
     }
     state.done = true
@@ -105,5 +108,5 @@ fn main() {
     for !state.done {
         co.sleep(1)
     }
-    assert(state.error == 'conn closed')
+    assert(state.error == io.CLOSED)
 }

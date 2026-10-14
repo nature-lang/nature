@@ -73,6 +73,8 @@ fn chan<T>.new(...[int] args):chan<T>
 
 ## type chan
 
+在已关闭的通道上发送、接收或再次关闭，会以内置的 `errset CHAN_CLOSED` 出错。
+
 ### chan.send
 
 ```
@@ -153,7 +155,7 @@ fn chan<T>.is_successful(self):bool
 type future_t<T> = struct{
     i64 size
     ptr<T> result
-    throwable? error
+    errset_t error
     anyptr co
 }
 ```
@@ -194,35 +196,6 @@ fn co_return<T>(ptr<T> result)
 
 # [error](https://github.com/nature-lang/nature/blob/master/std/builtin/error.n)
 
-## type throwable
-
-```
-type throwable = interface{
-    fn msg():string
-}
-```
-
-可抛出对象的接口。
-
-## type errort
-
-```
-type errort:throwable = struct{
-    string message
-    bool is_panic
-}
-```
-
-实现 throwable 接口的错误类型。
-
-### errort.msg
-
-```
-fn errort.msg():string
-```
-
-获取错误消息。
-
 ## type errable
 
 ```
@@ -232,7 +205,7 @@ type errable<T,E> = union{
 }
 ```
 
-返回 `errable<T,E>` 的函数是可出错函数，`.x` 和 `.n` 都支持：`return` 给出 `T`，`throw` 给出 `E`，错误通过返回值带回。`.x` 中 `T!` 是 `errable<T,errset_t>` 的简写；`.n` 中 `T!` 仍然把错误挂在协程上。`errable<T,E>` 后面再写 `!` 会被拒绝。
+返回 `errable<T,E>` 的函数是可出错函数，`.x` 和 `.n` 都支持：`return` 给出 `T`，`throw` 给出 `E`，错误通过返回值带回。`T!` 是 `errable<T,errset_t>` 的简写，绑定到 C 的 `T!` 函数也返回它。`errable<T,E>` 后面再写 `!` 会被拒绝。
 
 错误只能传播给错误类型相同的函数。错误类型不同的调用必须 catch 后转换，编译器会检查：
 
@@ -254,7 +227,7 @@ fn load(string s):int! {
 }
 ```
 
-跟在返回 `errable<T,E>` 的函数调用后面的 catch 只处理这个调用的错误，`e` 的类型就是它的错误类型。参数中的调用不在范围内：它们的错误照常向外传播，错误类型由编译器检查，所以 `check(parse(1)) catch e { ... }` 只处理 `check`。`.n` 中其他的 catch 仍然处理整个表达式里 `T!` 调用的错误。`go` 暂不支持返回 `errable<T,E>` 的函数。
+跟在返回 `errable<T,E>` 的函数调用后面的 catch 只处理这个调用的错误，`e` 的类型就是它的错误类型。参数中的调用不在范围内：它们的错误照常向外传播，错误类型由编译器检查，所以 `check(parse(1)) catch e { ... }` 只处理 `check`。其他情况都不会进入 catch。`go` 运行以 errset 出错的函数，await 以协程的 errset 出错。
 
 ## errset
 
@@ -285,15 +258,16 @@ fn main() {
 
 `errset` 声明注册一个具名错误。它的身份就是这条声明本身：编译器为其分配全程序唯一的 id，因此 `io.TIMEOUT` 与 `fmt.TIMEOUT` 即使同名也是两个不同的错误。errset 不携带消息和数据，可以用 `==`、`!=` 比较，也可以用 `match e { TIMEOUT -> ... _ -> ... }` 分支。errset 的集合是开放的，所以 `match` 必须有 `_` 分支。
 
-声明只能出现在模块顶层，且始终对外公开，不需要写 `pub`；写了 `pub` 也会被忽略。errset 的值类型是内置的 `errset_t`，运行时存成 `u32` 的 id。只有 errset 名字能产生 `errset_t` 的值：整数字面量和 `u32` 的值都不能转换为它，所以 `throw 5`、把 `u32 a = 12` 和 errset 比较都是类型错误。`.n` 模块可以声明 errset，但 `.n` 函数不能抛出它。
-
-## fn errorf
+声明只能出现在模块顶层，且始终对外公开，不需要写 `pub`；写了 `pub` 也会被忽略。errset 的值类型是内置的 `errset_t`，运行时存成 `u32` 的 id。只有 errset 名字能产生 `errset_t` 的值：整数字面量和 `u32` 的值都不能转换为它，所以 `throw 5`、把 `u32 a = 12` 和 errset 比较都是类型错误。`print`、`println` 和 `fmt` 的 `%v` 把 `errset_t` 打印成它的名字，比如 `io.EOF`。没有被 catch 的错误会结束程序，并打印错误名和它经过的函数：
 
 ```
-fn errorf(string format, ...[any] args):ref<errort>
+coroutine 'main' uncaught error: io.NOT_FOUND at main.n:5:42
+stack backtrace:
+0:	main.load
+		at main.n:5:42
+1:	main.main
+		at main.n:9:9
 ```
-
-创建格式化错误。
 
 # [map](https://github.com/nature-lang/nature/blob/master/std/builtin/map.n)
 

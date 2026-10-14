@@ -6,12 +6,12 @@ static void test_basic() {
     char *raw = exec_output();
     char *str =
         "hello nature\n"
-        "coroutine 'main' uncaught error: 'world error' at cases/20230422_01_throw.n:3:28\n"
+        "coroutine 'main' uncaught error: main.WORLD_ERROR at cases/20230422_01_throw.n:5:21\n"
         "stack backtrace:\n"
         "0:\tmain.hello\n"
-        "\t\tat cases/20230422_01_throw.n:3:28\n"
+        "\t\tat cases/20230422_01_throw.n:5:21\n"
         "1:\tmain.main\n"
-        "\t\tat cases/20230422_01_throw.n:7:10\n";
+        "\t\tat cases/20230422_01_throw.n:9:10\n";
     assert_string_equal(raw, str);
 }
 

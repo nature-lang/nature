@@ -1442,7 +1442,7 @@ static ast_expr_t parser_catch_expr(module_t *m, ast_expr_t left) {
                    error_ident->literal);
 
     catch_expr->catch_err.ident = error_ident->literal;
-    catch_expr->catch_err.type = type_kind_new(TYPE_UNKNOWN); // 实际上就是 errort
+    catch_expr->catch_err.type = type_kind_new(TYPE_UNKNOWN); // infer takes the error type of what the catch follows
 
     catch_expr->catch_body = parser_body(m, true);
 

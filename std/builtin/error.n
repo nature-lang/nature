@@ -1,8 +1,6 @@
+// nothing here uses fmt; the import keeps the string methods from strings, which fmt imports,
+// available to every module
 import fmt
-
-pub type throwable = interface{
-	fn msg():string
-}
 
 pub type trace_t = struct{
     string path
@@ -11,22 +9,7 @@ pub type trace_t = struct{
     int column
 }
 
-pub type errort:throwable = struct{
-	string message
-	bool is_panic
-}
-
-pub fn errort.msg(&self):string {
-	return self.message
-}
-
-pub fn errorf(string format, ...[any] args):ref<errort> {
-	var msg = fmt.sprintf(format, ...args)
-	return new errort(message = msg)
-}
-
-
-// In .x `T!` returns errable<T,errset_t>: the value, or an errset.
+// `T!` returns errable<T,errset_t>: the value, or an errset.
 pub type errable<T,E> = union{
     T value
     E error

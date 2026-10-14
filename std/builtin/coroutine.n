@@ -4,7 +4,7 @@ import runtime
 pub type future_t<T> = struct{
     i64 size
     ptr<T> result
-    throwable? error
+    errset_t error // the errset the coroutine failed with, 0 if it did not
     anyptr co
 }
 
@@ -27,25 +27,13 @@ pub fn co_return<T>(ptr<T> result) {
     utils.coroutine_return(result as anyptr)
 }
 
+// coroutine_await fails with the errset the coroutine failed with
 #where T:nonvoid
 pub fn future_t<T>.await(&self):T! {
-    utils.coroutine_await(self.co)
-
-    if self.error is throwable {
-        var error = self.error as throwable
-        throw errorf(error.msg())
-    }
-
+    utils.coroutine_await(self as anyptr)
     return *self.result
 }
 
 pub fn future_t<T>.await_void(&self):void! {
-    utils.coroutine_await(self.co)
-
-    if self.error is throwable {
-        var error = self.error as throwable
-        throw errorf(error.msg())
-    }
-
-    return
+    utils.coroutine_await(self as anyptr)
 }

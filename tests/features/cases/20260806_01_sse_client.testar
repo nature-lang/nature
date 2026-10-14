@@ -122,6 +122,7 @@ chunked body ok
 import http.client
 import net.tcp
 import co
+import io
 
 fn serve():void! {
     var server = tcp.listen('127.0.0.1:18991')
@@ -153,7 +154,7 @@ fn main() {
     bool eof = false
     for !eof {
         var n = resp.read(scratch) catch e {
-            assert(e.msg() == 'EOF')
+            assert(e == io.EOF)
             eof = true
             0
         }

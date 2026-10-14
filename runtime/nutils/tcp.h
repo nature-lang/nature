@@ -241,11 +241,11 @@ void uv_async_tcp_read(inner_conn_t *conn) {
 }
 
 // read once
-int64_t rt_uv_tcp_read(n_tcp_conn_t *n_conn, n_vec_t buf) {
+n_errable_t rt_uv_tcp_read(n_tcp_conn_t *n_conn, n_vec_t buf) {
     coroutine_t *co = coroutine_get();
     if (n_conn->closed) {
-        rti_co_throw(co, "conn closed", false);
-        return 0;
+        rti_co_throw(co, "io.CLOSED");
+        return rti_errable(0);
     }
 
     inner_conn_t *conn = n_conn->conn;
@@ -267,19 +267,15 @@ int64_t rt_uv_tcp_read(n_tcp_conn_t *n_conn, n_vec_t buf) {
     conn_release(conn);
 
     if (closed) {
-        rti_co_throw(co, "conn closed", false);
-        return 0;
-    }
-    if (read_len == UV_ETIMEDOUT) {
-        rti_co_throw(co, "tcp read timeout", false);
-        return 0;
+        rti_co_throw(co, "io.CLOSED");
+        return rti_errable(0);
     }
     if (read_len < 0) {
-        rti_co_throw(co, uv_strerror(read_len), false);
-        return 0;
+        rti_co_throw(co, rti_uv_errset(read_len));
+        return rti_errable(0);
     }
 
-    return read_len;
+    return rti_errable(read_len);
 }
 
 static void uv_async_tcp_write(inner_conn_t *conn) {
@@ -291,17 +287,17 @@ static void uv_async_tcp_write(inner_conn_t *conn) {
 
     int result = uv_write(&conn->write_req, (uv_stream_t *) &conn->handle, &write_buf, 1, on_tcp_write_end_cb);
     if (result < 0) {
-        rti_co_throw(conn->co, tlsprintf("tcp write failed: %s", uv_strerror(result)), false);
+        rti_co_throw(conn->co, rti_uv_errset(result));
         DEBUGF("[rt_uv_tcp_write] co=%p, tcp write failed: %s", conn->co, uv_strerror(result));
         co_ready(conn->co);
     }
 }
 
-int64_t rt_uv_tcp_write(n_tcp_conn_t *n_conn, n_vec_t buf) {
+n_errable_t rt_uv_tcp_write(n_tcp_conn_t *n_conn, n_vec_t buf) {
     coroutine_t *co = coroutine_get();
     if (n_conn->closed) {
-        rti_co_throw(co, "conn closed", false);
-        return 0;
+        rti_co_throw(co, "io.CLOSED");
+        return rti_errable(0);
     }
 
     inner_conn_t *conn = n_conn->conn;
@@ -314,7 +310,7 @@ int64_t rt_uv_tcp_write(n_tcp_conn_t *n_conn, n_vec_t buf) {
     DEBUGF("[rt_uv_tcp_write] co=%p, waiting resume", co)
 
     // not need yield, return directly
-    return buf.length;
+    return rti_errable(buf.length);
 }
 
 static inline void on_tcp_connect_cb(uv_connect_t *conn_req, int status) {
@@ -332,7 +328,7 @@ static inline void on_tcp_connect_cb(uv_connect_t *conn_req, int status) {
 
     if (status < 0) {
         DEBUGF("[on_tcp_connect_cb] connection failed: %s", uv_strerror(status));
-        rti_co_throw(conn->co, tlsprintf("connection failed: %s", uv_strerror(status)), false);
+        rti_co_throw(conn->co, rti_uv_errset(status));
     }
 
     co_ready(conn->co);
@@ -347,7 +343,7 @@ static inline void on_tcp_timeout_cb(uv_timer_t *handle) {
     uv_timer_stop(handle);
     uv_close((uv_handle_t *) handle, on_conn_close_timer_cb);
 
-    rti_co_throw(conn->co, "connection timeout", 0);
+    rti_co_throw(conn->co, "io.TIMEOUT");
     co_ready(conn->co);
 }
 
@@ -361,7 +357,7 @@ static void uv_async_tcp_connect(inner_conn_t *conn, struct sockaddr_in *dest, n
     free(dest);
 
     if (result < 0) {
-        rti_co_throw(conn->co, tlsprintf("connection failed: %s", uv_strerror(result)), false);
+        rti_co_throw(conn->co, rti_uv_errset(result));
         uv_close((uv_handle_t *) &conn->handle, on_conn_close_handle_cb);
         uv_close((uv_handle_t *) &conn->timer, on_conn_close_timer_cb);
         return;
@@ -372,7 +368,7 @@ static void uv_async_tcp_connect(inner_conn_t *conn, struct sockaddr_in *dest, n
     }
 }
 
-void rt_uv_tcp_connect(n_tcp_conn_t *n_conn, n_string_t ip, n_int64_t port, n_int64_t timeout_ms) {
+n_errable_t rt_uv_tcp_connect(n_tcp_conn_t *n_conn, n_string_t ip, n_int64_t port, n_int64_t timeout_ms) {
     DEBUGF("[rt_uv_tcp_connect] start, addr %s, port %ld, co=%p", (char *) rt_string_ref(&ip), port, coroutine_get())
 
     coroutine_t *co = coroutine_get();
@@ -392,6 +388,7 @@ void rt_uv_tcp_connect(n_tcp_conn_t *n_conn, n_string_t ip, n_int64_t port, n_in
     global_waiting_send(uv_async_tcp_connect, conn, dest, (void *) timeout_ms);
 
     DEBUGF("[rt_uv_tcp_connect] resume, connect success, will return conn=%p, co=%p", conn, co)
+    return rti_errable(0);
 }
 
 void uv_async_tcp_accept(inner_server_t *inner_server, coroutine_t *co) {
@@ -409,13 +406,13 @@ void uv_async_tcp_accept(inner_server_t *inner_server, coroutine_t *co) {
     inner_server->waiters_count += 1;
 }
 
-void rt_uv_tcp_accept(n_tcp_server_t *server, n_tcp_conn_t *n_conn) {
+n_errable_t rt_uv_tcp_accept(n_tcp_server_t *server, n_tcp_conn_t *n_conn) {
     coroutine_t *co = coroutine_get();
     DEBUGF("[rt_uv_tcp_accept] accept start, co=%p", co)
 
     if (server->closed) {
-        rti_co_throw(co, "server closed", false);
-        return;
+        rti_co_throw(co, "io.CLOSED");
+        return rti_errable(0);
     }
     inner_server_t *inner_server = server->inner;
     inner_server->accept_waiters += 1;
@@ -431,8 +428,8 @@ void rt_uv_tcp_accept(n_tcp_server_t *server, n_tcp_conn_t *n_conn) {
             if (inner_server->accept_waiters == 0) {
                 free_conn(inner_server);
             }
-            rti_co_throw(co, "server closed", false);
-            return;
+            rti_co_throw(co, "io.CLOSED");
+            return rti_errable(0);
         }
         if (inner_server->accept_head == NULL) {
             rt_coroutine_sleep(1);
@@ -458,6 +455,7 @@ void rt_uv_tcp_accept(n_tcp_server_t *server, n_tcp_conn_t *n_conn) {
     n_conn->conn = conn;
     // accept success, can read
     DEBUGF("[rt_uv_tcp_accept] accept success, inner_conn=%p, co=%p", conn, co);
+    return rti_errable(0);
 }
 
 void on_tcp_conn_cb(uv_stream_t *handle, int status) {
@@ -522,14 +520,14 @@ static void uv_async_tcp_listen(n_tcp_server_t *server) {
     int result = uv_listen((uv_stream_t *) &server->inner->handle, DEFAULT_BACKLOG, on_tcp_conn_cb);
     if (result) {
         // 端口占用等错误
-        rti_co_throw(server->inner->listen_co, tlsprintf("listen failed: %s", uv_strerror(result)), false);
+        rti_co_throw(server->inner->listen_co, rti_uv_errset(result));
         return;
     }
 
     co_ready(server->inner->listen_co);
 }
 
-void rt_uv_tcp_listen(n_tcp_server_t *server) {
+n_errable_t rt_uv_tcp_listen(n_tcp_server_t *server) {
     DEBUGF("[rt_uv_tcp_listen] start, addr %s, port %ld", (char *) rt_string_ref(&server->ip), server->port)
 
     n_processor_t *p = processor_get();
@@ -545,6 +543,7 @@ void rt_uv_tcp_listen(n_tcp_server_t *server) {
 
     init_conn(server->inner);
     DEBUGF("[rt_uv_tcp_listen] listen success, will return")
+    return rti_errable(0);
 }
 
 void uv_async_server_close(n_tcp_server_t *server) {
