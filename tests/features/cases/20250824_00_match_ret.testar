@@ -1,6 +1,6 @@
 === test_basic
 --- main.n
-errset ZERO_DIVISOR
+errdef ZERO_DIVISOR
 
 fn div(int a, int b):int! {
     if b == 0 {
@@ -59,7 +59,7 @@ fn main() {
 
 === test_break_failed
 --- main.n
-errset ZERO_DIVISOR
+errdef ZERO_DIVISOR
 
 fn div(int a, int b):int! {
     if b == 0 {
@@ -83,7 +83,7 @@ nature-test/main.n:14:17: excepted ';' or '}' at end of statement
 
 === test_break_failed2
 --- main.n
-errset ZERO_DIVISOR
+errdef ZERO_DIVISOR
 
 fn div(int a, int b):int! {
     if b == 0 {

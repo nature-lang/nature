@@ -5,7 +5,7 @@ type options_t = struct {
     {string:string} headers = {}
 }
 
-errset INVALID_HEADERS
+errdef INVALID_HEADERS
 
 fn stream_option_headers(any value): {string:string}! {
     if !(value is {string:any}) {throw INVALID_HEADERS}

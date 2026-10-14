@@ -13,6 +13,6 @@ pub fn panic(string msg)
 pub fn assert(bool cond)
 
 // the panic of an index or slice, a map access or an `as` that a catch right after it gets as an error
-errset INDEX_OUT_OF_RANGE
-errset KEY_NOT_FOUND
-errset TYPE_ASSERT_FAILED
+errdef INDEX_OUT_OF_RANGE
+errdef KEY_NOT_FOUND
+errdef TYPE_ASSERT_FAILED

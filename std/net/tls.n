@@ -4,7 +4,7 @@ import io
 import net.types
 
 // the TLS session could not be set up
-errset HANDSHAKE_FAILED
+errdef HANDSHAKE_FAILED
 
 pub type conn_t:types.connable = struct{
     anyptr conn

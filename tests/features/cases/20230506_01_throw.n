@@ -1,4 +1,4 @@
-errset DIVISOR_ZERO
+errdef DIVISOR_ZERO
 
 fn rem(int dividend, int divisor):int! {
 	if divisor == 0 {

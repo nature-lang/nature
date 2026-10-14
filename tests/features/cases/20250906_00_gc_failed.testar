@@ -11,9 +11,9 @@ import libc
 import co
 import runtime
 
-errset INVALID_TOKEN
-errset TOKEN_EXPIRED
-errset INVALID_HEADER
+errdef INVALID_TOKEN
+errdef TOKEN_EXPIRED
+errdef INVALID_HEADER
 
 // JWT configuration constants
 const JWT_ALGORITHM = "HS256"

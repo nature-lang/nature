@@ -1,6 +1,6 @@
 === test_errable
 --- main.x
-errset BAD
+errdef BAD
 
 type position_error_t = struct{
     int position
@@ -100,8 +100,8 @@ interface negative position
 --- main.n
 import "util.x"
 
-errset OLD_ERROR
-errset CONVERTED
+errdef OLD_ERROR
+errdef CONVERTED
 
 fn parse(int at):errable<int,string> {
     if at < 0 {
@@ -160,7 +160,7 @@ fn main() {
     }
 }
 --- util.x
-errset TIMEOUT
+errdef TIMEOUT
 
 pub fn fail()! {
     throw TIMEOUT
@@ -196,7 +196,7 @@ nature-test/main.x:9:19: `parse` fails with string, which cannot propagate into 
 
 === test_catch_covers_only_the_call_it_follows
 --- main.x
-errset BAD
+errdef BAD
 
 fn parse(int at):errable<int,string> {
     throw 'negative position'
@@ -232,7 +232,7 @@ fn main() {
     util.fail()
 }
 --- util.x
-errset TIMEOUT
+errdef TIMEOUT
 
 pub fn fail()! {
     throw TIMEOUT

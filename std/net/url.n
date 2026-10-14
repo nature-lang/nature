@@ -1,4 +1,4 @@
-errset INVALID_URL
+errdef INVALID_URL
 
 pub type url_t = struct{
     string url

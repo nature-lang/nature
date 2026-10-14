@@ -2,7 +2,7 @@ mod base64
 
 import libc
 
-errset INVALID_INPUT
+errdef INVALID_INPUT
 
 #linkid mbedtls_base64_decode
 fn mbedtls_base64_decode(anyptr dst, int dlen, ptr<int> olen, anyptr src, int slen):i32

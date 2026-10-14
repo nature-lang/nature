@@ -130,7 +130,7 @@ done
 
 === test_throw_unwind
 --- main.n
-errset X
+errdef X
 
 fn boom():void! {
     defer {
@@ -178,7 +178,7 @@ nature-test/main.n:3:14: return/break/continue/throw/ret are not allowed inside 
 // An errable call inside a defer body emits its own unwind, which walks the defer scope stack
 // again. Without a re-entrancy guard that re-enters the scope currently being emitted and
 // recurses until the compiler's own stack runs out.
-errset BOOM
+errdef BOOM
 
 fn cleanup():int! {
     return 1

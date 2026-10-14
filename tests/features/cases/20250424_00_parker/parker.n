@@ -9,8 +9,8 @@ import parker.util
 import compress.tgz
 import fs
 
-errset INVALID_ARGS
-errset NOT_FOUND
+errdef INVALID_ARGS
+errdef NOT_FOUND
 
 const version = '0.1.0'
 

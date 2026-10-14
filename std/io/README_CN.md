@@ -2,19 +2,19 @@
 
 输入/输出接口和缓冲区实现，用于读取和写入数据。
 
-## errset
+## errdef
 
 ```
-errset EOF
-errset NOT_FOUND
-errset PERMISSION_DENIED
-errset ALREADY_EXISTS
-errset CLOSED
-errset TIMEOUT
-errset CONNECTION_REFUSED
-errset CONNECTION_RESET
-errset ADDR_IN_USE
-errset OTHER
+errdef EOF
+errdef NOT_FOUND
+errdef PERMISSION_DENIED
+errdef ALREADY_EXISTS
+errdef CLOSED
+errdef TIMEOUT
+errdef CONNECTION_REFUSED
+errdef CONNECTION_RESET
+errdef ADDR_IN_USE
+errdef OTHER
 ```
 
 fs、net、process 的读写和其他系统调用的错误。没有对应 errset 的 libuv 或 errno 错误码都归为 `OTHER`。

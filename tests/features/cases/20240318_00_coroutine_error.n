@@ -1,7 +1,7 @@
 import co
 
-errset DIVISOR_ZERO
-errset CLOSURE_ERROR
+errdef DIVISOR_ZERO
+errdef CLOSURE_ERROR
 
 fn div(i32 dividend, i32 divisor):i32! {
     co.sleep(500)

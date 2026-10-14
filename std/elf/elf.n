@@ -3,7 +3,7 @@ mod elf
 import syscall
 import io
 
-errset INVALID_ELF
+errdef INVALID_ELF
 
 int EI_MAG0 = 0
 u8 ELFMAG0 = 0x7f

@@ -17,7 +17,7 @@ nature-test/main.n:2:22: type inconsistency, expect=errset_t(u32), actual=string
 
 === test_throw
 --- main.n
-errset BAR_ERROR
+errdef BAR_ERROR
 
 fn bar():void! {
     throw BAR_ERROR

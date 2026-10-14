@@ -323,8 +323,8 @@ typedef struct {
     bool is_pub; // module 外可见, 默认 false
 } ast_constdef_stmt_t;
 
-// `errset NAME` registers a named error that is public to every importer. Its identity is the
-// declaration itself: `id` is unique across the whole program and 0 is never assigned.
+// `errdef NAME` registers a named error, an errset, that is public to every importer. Its identity is
+// the declaration itself: `id` is unique across the whole program and 0 is never assigned.
 typedef struct {
     char *ident;
     int64_t id;

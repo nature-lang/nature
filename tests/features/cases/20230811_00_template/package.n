@@ -3,7 +3,7 @@ mod package
 import syscall
 import package.zlib
 
-errset WRITE_FAILED
+errdef WRITE_FAILED
 
 fn main():void! {
     var input = 'mock/input.txt'

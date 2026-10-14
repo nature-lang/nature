@@ -10,8 +10,8 @@ int id = 1
 pub [user] list = []
 {string:user} userof = {}
 
-errset ALREADY_REGISTERED
-errset NOT_FOUND
+errdef ALREADY_REGISTERED
+errdef NOT_FOUND
 
 // 全局函数
 pub fn register(string username, string password):void! {

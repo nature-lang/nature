@@ -2,9 +2,9 @@ mod mem
 
 import libc
 
-errset BUFFER_TOO_SMALL
+errdef BUFFER_TOO_SMALL
 // a type of size 0 can't be read from or written to a buffer
-errset UNSUPPORTED_TYPE
+errdef UNSUPPORTED_TYPE
 
 pub fn copy<T>([u8] buf, ptr<T> dst):void! {
     int size = @sizeof(T)
