@@ -876,23 +876,25 @@ bool rt_in_heap(n_anyptr_t addr) {
     return in_heap(addr);
 }
 
-n_string_t rt_errset_name(uint32_t errset) {
-    char *name = ERRSET_NAME(errset);
-    return string_new(name, strlen(name));
-}
-
-// the message is in the strtable of the binary, so the string refers to it there like a string literal
-// and allocates nothing
-n_string_t rt_errset_msg(uint32_t errset) {
-    char *msg = ERRSET_MSG(errset);
-    int64_t length = (int64_t) strlen(msg);
+// The name and the message of an errset are in the strtable of the binary, so the string refers to them
+// there like a string literal and allocates nothing.
+static n_string_t strtable_string(char *str) {
+    int64_t length = (int64_t) strlen(str);
     return (n_string_t) {
-        .data = (uint8_t *) msg,
+        .data = (uint8_t *) str,
         .length = length,
         .capacity = length + 1,
         .element_size = 1,
         .hash = string_rtype.hash,
     };
+}
+
+n_string_t rt_errset_name(uint32_t errset) {
+    return strtable_string(ERRSET_NAME(errset));
+}
+
+n_string_t rt_errset_msg(uint32_t errset) {
+    return strtable_string(ERRSET_MSG(errset));
 }
 
 // the io errset of an errno or, on windows, a GetLastError code
