@@ -233,7 +233,7 @@ A catch after a call of a function that returns `errable<T,E>` handles only that
 
 ```nature
 // in the io module
-errdef TIMEOUT
+errdef TIMEOUT 'request timed out'
 errdef CLOSED
 
 pub fn read(int mode):int! {
@@ -249,14 +249,14 @@ import "io.x"
 fn main() {
     var n = io.read(1) catch e {
         if e == io.TIMEOUT {
-            println('timeout')
+            println(e.msg()) // request timed out
         }
         -1
     }
 }
 ```
 
-An `errdef` declaration registers a named error, an errset. Its identity is the declaration itself: the compiler gives it a program-wide id, so `io.TIMEOUT` and `fmt.TIMEOUT` are different errors even though they share a name. An errset carries no message and no data, so it is compared with `==` and `!=`, or matched with `match e { TIMEOUT -> ... _ -> ... }`. The set of errsets is open, so a `match` needs a `_` arm.
+An `errdef` declaration registers a named error, an errset. Its identity is the declaration itself: the compiler gives it a program-wide id, so `io.TIMEOUT` and `fmt.TIMEOUT` are different errors even though they share a name. An errset carries no data, so it is compared with `==` and `!=`, or matched with `match e { TIMEOUT -> ... _ -> ... }`. The set of errsets is open, so a `match` needs a `_` arm. A string literal after the name is the errset's message: `e.msg()` returns it, or the name when the `errdef` has none.
 
 Declarations are module-level only and always public, so `pub` is not needed; a `pub` before `errdef` is accepted and ignored. An errset value has the builtin type `errset_t` and is stored as a `u32` id at run time. Only an errset name produces an `errset_t` value: neither an integer literal nor a `u32` value converts to it, so `throw 5` and comparing `u32 a = 12` with an errset are type errors. `print`, `println` and `%v` in `fmt` print an `errset_t` as its name, such as `io.EOF`. An error nothing catches ends the program with its name and the trace of the functions it passed through:
 

@@ -49,3 +49,4 @@ table_t *ct_rtype_table = NULL; // 避免 rtype_vec 重复写入
 
 // - errset
 slice_t *ct_errset_names = NULL;
+slice_t *ct_errset_msgs = NULL;

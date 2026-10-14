@@ -199,8 +199,10 @@ static void module_source_register_symbols(module_t *m, source_file_t *sf) {
             // Every module of a program is built by one compiler process, so the position in
             // ct_errset_names gives each errset a program-wide id without hashing and without
             // collisions. 0 is never handed out. The display name, such as io.EOF, names it at run time.
-            slice_push(ct_errset_names,
-                       m->display_ident ? str_connect_by(m->display_ident, errset->ident, ".") : errset->ident);
+            char *display_name = m->display_ident ? str_connect_by(m->display_ident, errset->ident, ".") : errset->ident;
+            slice_push(ct_errset_names, display_name);
+            // an errset without a message has its name as the message
+            slice_push(ct_errset_msgs, errset->msg ? errset->msg : display_name);
             errset->ident = ident_with_prefix(m->ident, errset->ident);
             errset->id = ct_errset_names->count;
             // always public: callers need the name to compare against what they catch

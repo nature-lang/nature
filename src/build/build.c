@@ -1305,6 +1305,7 @@ static void build_init(char *build_entry) {
     ct_caller_data = 0;
 
     ct_errset_names = slice_new();
+    ct_errset_msgs = slice_new();
 
     linker_libs = slice_new();
 }

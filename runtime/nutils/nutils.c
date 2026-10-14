@@ -881,6 +881,11 @@ n_string_t rt_errset_name(uint32_t errset) {
     return string_new(name, strlen(name));
 }
 
+n_string_t rt_errset_msg(uint32_t errset) {
+    char *msg = ERRSET_MSG(errset);
+    return string_new(msg, strlen(msg));
+}
+
 // the io errset of an errno or, on windows, a GetLastError code
 uint32_t rt_sys_errset(n_int_t code) {
     return rt_find_errset(rti_uv_errset(uv_translate_sys_error((int) code)));

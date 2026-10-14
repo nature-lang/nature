@@ -233,7 +233,7 @@ fn load(string s):int! {
 
 ```nature
 // 在 io 模块中
-errdef TIMEOUT
+errdef TIMEOUT 'request timed out'
 errdef CLOSED
 
 pub fn read(int mode):int! {
@@ -249,14 +249,14 @@ import "io.x"
 fn main() {
     var n = io.read(1) catch e {
         if e == io.TIMEOUT {
-            println('timeout')
+            println(e.msg()) // request timed out
         }
         -1
     }
 }
 ```
 
-`errdef` 声明注册一个具名错误，即一个 errset。它的身份就是这条声明本身：编译器为其分配全程序唯一的 id，因此 `io.TIMEOUT` 与 `fmt.TIMEOUT` 即使同名也是两个不同的错误。errset 不携带消息和数据，可以用 `==`、`!=` 比较，也可以用 `match e { TIMEOUT -> ... _ -> ... }` 分支。errset 的集合是开放的，所以 `match` 必须有 `_` 分支。
+`errdef` 声明注册一个具名错误，即一个 errset。它的身份就是这条声明本身：编译器为其分配全程序唯一的 id，因此 `io.TIMEOUT` 与 `fmt.TIMEOUT` 即使同名也是两个不同的错误。errset 不携带数据，可以用 `==`、`!=` 比较，也可以用 `match e { TIMEOUT -> ... _ -> ... }` 分支。errset 的集合是开放的，所以 `match` 必须有 `_` 分支。名字后面的字符串字面量是这个 errset 的消息：`e.msg()` 返回它，`errdef` 没写消息时返回名字。
 
 声明只能出现在模块顶层，且始终对外公开，不需要写 `pub`；写了 `pub` 也会被忽略。errset 的值类型是内置的 `errset_t`，运行时存成 `u32` 的 id。只有 errset 名字能产生 `errset_t` 的值：整数字面量和 `u32` 的值都不能转换为它，所以 `throw 5`、把 `u32 a = 12` 和 errset 比较都是类型错误。`print`、`println` 和 `fmt` 的 `%v` 把 `errset_t` 打印成它的名字，比如 `io.EOF`。没有被 catch 的错误会结束程序，并打印错误名和它经过的函数：
 
