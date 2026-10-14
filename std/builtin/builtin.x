@@ -16,3 +16,7 @@ pub fn assert(bool cond)
 errdef INDEX_OUT_OF_RANGE
 errdef KEY_NOT_FOUND
 errdef TYPE_ASSERT_FAILED
+
+// the message of an errdef, or its name when it has none
+#linkid rt_errset_msg
+pub fn errset_t.msg(self):string

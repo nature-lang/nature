@@ -1,6 +1,6 @@
 === test_errset
 --- main.x
-errdef TIMEOUT
+errdef TIMEOUT 'read timed out'
 errdef CLOSED
 errdef LATE
 
@@ -176,6 +176,8 @@ fn main() {
     if n is shape.circle v {
         println('circle', v)
     }
+
+    println(TIMEOUT.msg(), CLOSED.msg())
 }
 --- output.txt
 42
@@ -198,6 +200,7 @@ defer true false
 defer only true
 -12
 circle -1
+read timed out main.CLOSED
 
 === test_same_name_in_two_modules_is_two_errors
 --- main.x
