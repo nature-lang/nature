@@ -77,10 +77,8 @@ n_vec_t rt_vec_new(int64_t hash, int64_t element_hash, int64_t length, void *val
     assertf(element_hash > 0, "element_hash must be a valid hash");
 
     if (length < 0) {
-        char *msg = tlsprintf("len must be greater than 0");
-        rti_throw(msg, true);
-        n_vec_t empty = {0};
-        return empty;
+        addr_t ret_addr = CALLER_RET_ADDR();
+        rti_panic_at(ret_addr, "len must be greater than 0");
     }
     int64_t capacity = length;
     if (capacity == 0) {
@@ -121,10 +119,8 @@ n_vec_t rt_vec_new(int64_t hash, int64_t element_hash, int64_t length, void *val
 
 n_vec_t rt_vec_cap(int64_t hash, int64_t element_hash, int64_t capacity) {
     if (capacity < 0) {
-        char *msg = tlsprintf("cap must be greater than 0");
-        rti_throw(msg, true);
-        n_vec_t empty = {0};
-        return empty;
+        addr_t ret_addr = CALLER_RET_ADDR();
+        rti_panic_at(ret_addr, "cap must be greater than 0");
     }
 
 
@@ -180,7 +176,7 @@ void rti_vec_access(n_vec_t *l, uint64_t index, void *value_ref) {
     if (index >= l->length) {
         char *msg = tlsprintf("index out of range [%d] with length %d", index, l->length);
         DEBUGF("[runtime.rti_vec_access] has err %s", msg);
-        rti_throw(msg, true);
+        rti_panic(msg);
 
         return;
     }
@@ -294,26 +290,33 @@ void rt_vec_push(n_vec_t *vec, int64_t element_hash, void *ref) {
  * @param end 结束 index, end 如果 == -1 则解析为 len()
  * @return
  */
-n_vec_t rt_vec_slice(n_vec_t *l, int64_t start, int64_t end) {
+// the panic message of slicing l with [start, end), NULL when the slice is valid
+char *rti_vec_slice_error(n_vec_t *l, int64_t start, int64_t end) {
     if (end == -1) {
         end = l->length;
     }
 
     // start end 检测
     if (start > l->length || end > l->length || start < 0 || end < 0) {
-        char *msg = tlsprintf("slice [%d:%d] out of vec with length %d", start, end, l->length);
-        DEBUGF("[runtime.vec_slice] has err %s", msg);
-        rti_throw(msg, true);
-        n_vec_t empty = {0};
-        return empty;
+        return tlsprintf("slice [%d:%d] out of vec with length %d", start, end, l->length);
     }
 
     if (start > end) {
-        char *msg = tlsprintf("invalid index values, must be low %d <= high %d", start, end);
-        DEBUGF("[runtime.vec_slice] has err %s", msg);
-        rti_throw(msg, true);
-        n_vec_t empty = {0};
-        return empty;
+        return tlsprintf("invalid index values, must be low %d <= high %d", start, end);
+    }
+
+    return NULL;
+}
+
+n_vec_t rt_vec_slice(n_vec_t *l, int64_t start, int64_t end) {
+    char *msg = rti_vec_slice_error(l, start, end);
+    if (msg) {
+        addr_t ret_addr = CALLER_RET_ADDR();
+        rti_panic_at(ret_addr, msg);
+    }
+
+    if (end == -1) {
+        end = l->length;
     }
 
     DEBUGF("[vec_slice] rtype_hash=%lu, element_size=%lu, start=%lu, end=%lu", l->hash,
@@ -381,7 +384,7 @@ n_anyptr_t rt_vec_element_addr(n_vec_t *l, uint64_t index) {
     if (index >= l->length) {
         char *msg = tlsprintf("index out of vec [%d] with length %d", index, l->length);
         DEBUGF("[runtime.rt_vec_element_addr] has err %s", msg);
-        rti_throw(msg, true);
+        rti_panic(msg);
         return 0;
     }
 

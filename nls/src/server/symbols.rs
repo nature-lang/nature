@@ -114,6 +114,10 @@ fn symbol_from_stmt(
             let c = const_mutex.lock().unwrap();
             (c.ident.clone(), SymbolKind::CONSTANT, c.symbol_start, c.symbol_end)
         }
+        AstNode::ErrsetDef(errset_mutex) => {
+            let e = errset_mutex.lock().unwrap();
+            (e.ident.clone(), SymbolKind::CONSTANT, e.symbol_start, e.symbol_end)
+        }
         _ => return None,
     };
 

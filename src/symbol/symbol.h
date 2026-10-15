@@ -57,13 +57,14 @@ typedef enum {
     SYMBOL_TYPE,
     SYMBOL_FN,
     SYMBOL_CONST,
+    SYMBOL_ERRSET,
 } symbol_type_t;
 
 typedef struct {
     string ident; // 符号唯一标识
     bool is_local; // 对应 elf 符号中的 global/local, 表示能否被外部链接链接到
     symbol_type_t type;
-    void *ast_value; // ast_typedef_stmt/ast_var_decl/ast_fndef_t/closure_t/ast_constdef_stmt_t
+    void *ast_value; // ast_typedef_stmt/ast_var_decl/ast_fndef_t/closure_t/ast_constdef_stmt_t/ast_errset_stmt_t
     module_t *owner; // 模块声明的所属 module; 局部、内建和编译器生成符号为 NULL
     bool is_pub; // owner 非 NULL 时表示能否被其他 module 访问
     int64_t ref_count; // 引用计数

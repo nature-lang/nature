@@ -152,7 +152,7 @@ Replace all occurrences of old substring with new substring
 fn string.to_int(self):int!
 ```
 
-Convert string to integer, may throw error if invalid format
+Convert string to integer. It fails with `strings.INVALID_NUMBER` if the format is invalid and with `strings.OUT_OF_RANGE` if the number is too large
 
 ## fn string.to_float
 
@@ -160,7 +160,7 @@ Convert string to integer, may throw error if invalid format
 fn string.to_float(self):float!
 ```
 
-Convert string to float, may throw error if invalid format
+Convert string to float. It fails with `strings.INVALID_NUMBER` if the format is invalid
 
 ## fn string.to_lower
 

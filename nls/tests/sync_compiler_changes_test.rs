@@ -129,3 +129,138 @@ fn main() {}
         errors
     );
 }
+
+#[tokio::test]
+async fn test_errdef_and_errable_should_pass() {
+    let code = r#"
+import io
+
+errdef TIMEOUT 'request timed out'
+errdef CLOSED
+
+type position_error_t = struct{
+    int position
+}
+
+fn read(int mode):int! {
+    if mode == 1 {
+        throw TIMEOUT
+    }
+    return 42
+}
+
+fn locate(int at):errable<int,position_error_t> {
+    if at > 9 {
+        throw position_error_t{position: at}
+    }
+    return at
+}
+
+fn relay(int mode):int! {
+    return read(mode)
+}
+
+fn main():void! {
+    var a = read(1) catch e {
+        if e == TIMEOUT {
+            println(e.msg())
+        }
+        -1
+    }
+    var b = locate(10) catch e {
+        e.position
+    }
+    var list = [1, 2, 3]
+    var c = list[5] catch e {
+        if e == INDEX_OUT_OF_RANGE {
+            println('out of range')
+        }
+        0
+    }
+    var d = relay(2) catch e {
+        match e {
+            TIMEOUT -> -1
+            CLOSED -> -2
+            _ -> -3
+        }
+    }
+    var fut = go read(1)
+    var v = fut.await() catch e {
+        0
+    }
+    println(a, b, c, d, v, io.EOF.msg())
+    relay(3)
+}
+"#;
+
+    let errors = build_errors("errdef_errable_ok", code).await;
+    assert!(errors.is_empty(), "expected no analyzer errors, actual: {:?}", errors);
+}
+
+#[tokio::test]
+async fn test_errable_errors() {
+    let code = r#"
+errdef BAD
+
+fn parse(int at):errable<int,string> {
+    if at < 0 {
+        throw 'negative'
+    }
+    return at
+}
+
+fn convert(int at):int! {
+    var v = parse(at)
+    return v
+}
+
+fn wrong():int! {
+    throw 5
+}
+
+fn plain():int {
+    throw BAD
+}
+
+fn twice():errable<int,string>! {
+    return 1
+}
+"#;
+
+    let errors = build_errors("errable_errors", code).await;
+    for expected in [
+        "`parse` fails with string, which cannot propagate into `fn convert`",
+        "type inconsistency: expect 'errset_t(u32)', actual 'i64'",
+        "can't use throw stmt in a fn without an errable! declaration",
+        "a fn returning errable<T,E> is already errable, `!` is not needed",
+    ] {
+        assert!(errors.iter().any(|msg| msg.contains(expected)), "expected '{}', actual: {:?}", expected, errors);
+    }
+    assert_eq!(errors.len(), 4, "expected only the four errable errors, actual: {:?}", errors);
+}
+
+#[tokio::test]
+async fn test_var_from_ref_call_and_new_should_pass() {
+    let code = r#"
+type foo_t = struct{
+    int a
+}
+
+fn foo_t.get(&self):int {
+    return self.a
+}
+
+fn make():ref<foo_t> {
+    return new foo_t(a=1)
+}
+
+fn main() {
+    var made = make()
+    var created = new foo_t(a=2)
+    println(made.get(), created.get())
+}
+"#;
+
+    let errors = build_errors("var_from_ref_call_and_new_ok", code).await;
+    assert!(errors.is_empty(), "expected no analyzer errors, actual: {:?}", errors);
+}

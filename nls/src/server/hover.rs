@@ -37,7 +37,7 @@ fn build_hover(project: &Project, file_path: &str, position: Position) -> Option
     // Global symbols have a module prefix ("module.ident") in their ident;
     // local variables/constants inside function bodies do not.
     let is_global = match &symbol.kind {
-        SymbolKind::Fn(_) | SymbolKind::Type(_) => true,
+        SymbolKind::Fn(_) | SymbolKind::Type(_) | SymbolKind::Errset(_) => true,
         SymbolKind::Var(_) | SymbolKind::Const(_) => symbol.ident.contains('.'),
     };
     let doc_comment = if is_global {
@@ -77,6 +77,13 @@ fn format_hover_content(kind: &SymbolKind, word: &str, doc: Option<&str>) -> Str
         SymbolKind::Const(const_mutex) => {
             let c = const_mutex.lock().unwrap();
             format!("```n\nconst {}: {}\n```", display_name(&c.ident, word), type_display_name(&c.type_))
+        }
+        SymbolKind::Errset(errset_mutex) => {
+            let errset = errset_mutex.lock().unwrap();
+            match &errset.msg {
+                Some(msg) => format!("```n\nerrdef {} '{}'\n```", display_name(&errset.ident, word), msg),
+                None => format!("```n\nerrdef {}\n```", display_name(&errset.ident, word)),
+            }
         }
         SymbolKind::Type(typedef_mutex) => {
             let typedef = typedef_mutex.lock().unwrap();
@@ -247,6 +254,7 @@ fn symbol_def_start(kind: &SymbolKind) -> usize {
         SymbolKind::Var(v) => v.lock().unwrap().symbol_start,
         SymbolKind::Const(c) => c.lock().unwrap().symbol_start,
         SymbolKind::Type(t) => t.lock().unwrap().symbol_start,
+        SymbolKind::Errset(e) => e.lock().unwrap().symbol_start,
     }
 }
 
@@ -326,7 +334,7 @@ fn strip_comment_marker(comment: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::analyzer::common::{AstFnDef, Type, VarDeclExpr};
+    use crate::analyzer::common::{AstErrsetDef, AstFnDef, Type, VarDeclExpr};
     use std::sync::{Arc, Mutex};
 
     #[test]
@@ -343,6 +351,19 @@ mod tests {
         }));
         let content = format_hover_content(&SymbolKind::Var(var), "count", None);
         assert!(content.contains("var count: i64"), "got: {}", content);
+    }
+
+    #[test]
+    fn hover_errset() {
+        let errset = Arc::new(Mutex::new(AstErrsetDef {
+            ident: "io.TIMEOUT".into(),
+            msg: Some("request timed out".into()),
+            symbol_id: 0,
+            symbol_start: 0,
+            symbol_end: 7,
+        }));
+        let content = format_hover_content(&SymbolKind::Errset(errset), "TIMEOUT", None);
+        assert!(content.contains("errdef TIMEOUT 'request timed out'"), "got: {}", content);
     }
 
     #[test]

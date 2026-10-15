@@ -1,4 +1,7 @@
 
+// the C fn fails with io errsets
+import io
+
 #linkid rt_uv_dns_lookup
 fn uv_dns_lookup(string host):[string]!
 

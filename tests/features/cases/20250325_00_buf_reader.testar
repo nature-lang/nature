@@ -27,17 +27,15 @@ fn main():void! {
     var br = new buf.reader<ref<io.buffer>>(rd)
 
     var buf = vec<u8>.new(0, 5)
-    try {
-        br.read(buf)
-        panic('should throw EOF')
-    } catch err {
-        assert(err.msg() == 'EOF')
-        println(err.msg())
+    br.read(buf) catch err {
+        assert(err == io.EOF)
+        println(err)
+        0
     }
 }
 
 --- output.txt
-EOF
+io.EOF
 
 === test_read_until
 --- main.n
@@ -132,19 +130,16 @@ fn main():void! {
     println("second read data: " + (buf as string))
     assert(buf as string == " worl")
 
-    try {
-        br.read_exact(buf)
-        panic('an error should have occurred')
-    } catch e {
-        println("expected error: " + e.msg())
-        assert(e.msg() == "EOF")
+    br.read_exact(buf) catch e {
+        println("expected error:", e)
+        assert(e == io.EOF)
     }
 }
 
 --- output.txt
 read data: hello
 second read data:  worl
-expected error: EOF
+expected error: io.EOF
 
 === test_read_exact_empty
 --- main.n
@@ -158,17 +153,14 @@ fn main():void! {
     var br = new buf.reader<ref<io.buffer>>(rd)
 
     var buf = vec<u8>.new(0, 5)
-    try {
-        br.read_exact(buf)
-        panic('an error should have occurred')
-    } catch e {
-        println("expected error: " + e.msg())
-        assert(e.msg() == "EOF")
+    br.read_exact(buf) catch e {
+        println("expected error:", e)
+        assert(e == io.EOF)
     }
 }
 
 --- output.txt
-expected error: EOF
+expected error: io.EOF
 
 
 === test_partial_read
@@ -184,17 +176,14 @@ fn main():void! {
     var br = new buf.reader<ref<io.buffer>>(rd)
 
     var buf = vec<u8>.new(0, 5)
-    try {
-        br.read_exact(buf)
-        panic('an error should have occurred')
-    } catch e {
-        println("expected error: " + e.msg())
-        assert(e.msg() == "EOF")
+    br.read_exact(buf) catch e {
+        println("expected error:", e)
+        assert(e == io.EOF)
     }
 }
 
 --- output.txt
-expected error: EOF
+expected error: io.EOF
 
 === test_read_zero_length
 --- main.n
@@ -245,11 +234,10 @@ fn main():void! {
         fmt.printf('%c\n', b)
     }
 
-    try {
-        b = br.read_byte()
-    } catch e {
-        println("expected err: " + e.msg())
-        assert(e.msg() == "EOF")
+    b = br.read_byte() catch e {
+        println("expected err:", e)
+        assert(e == io.EOF)
+        0
     }
 }
 
@@ -257,7 +245,7 @@ fn main():void! {
 l
 l
 o
-expected err: EOF
+expected err: io.EOF
 
 === test_read_line
 --- main.n
@@ -287,11 +275,9 @@ fn main():void! {
     assert(line == "Test\rEnd")
 
     // Test EOF
-    try {
-        line = br.read_line()
-        println("can't get here")
-    } catch e {
-        println("catch e: " + e.msg())
+    line = br.read_line() catch e {
+        println("catch e:", e)
+        ''
     }
 }
 
@@ -299,7 +285,7 @@ fn main():void! {
 Line 1: 'Hello'
 Line 2: 'World'
 Line 3: 'Test\rEnd'
-catch e: EOF
+catch e: io.EOF
 
 === test_read_empty_line
 --- main.n
@@ -318,11 +304,9 @@ fn main():void! {
         println("Read line: '" + line + "'")
     }
 
-    try {
-        var line = br.read_line()
-        println("unexpected line: '" + line + "'")
-    } catch e {
-        println("catch e: " + e.msg())
+    br.read_line() catch e {
+        println("catch e:", e)
+        ''
     }
 }
 
@@ -332,4 +316,4 @@ Read line: ''
 Read line: ''
 Read line: 'Hello'
 Read line: ''
-catch e: EOF
+catch e: io.EOF

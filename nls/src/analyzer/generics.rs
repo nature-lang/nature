@@ -468,10 +468,6 @@ impl<'a> Generics<'a> {
                 self.check_expr(fndef, try_expr);
                 self.check_body(fndef, catch_body);
             }
-            AstNode::TryCatch(try_body, _, catch_body) => {
-                self.check_body(fndef, try_body);
-                self.check_body(fndef, catch_body);
-            }
             AstNode::Let(expr) => self.check_expr(fndef, expr),
             AstNode::Match(subject, cases) => {
                 if let Some(subject) = subject {

@@ -135,6 +135,7 @@ fn interface_extract_fn_type(typesys: &mut Typesys, fndef: &AstFnDef) -> Result<
         param_types: Vec::new(),
         return_type: typesys.reduction_type(fndef.return_type.clone())?,
     };
+    typesys.errable_return(&mut type_fn)?;
 
     for (i, param) in fndef.params.iter().enumerate() {
         if !fndef.is_static && fndef.self_kind != SelfKind::Null && i == 0 {

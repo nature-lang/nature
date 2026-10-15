@@ -72,9 +72,11 @@ panic: 'index out of range [2] with length 2' at nature-test/main.n:13:22
 
 === test_live_in_phi_not_rename
 --- main.n
+errdef DIVISOR_ZERO
+
 fn rem(int dividend, int divisor):int! {
 	if divisor == 0 {
-		throw errorf('divisor cannot zero')
+		throw DIVISOR_ZERO
 	}
 
 	return dividend % divisor
@@ -83,14 +85,14 @@ fn rem(int dividend, int divisor):int! {
 fn test1(int result) {
 }
 
-fn test2(string msg) {
+fn test2(errset_t e) {
 }
 
 int result = 0
 
 fn main():void! {
     result = rem(10, 0) catch err {
-        test2(err.msg())
+        test2(err)
         1
     }
     test1(result)
@@ -100,9 +102,9 @@ fn main():void! {
 }
 
 --- output.txt
-coroutine 'main' uncaught error: 'divisor cannot zero' at nature-test/main.n:3:34
+coroutine 'main' uncaught error: main.DIVISOR_ZERO at nature-test/main.n:5:20
 stack backtrace:
 0:	main.rem
-		at nature-test/main.n:3:34
+		at nature-test/main.n:5:20
 1:	main.main
-		at nature-test/main.n:25:22
+		at nature-test/main.n:27:22

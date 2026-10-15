@@ -71,6 +71,7 @@ typedef enum {
     AST_STMT_IMPORT,
     AST_STMT_VARDEF,
     AST_STMT_CONSTDEF,
+    AST_STMT_ERRSET,
     AST_STMT_VAR_TUPLE_DESTR,
     AST_STMT_ASSIGN,
     AST_STMT_GLOBAL_ASSIGN,
@@ -86,7 +87,6 @@ typedef enum {
     AST_STMT_TYPEDEF,
     AST_STMT_SELECT,
     AST_CALL,
-    AST_STMT_TRY_CATCH,
     AST_CATCH,
     AST_MATCH,
     AST_FNDEF, // fn def (其包含 body)
@@ -323,6 +323,14 @@ typedef struct {
     bool is_pub; // module 外可见, 默认 false
 } ast_constdef_stmt_t;
 
+// `errdef NAME 'message'` registers a named error, an errset, that is public to every importer. Its
+// identity is the declaration itself: `id` is unique across the whole program and 0 is never assigned.
+typedef struct {
+    char *ident;
+    char *msg; // the optional message, NULL without one
+    int64_t id;
+} ast_errset_stmt_t;
+
 typedef struct {
     ast_expr_t left; // a  或 foo.bar.car 或者 d[0] 或者 (xx, xx, xx)
     ast_expr_t right;
@@ -392,21 +400,6 @@ typedef struct {
     ast_var_decl_t catch_err;
     slice_t *catch_body;
 } ast_catch_t;
-
-/**
- * try {
- *  stmt
- *  stmt
- * } catch e {
- *    stmt
- *    stmt
- * }
- */
-typedef struct {
-    slice_t *try_body;
-    ast_var_decl_t catch_err;
-    slice_t *catch_body;
-} ast_try_catch_stmt_t;
 
 /**
  * match nice {

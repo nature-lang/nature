@@ -23,8 +23,8 @@ import json
 fn main() {
     var s = `-12`
     var b = json.deserialize<bool>(s) catch e {
-        panic(e.msg())
-        false
+        println(e)
+        return
     }
     println(b)
 
@@ -34,7 +34,7 @@ fn main() {
 }
 
 --- output.txt
-panic: 'expected boolean value at position 0' at nature-test/main.n:6:15
+json.SYNTAX
 
 === test_deserialize_u8_string
 --- main.n
@@ -43,8 +43,8 @@ import json
 fn main() {
     var s = `12`
     var b = json.deserialize<u8>(s) catch e {
-        panic(e.msg())
-        0
+        println(e)
+        return
     }
     println(b)
 
@@ -121,14 +121,14 @@ fn main() {
     }
 
     var f = json.deserialize<foo_t>(s) catch e {
-        panic(e.msg())
-        foo_t{}
+        println(e)
+        return
     }
     println(f.key1, f.key[0], f.key[1], f.key[2], f.key_1)
 }
 
 --- output.txt
-panic: 'expected `"` at position 27' at nature-test/main.n:14:15
+json.SYNTAX
 
 === test_deserialize_struct
 --- main.n

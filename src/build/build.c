@@ -157,6 +157,12 @@ static void elf_custom_links() {
     elf_put_sym(ctx->symtab_section, ctx->symtab_hash, &sym, SYMBOL_SYMDEF_DATA);
     elf_put_global_symbol(ctx, SYMBOL_SYMDEF_COUNT, &ct_symdef_count, QWORD);
 
+    // errset --------------------------------------------------------------------------
+    uint64_t errset_offset = errsets_put();
+    uint64_t errset_count = (uint64_t) ct_errset_names->count;
+    elf_put_global_symbol(ctx, SYMBOL_ERRSET_OFFSET, &errset_offset, QWORD);
+    elf_put_global_symbol(ctx, SYMBOL_ERRSET_COUNT, &errset_count, QWORD);
+
     // ndata --------------------------------------------------------------------------
     elf_put_data(ctx->ndata_section, ct_data, ct_data_len);
     sym = (Elf64_Sym) {
@@ -259,6 +265,12 @@ static void mach_custom_links() {
                                       },
                  SYMBOL_SYMDEF_DATA);
     macho_put_global_symbol(ctx, SYMBOL_SYMDEF_COUNT, &ct_symdef_count, QWORD);
+
+    // errset --------------------------------------------------------------------------
+    uint64_t errset_offset = errsets_put();
+    uint64_t errset_count = (uint64_t) ct_errset_names->count;
+    macho_put_global_symbol(ctx, SYMBOL_ERRSET_OFFSET, &errset_offset, QWORD);
+    macho_put_global_symbol(ctx, SYMBOL_ERRSET_COUNT, &errset_count, QWORD);
 
     // ndata --------------------------------------------------------------------------
     mach_put_data(ctx->ndata_section, ct_data, ct_data_len);
@@ -458,6 +470,13 @@ static void coff_custom_links() {
     coff_relocate_symdefs(object, symdef, symdef_offset);
     coff_put_metadata(object, globals, SYMBOL_SYMDEF_COUNT, &ct_symdef_count,
                       sizeof(ct_symdef_count));
+
+    uint64_t errset_offset = errsets_put();
+    coff_put_metadata(object, globals, SYMBOL_ERRSET_OFFSET, &errset_offset,
+                      sizeof(errset_offset));
+    uint64_t errset_count = (uint64_t) ct_errset_names->count;
+    coff_put_metadata(object, globals, SYMBOL_ERRSET_COUNT, &errset_count,
+                      sizeof(errset_count));
 
     coff_put_metadata(object, ndata, SYMBOL_DATA, ct_data, ct_data_len);
     coff_put_metadata(object, nstrtable, SYMBOL_STRTABLE_DATA,
@@ -1284,6 +1303,9 @@ static void build_init(char *build_entry) {
 
     ct_caller_list = ct_list_new(sizeof(caller_t));
     ct_caller_data = 0;
+
+    ct_errset_names = slice_new();
+    ct_errset_msgs = slice_new();
 
     linker_libs = slice_new();
 }

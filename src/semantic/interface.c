@@ -1,5 +1,6 @@
 #include "interface.h"
 
+#include "infer.h"
 #include "src/ast.h"
 #include "src/error.h"
 #include "src/lir.h"
@@ -63,6 +64,13 @@ static type_t interface_extract_fn_type(module_t *m, ast_fndef_t *fndef) {
     fn->is_x = fndef->is_x;
     fn->param_types = ct_list_new(sizeof(type_t));
     fn->return_type = reduction_type(m, type_copy(m, fndef->return_type));
+    // infer_fn_decl may already have rewritten a T! declaration, so an errable return here only
+    // marks the fn errable
+    if (is_errable_type(fn->return_type)) {
+        fn->is_errable = true;
+    } else {
+        infer_errable_return(m, fn);
+    }
 
     assert(fndef->self_kind != PARAM_SELF_NULL);
     // skip self param

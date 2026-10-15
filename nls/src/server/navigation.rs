@@ -259,6 +259,8 @@ fn extract_symbol_type(kind: &SymbolKind) -> Option<Type> {
             let f = f.lock().unwrap();
             Some(f.return_type.clone())
         }
+        // an errset has the builtin type errset_t, which has no definition to go to
+        SymbolKind::Errset(_) => None,
         // If the cursor is already on a type, go to it directly.
         SymbolKind::Type(t) => {
             let t = t.lock().unwrap();
@@ -674,7 +676,7 @@ fn extract_type_from_kind(kind: &SymbolKind) -> Option<Type> {
         SymbolKind::Var(v) => Some(v.lock().unwrap().type_.clone()),
         SymbolKind::Const(c) => Some(c.lock().unwrap().type_.clone()),
         SymbolKind::Fn(f) => Some(f.lock().unwrap().return_type.clone()),
-        SymbolKind::Type(_) => None,
+        SymbolKind::Type(_) | SymbolKind::Errset(_) => None,
     }
 }
 
@@ -956,6 +958,10 @@ fn symbol_def_range(kind: &SymbolKind) -> (usize, usize) {
         SymbolKind::Const(c) => {
             let c = c.lock().unwrap();
             (c.symbol_start, c.symbol_end)
+        }
+        SymbolKind::Errset(e) => {
+            let e = e.lock().unwrap();
+            (e.symbol_start, e.symbol_end)
         }
     }
 }

@@ -170,6 +170,28 @@ static inline bool user_main_is_fn(void) {
 typedef void (*void_fn_t)();
 typedef void (*env_fn_t)(void *envs);
 
+// errable<T,errset_t>, which a nature fn returns and so does a C fn bound as T!: the tag, then the value
+// or, when it failed, the errset. n_errable_t holds a value of up to 8 bytes, n_errable_vec_t a vec or a
+// string.
+typedef struct {
+    uint64_t tag;
+    union {
+        uint64_t value;
+        uint32_t errset;
+    };
+} n_errable_t;
+
+typedef struct {
+    uint64_t tag;
+    union {
+        n_vec_t value;
+        uint32_t errset;
+    };
+} n_errable_vec_t;
+
+typedef n_errable_t (*errable_fn_t)();
+typedef n_errable_t (*env_errable_fn_t)(void *envs);
+
 /**
  * 参考 linux, 栈从上往下增长，所以在数学意义上 base > end
  */
@@ -374,7 +396,7 @@ struct linkco_t {
 typedef struct n_future_t {
     int64_t size;
     void *result;
-    n_union_t error; // 类似 result 一样可选的 error
+    uint32_t error; // the errset the coroutine failed with, 0 if it did not
     void *await_co;
 } n_future_t;
 
@@ -441,8 +463,8 @@ struct coroutine_t {
     //    uint64_t scan_offset;
     //    uint64_t scan_ret_addr;
 
-    bool has_error;
-    n_interface_t error; // throwable
+    uint32_t errset; // the errset rti_throw reports for the C fn to return, 0 if none
+    char *panic_msg; // the panic a runtime call reports for co_has_panic
     n_vec_t traces; // element is n_trace_t
 
     ATOMIC int32_t select_done;
@@ -498,11 +520,24 @@ struct n_processor_t {
     struct n_processor_t *next; // processor 链表支持
 };
 
-void rti_throw(char *msg, bool panic);
+void rti_panic(char *msg);
 
-void rti_co_throw(coroutine_t *co, char *msg, bool panic);
+// A C fn reports an errset by its display name, such as io.EOF. The module binding the fn declares
+// or imports it, so the program has it whenever the fn can be called.
+void rti_throw(char *errset_name);
 
-void coroutine_dump_error(coroutine_t *co);
+void rti_co_throw(coroutine_t *co, char *errset_name);
+
+// A C fn bound as T! returns rti_errable(value): the errset rti_throw reported makes it the error.
+n_errable_t rti_errable(uint64_t value);
+
+n_errable_vec_t rti_errable_vec(n_vec_t value);
+
+uint32_t rti_take_errset();
+
+char *rti_uv_errset(int code);
+
+void coroutine_dump_error(coroutine_t *co, uint32_t errset);
 
 /**
  * 正常需要根据线程 id 返回，第一版返回 id 就行了

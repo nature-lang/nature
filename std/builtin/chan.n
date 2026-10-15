@@ -1,5 +1,7 @@
 import co
 
+errdef CHAN_CLOSED 'channel closed'
+
 // var ch = chan<T>.new()
 pub fn chan<T>.new(...[int] args):chan<T> {
     int rhash = @reflect_hash(chan<T>)

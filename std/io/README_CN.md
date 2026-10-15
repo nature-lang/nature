@@ -2,6 +2,31 @@
 
 输入/输出接口和缓冲区实现，用于读取和写入数据。
 
+## errdef
+
+```
+errdef EOF 'end of file'
+errdef NOT_FOUND 'not found'
+errdef PERMISSION_DENIED 'permission denied'
+errdef ALREADY_EXISTS 'already exists'
+errdef CLOSED 'file or connection closed'
+errdef TIMEOUT 'timed out'
+errdef CONNECTION_REFUSED 'connection refused'
+errdef CONNECTION_RESET 'connection reset by peer'
+errdef ADDR_IN_USE 'address already in use'
+errdef OTHER 'other system error'
+```
+
+fs、net、process 的读写和其他系统调用的错误。没有对应 errset 的 libuv 或 errno 错误码都归为 `OTHER`。
+
+## fn sys_errset
+
+```
+fn sys_errset(int code):errset_t
+```
+
+errno（Windows 上是 `GetLastError` 的错误码）对应的 errset。
+
 ## type reader
 
 ```

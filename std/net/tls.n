@@ -3,6 +3,8 @@ import strings
 import io
 import net.types
 
+errdef HANDSHAKE_FAILED 'TLS handshake failed'
+
 pub type conn_t:types.connable = struct{
     anyptr conn
     bool closed

@@ -13,7 +13,7 @@ static inline void on_dns_resolved_cb(uv_getaddrinfo_t *req, int status, struct 
     DEBUGF("[on_dns_resolved_cb] co: %p, status: %d", co, status);
 
     if (status < 0) {
-        rti_co_throw(co, (char *) uv_strerror(status), false);
+        rti_co_throw(co, rti_uv_errset(status));
         co_ready(co);
         return;
     }
@@ -57,13 +57,13 @@ void uv_async_getaddrinfo_register(uv_getaddrinfo_t *req, dns_ctx_t *ctx) {
     int result = uv_getaddrinfo(&global_loop, req, on_dns_resolved_cb, rt_string_ref(&ctx->host), NULL, &hints);
     if (result) {
         DEBUGF("[uv_async_getaddrinfo_register] uv_getaddrinfo failed: %s, co=%p", uv_strerror(result), req->data);
-        rti_co_throw(req->data, tlsprintf("resolve %s failed: %s", rt_string_ref(&ctx->host), uv_strerror(result)), false);
+        rti_co_throw(req->data, rti_uv_errset(result));
         co_ready(req->data);
         return;
     }
 }
 
-n_vec_t rt_uv_dns_lookup(n_string_t host) {
+n_errable_vec_t rt_uv_dns_lookup(n_string_t host) {
     n_processor_t *p = processor_get();
     coroutine_t *co = coroutine_get();
 
@@ -82,7 +82,7 @@ n_vec_t rt_uv_dns_lookup(n_string_t host) {
 
     n_vec_t result = ctx->ips;
     free(ctx);
-    return result;
+    return rti_errable_vec(result);
 }
 
 #endif //NATURE_RUNTIME_NUTILS_DNS_H_

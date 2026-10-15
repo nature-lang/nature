@@ -11,4 +11,4 @@ fn coroutine_dispatch(anyptr co)
 pub fn coroutine_return(anyptr result)
 
 #linkid rt_coroutine_await
-pub fn coroutine_await(anyptr co)
+pub fn coroutine_await(anyptr future):void!

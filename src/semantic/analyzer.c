@@ -1172,17 +1172,6 @@ static void analyzer_catch(module_t *m, ast_catch_t *catch_expr) {
     analyzer_end_scope(m);
 }
 
-static void analyzer_try_catch_stmt(module_t *m, ast_try_catch_stmt_t *try_stmt) {
-    analyzer_begin_scope(m);
-    analyzer_body(m, try_stmt->try_body);
-    analyzer_end_scope(m);
-
-    analyzer_begin_scope(m);
-    analyzer_var_decl(m, &try_stmt->catch_err, true);
-    analyzer_body(m, try_stmt->catch_body);
-    analyzer_end_scope(m);
-}
-
 static void analyzer_as_expr(module_t *m, ast_as_expr_t *as_expr) {
     analyzer_type(m, &as_expr->target_type);
     analyzer_expr(m, &as_expr->src);
@@ -2318,9 +2307,6 @@ static void analyzer_stmt(module_t *m, ast_stmt_t *stmt) {
         case AST_CATCH: {
             return analyzer_catch(m, stmt->value);
         }
-        case AST_STMT_TRY_CATCH: {
-            return analyzer_try_catch_stmt(m, stmt->value);
-        }
         case AST_STMT_SELECT: {
             return analyzer_select(m, stmt->value);
         }
@@ -2398,6 +2384,11 @@ static void analyzer_module_decls(module_t *m, slice_t *stmt_list, slice_t *fn_l
             analyzer_expr(m, constdef_stmt->right);
             // right must literal
             ANALYZER_ASSERTF(constdef_stmt->right->assert_type == AST_EXPR_LITERAL, "const cannot be initialized");
+            continue;
+        }
+
+        if (stmt->assert_type == AST_STMT_ERRSET) {
+            // registered with the other global symbols in module_source_register_symbols
             continue;
         }
 

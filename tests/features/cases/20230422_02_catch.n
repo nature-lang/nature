@@ -1,29 +1,33 @@
+errdef HELLO_ERROR
+errdef WORLD_ERROR
+errdef WRAPPED_ERROR
+
 fn hello():void! {
     println('hello nature')
-    throw errorf('hello error')
+    throw HELLO_ERROR
 }
 
 fn main():void! {
     hello() catch err {
-        println('catch err:', err.msg())
+        println('catch err:', err)
     }
 
     // closure fn
     var world = fn(bool e):int! {
         if e {
-            throw errorf('world error')
+            throw WORLD_ERROR
         }
         return 233
     }
 
     int foo = world(true) catch err {
-        println('catch err:', err.msg())
+        println('catch err:', err)
         12
     }
     println('foo =', foo)
 
     foo = world(false) catch err {
-        println('catch err:', err.msg())
+        println('catch err:', err)
         12
     }
     println('foo =', foo)
@@ -31,6 +35,6 @@ fn main():void! {
 
     // return
     hello() catch err1 {
-        throw errorf('??' + err1.msg())
+        throw WRAPPED_ERROR
     }
 }

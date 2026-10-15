@@ -8,7 +8,7 @@
 fn vec_new<T>(ptr<T> p, int len):vec<T>!
 ```
 
-从原始指针和长度创建新的向量。长度必须为非负数，否则抛出错误
+从原始指针和长度创建新的向量。长度必须为非负数，否则以 `INDEX_OUT_OF_RANGE` 出错
 
 ## fn ptr_to
 

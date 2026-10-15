@@ -638,12 +638,6 @@ static void generics_stmt(module_t *m, ast_stmt_t *stmt) {
             generics_body(m, catch_stmt->catch_body);
             break;
         }
-        case AST_STMT_TRY_CATCH: {
-            ast_try_catch_stmt_t *try_catch = stmt->value;
-            generics_body(m, try_catch->try_body);
-            generics_body(m, try_catch->catch_body);
-            break;
-        }
         default:
             break;
     }

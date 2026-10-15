@@ -300,14 +300,10 @@ impl<'a> Semantic<'a> {
             } else {
                 t.kind = TypeKind::Ptr(Box::new(inner.clone()));
             }
-            // Propagate symbol_id from inner for completion/hover lookup
-            if t.symbol_id == 0 && inner.symbol_id != 0 {
-                t.symbol_id = inner.symbol_id;
-                t.ident = inner.ident.clone();
-                if t.ident_kind == TypeIdentKind::Unknown {
-                    t.ident_kind = inner.ident_kind.clone();
-                }
-            }
+            // A ref<T> or ptr<T> has no name of its own; completion, hover and navigation look through it
+            // to T. A name here would make typesys compare it as a different nominal type.
+            t.ident = String::new();
+            t.ident_kind = TypeIdentKind::Unknown;
             return;
         }
 
@@ -350,14 +346,6 @@ impl<'a> Semantic<'a> {
             }
             TypeKind::Ref(inner) | TypeKind::Ptr(inner) => {
                 self.resolve_inferred_type(inner);
-                // Propagate the resolved symbol_id to the outer type for completion lookup
-                if t.symbol_id == 0 && inner.symbol_id != 0 {
-                    t.symbol_id = inner.symbol_id;
-                    t.ident = inner.ident.clone();
-                    if t.ident_kind == TypeIdentKind::Unknown {
-                        t.ident_kind = inner.ident_kind.clone();
-                    }
-                }
             }
             _ => {}
         }
@@ -370,10 +358,9 @@ impl<'a> Semantic<'a> {
                 // Look up the function being called to get its return type
                 self.infer_type_from_call(call)
             }
-            AstNode::New(type_, _, _) | AstNode::StructNew(_, type_, _) => {
-                // new Type{} or Type{} — the type is the type being constructed
-                Some(type_.clone())
-            }
+            // `new T(...)` gives a ref<T>, a struct literal T{...} a T
+            AstNode::New(type_, _, _) => Some(Type::undo_new(TypeKind::Ref(Box::new(type_.clone())))),
+            AstNode::StructNew(_, type_, _) => Some(type_.clone()),
             AstNode::Ident(_, symbol_id) => {
                 // Variable reference — look up the variable's type
                 if *symbol_id != 0 {
@@ -401,6 +388,14 @@ impl<'a> Semantic<'a> {
         }
     }
 
+    /// The type a call of fndef has: T for a fn returning errable<T,E>, else the declared return type.
+    fn call_type(fndef: &AstFnDef) -> Type {
+        if fndef.return_type.ident == "errable" && fndef.return_type.args.len() == 2 {
+            return fndef.return_type.args[0].clone();
+        }
+        fndef.return_type.clone()
+    }
+
     /// Infer type from a function call by looking up the function's return type.
     fn infer_type_from_call(&self, call: &AstCall) -> Option<Type> {
         // The called function is typically an Ident or a SelectExpr (module.fn_name)
@@ -411,7 +406,7 @@ impl<'a> Semantic<'a> {
                         if let SymbolKind::Fn(fndef) = &symbol.kind {
                             let fndef = fndef.lock().unwrap();
                             if !fndef.return_type.kind.is_unknown() {
-                                return Some(fndef.return_type.clone());
+                                return Some(Self::call_type(&fndef));
                             }
                         }
                     }
@@ -429,7 +424,7 @@ impl<'a> Semantic<'a> {
                                 if let SymbolKind::Fn(fndef) = &symbol.kind {
                                     let fndef = fndef.lock().unwrap();
                                     if !fndef.return_type.kind.is_unknown() {
-                                        return Some(fndef.return_type.clone());
+                                        return Some(Self::call_type(&fndef));
                                     }
                                 }
                             }

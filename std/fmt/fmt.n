@@ -3,6 +3,7 @@ mod fmt
 import fmt.utils as *
 import strings
 import reflect
+import runtime
 
 pub fn sprintf(string format, ...[any] args):string {
     var end = format.len()
@@ -212,6 +213,11 @@ pub fn sprintf(string format, ...[any] args):string {
                 reflect.STRING -> arg_v.value as string
                 reflect.NULL -> 'null'
                 _ -> '%!v'
+            }
+
+            // an errset_t is a u32 at run time, it prints its name
+            if arg is errset_t {
+                s = runtime.errset_name(arg as errset_t)
             }
 
             for c in s {

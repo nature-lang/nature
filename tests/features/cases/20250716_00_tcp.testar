@@ -2,6 +2,7 @@
 --- main.n
 import net.tcp
 import co
+import io
 
 fn server():void! {
     var listener = tcp.listen('127.0.0.1:8080')
@@ -12,8 +13,8 @@ fn server():void! {
             var buf = vec<u8>.new(0, 1024)
             for true {
                 var len = conn.read(buf) catch e {
-                    if e.msg() != 'end of file' {
-                        println('conn read err:', e.msg())
+                    if e != io.EOF {
+                        println('conn read err:', e)
                     }
                     -1
                 }
@@ -62,13 +63,13 @@ import co
 
 fn main() {
     var conn = tcp.connect_timeout('10.255.255.1:8080', 1000) catch e {
-        throw errorf(e.msg())
+        throw e
     }
     conn.close()
 }
 
 --- output.txt
-coroutine 'main' uncaught error: 'connection timeout' at nature-test/main.n:6:22
+coroutine 'main' uncaught error: io.TIMEOUT at nature-test/main.n:6:15
 
 
 === test_cross_goroutine[exclude_os=windows]
@@ -151,6 +152,7 @@ import net.tcp
 import co
 import runtime
 import time
+import fmt
 
 fn server():void! {
     var listener = tcp.listen('0.0.0.0:8080')
@@ -163,7 +165,7 @@ fn server():void! {
     conn.close()
 
     conn.read(buf) catch e {
-        panic(e.msg())
+        panic(fmt.sprintf('%v', e))
         return
     }
 
@@ -187,11 +189,12 @@ fn main() {
 
 --- output.txt
 server is start
-panic: 'conn closed' at nature-test/main.n:17:15
+panic: 'io.CLOSED' at nature-test/main.n:18:31
 
 === test_url_parser
 --- main.n
 import net.url
+import fmt
 
 fn main() {
     println("Testing URL parser...")
@@ -380,30 +383,24 @@ fn test_error_cases():void! {
     println("Test 10: Error cases")
 
     // Test empty URL
-    try {
-        url.parse("")
-        assert(false) // Should not reach here
-    } catch e {
-        println("✓ Empty URL correctly throws error", e.msg())
-    }
+    println("✓ Empty URL correctly throws error", parse_error(""))
 
     // Test invalid URL format (missing //)
-    try {
-        url.parse("http:example.com")
-        assert(false) // Should not reach here
-    } catch e {
-        println("✓ Invalid URL format correctly throws error", e.msg())
-    }
+    println("✓ Invalid URL format correctly throws error", parse_error("http:example.com"))
 
     // Test URL with only scheme
-    try {
-        url.parse("http:")
-        assert(false) // Should not reach here
-    } catch e {
-        println("✓ Incomplete URL correctly throws error", e.msg())
-    }
+    println("✓ Incomplete URL correctly throws error", parse_error("http:"))
 
     println("✓ Error cases test passed")
+}
+
+// The error message of a url that must fail to parse.
+fn parse_error(string raw):string {
+    url.parse(raw) catch e {
+        return fmt.sprintf('%v', e)
+    }
+    assert(false) // Should not reach here
+    return ''
 }
 
 === test_conn_interface[exclude_os=windows]
@@ -445,7 +442,7 @@ fn server():void! {
             var buf = vec<u8>.new(0, 1024)
             for true {
                 var len = conn.read(buf) catch e {
-                    println('conn read err:', e.msg())
+                    println('conn read err:', e)
                     -1
                 }
                 if len == -1 {
@@ -479,7 +476,7 @@ import net.tcp
 
 fn main() {
     var conn = tcp.connect_timeout('64.233.170.108:465', 50) catch e {
-        println('in catch', e.msg())
+        println('in catch', e)
 
         co.sleep(1000)
         return

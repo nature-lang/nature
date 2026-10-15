@@ -11,6 +11,10 @@ import libc
 import co
 import runtime
 
+errdef INVALID_TOKEN
+errdef TOKEN_EXPIRED
+errdef INVALID_HEADER
+
 // JWT configuration constants
 const JWT_ALGORITHM = "HS256"
 const JWT_DEFAULT_EXPIRY = 3600 // 1 hour in seconds
@@ -116,7 +120,7 @@ fn generate(string sub, {string:any} custom_data, int expiry_seconds):string! {
 fn verify(string token):jwt_token_t! {
     var parts = token.split(".")
     if parts.len() != 3 {
-        throw errorf("Invalid JWT format")
+        throw INVALID_TOKEN
     }
 
     println('verify 1')
@@ -137,7 +141,7 @@ fn verify(string token):jwt_token_t! {
 
     // Verify algorithm
     if header.alg != jwt_config.algorithm {
-        throw errorf("Invalid algorithm")
+        throw INVALID_TOKEN
     }
     println('verify 5')
 
@@ -150,17 +154,17 @@ fn verify(string token):jwt_token_t! {
     println('verify 6')
 
     if expected_signature as string != actual_signature {
-        throw errorf("Invalid signature")
+        throw INVALID_TOKEN
     }
 
     // Verify time
     var now = time.unix()
     if payload.exp < now {
-        throw errorf("Token expired")
+        throw TOKEN_EXPIRED
     }
 
     if payload.nbf > now {
-        throw errorf("Token not yet valid")
+        throw INVALID_TOKEN
     }
 
     return jwt_token_t{
@@ -188,7 +192,7 @@ fn refresh_token(string token, int new_expiry):string! {
 fn is_token_expired(string token):bool! {
     var parts = token.split(".")
     if parts.len() != 3 {
-        throw errorf("Invalid JWT format")
+        throw INVALID_TOKEN
     }
 
     var encoded_payload = parts[1]
@@ -203,7 +207,7 @@ fn is_token_expired(string token):bool! {
 fn remaining_time(string token):int! {
     var parts = token.split(".")
     if parts.len() != 3 {
-        throw errorf("Invalid JWT format")
+        throw INVALID_TOKEN
     }
 
     var encoded_payload = parts[1]
@@ -222,7 +226,7 @@ fn remaining_time(string token):int! {
 // Extract token from Authorization header
 fn extract_token_from_header(string auth_header):string! {
     if !auth_header.starts_with("Bearer ") {
-        throw errorf("Invalid Authorization header format")
+        throw INVALID_HEADER
     }
     return auth_header[7..] // Remove "Bearer " prefix
 }

@@ -63,6 +63,12 @@ static void print_arg(n_any_t *arg) {
         VOID write(STDOUT_FILENO, sprint_buf, n);
         return;
     }
+    // an errset_t is a u32 at run time and prints its name
+    if (arg->rtype->hash == hash_string(ERRSET_IDENT)) {
+        char *name = ERRSET_NAME(arg->value.u32_value);
+        VOID write(STDOUT_FILENO, name, strlen(name));
+        return;
+    }
     if (arg->rtype->kind == TYPE_UINT32) {
         int n = sprintf(sprint_buf, "%u", arg->value.u32_value);
         VOID write(STDOUT_FILENO, sprint_buf, n);

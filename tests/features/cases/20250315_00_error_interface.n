@@ -9,6 +9,6 @@ pub fn foo():void! {
 
 fn main():void! {
     foo() catch err {
-        println('catch err:', err.msg())
+        println('catch err:', err)
     }
 }

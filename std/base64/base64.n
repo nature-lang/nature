@@ -2,6 +2,8 @@ mod base64
 
 import libc
 
+errdef INVALID_INPUT 'invalid character in base64 input'
+
 #linkid mbedtls_base64_decode
 fn mbedtls_base64_decode(anyptr dst, int dlen, ptr<int> olen, anyptr src, int slen):i32
 
@@ -26,7 +28,7 @@ pub fn decode([u8] src):[u8]! {
 
     var ret = mbedtls_base64_decode(dst.ref(), max_len, &olen, src.ref(), src.len())
     if ret != 0 {
-        throw errorf("base64 decode: invalid character in input")
+        throw INVALID_INPUT
     }
 
     dst = dst.slice(0, olen)

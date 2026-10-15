@@ -8,4 +8,4 @@
 fn assert(bool cond):void!
 ```
 
-当 cond 为 false 时抛出错误
+当 cond 为 false 时以 `testing.ASSERTION_FAILED` 出错
