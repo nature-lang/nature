@@ -5,16 +5,16 @@
 ## errdef
 
 ```
-errdef EOF
-errdef NOT_FOUND
-errdef PERMISSION_DENIED
-errdef ALREADY_EXISTS
-errdef CLOSED
-errdef TIMEOUT
-errdef CONNECTION_REFUSED
-errdef CONNECTION_RESET
-errdef ADDR_IN_USE
-errdef OTHER
+errdef EOF 'end of file'
+errdef NOT_FOUND 'not found'
+errdef PERMISSION_DENIED 'permission denied'
+errdef ALREADY_EXISTS 'already exists'
+errdef CLOSED 'file or connection closed'
+errdef TIMEOUT 'timed out'
+errdef CONNECTION_REFUSED 'connection refused'
+errdef CONNECTION_RESET 'connection reset by peer'
+errdef ADDR_IN_USE 'address already in use'
+errdef OTHER 'other system error'
 ```
 
 fs、net、process 的读写和其他系统调用的错误。没有对应 errset 的 libuv 或 errno 错误码都归为 `OTHER`。

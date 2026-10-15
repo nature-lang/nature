@@ -34,14 +34,13 @@ pub const MAGIC_CIPHER_COUNT = 24
     0x6f, 0x75, 0x62, 0x74,
 ]
 
-errdef PASSWORD_TOO_LONG
-errdef INVALID_COST
-errdef HASH_TOO_SHORT
-errdef INVALID_HASH_PREFIX
-errdef HASH_VERSION_TOO_NEW
-errdef NOT_VERIFY
-// the key or salt can't make a blowfish cipher
-errdef INVALID_KEY
+errdef PASSWORD_TOO_LONG 'password too long'
+errdef INVALID_COST 'invalid cost parameter'
+errdef HASH_TOO_SHORT 'hash too short'
+errdef INVALID_HASH_PREFIX 'invalid hash prefix'
+errdef HASH_VERSION_TOO_NEW 'hash version too new'
+errdef NOT_VERIFY 'verify failed'
+errdef INVALID_KEY 'failed to create salted cipher'
 
 // bcrypt hash structure
 pub type bcrypt_hash_t = struct {

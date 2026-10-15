@@ -45,9 +45,9 @@ fn assert(bool cond)
 ## errdef INDEX_OUT_OF_RANGE、KEY_NOT_FOUND、TYPE_ASSERT_FAILED
 
 ```
-errdef INDEX_OUT_OF_RANGE
-errdef KEY_NOT_FOUND
-errdef TYPE_ASSERT_FAILED
+errdef INDEX_OUT_OF_RANGE 'index out of range'
+errdef KEY_NOT_FOUND 'key not found in map'
+errdef TYPE_ASSERT_FAILED 'type assert failed'
 ```
 
 索引或切片越界、map 里没有这个 key、`as` 失败都会 panic。catch 紧跟在这类表达式后面时，会把 panic 当作其中一个 errset 接住，`.x` 和 `.n` 都一样：

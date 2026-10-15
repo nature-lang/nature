@@ -5,16 +5,11 @@ import fmt
 import unsafe
 import runtime
 
-// the input is not valid JSON
-errdef SYNTAX
-// the input is larger than DEFAULT_MAX_BYTES
-errdef TOO_LARGE
-// arrays and objects nest deeper than the max depth
-errdef TOO_DEEP
-// a number does not fit the type it is read into
-errdef OUT_OF_RANGE
-// the value can't be read into or written from this type
-errdef UNSUPPORTED_TYPE
+errdef SYNTAX 'invalid JSON'
+errdef TOO_LARGE 'JSON input is too large'
+errdef TOO_DEEP 'JSON nesting too deep'
+errdef OUT_OF_RANGE 'number out of range'
+errdef UNSUPPORTED_TYPE 'unsupported type'
 
 var null_hash = @reflect_hash(null) 
 

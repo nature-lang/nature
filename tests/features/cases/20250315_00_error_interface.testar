@@ -113,4 +113,4 @@ fn main() {
 --- output.txt
 main.TIMEOUT request timed out
 main.CLOSED main.CLOSED
-io.EOF
+end of file

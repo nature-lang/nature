@@ -229,9 +229,5 @@ pub fn vec<T>.search(*self, fn(int):bool predicate):int {
         }
     }
 
-    //if low >= self.len() || ??  {
-    //    throw errorf('not found')
-    //}
-
     return low
 }

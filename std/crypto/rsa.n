@@ -3,14 +3,12 @@ import crypto.utils
 import time
 import fmt
 
-errdef RNG_FAILED
-errdef KEY_GENERATION_FAILED
-// a PEM key can't be parsed or copied
-errdef INVALID_KEY
-// a key can't be written as PEM
-errdef PEM_WRITE_FAILED
-errdef ENCRYPTION_FAILED
-errdef DECRYPTION_FAILED
+errdef RNG_FAILED 'failed to seed RNG'
+errdef KEY_GENERATION_FAILED 'RSA key generation failed'
+errdef INVALID_KEY 'invalid RSA key'
+errdef PEM_WRITE_FAILED 'failed to write RSA key as PEM'
+errdef ENCRYPTION_FAILED 'RSA encryption failed'
+errdef DECRYPTION_FAILED 'RSA decryption failed'
 
 pub const SHA1 = 0x05
 pub const SHA224= 0x08
