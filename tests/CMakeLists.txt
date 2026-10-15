@@ -162,6 +162,11 @@ add_test(test_tls_write_all test_tls_write_all)
 if (NOT WIN32)
     add_executable(test_signal_handler_deadlock test_signal_handler_deadlock.c)
     target_include_directories(test_signal_handler_deadlock PRIVATE ${CMAKE_SOURCE_DIR})
+    # GCC on arm64 turns 64-bit atomics into libgcc calls whose init needs glibc's __getauxval, which a
+    # musl-gcc link can't resolve. Inline atomics need nothing from libgcc.
+    if (CMAKE_SYSTEM_NAME STREQUAL "linux" AND CMAKE_SYSTEM_PROCESSOR STREQUAL "arm64")
+        target_compile_options(test_signal_handler_deadlock PRIVATE -mno-outline-atomics)
+    endif ()
     target_link_libraries(test_signal_handler_deadlock m pthread)
     add_test(test_signal_handler_deadlock test_signal_handler_deadlock)
     set_tests_properties(test_signal_handler_deadlock PROPERTIES TIMEOUT 5)
