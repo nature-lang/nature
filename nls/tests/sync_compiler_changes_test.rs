@@ -238,3 +238,29 @@ fn twice():errable<int,string>! {
     }
     assert_eq!(errors.len(), 4, "expected only the four errable errors, actual: {:?}", errors);
 }
+
+#[tokio::test]
+async fn test_var_from_ref_call_and_new_should_pass() {
+    let code = r#"
+type foo_t = struct{
+    int a
+}
+
+fn foo_t.get(&self):int {
+    return self.a
+}
+
+fn make():ref<foo_t> {
+    return new foo_t(a=1)
+}
+
+fn main() {
+    var made = make()
+    var created = new foo_t(a=2)
+    println(made.get(), created.get())
+}
+"#;
+
+    let errors = build_errors("var_from_ref_call_and_new_ok", code).await;
+    assert!(errors.is_empty(), "expected no analyzer errors, actual: {:?}", errors);
+}
