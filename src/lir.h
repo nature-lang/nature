@@ -1487,6 +1487,12 @@ static inline bool need_eliminate_bal_fn_end(closure_t *c, lir_op_t *op) {
         return false;
     }
 
+    // so does void!: the end label returns the value errable (see linear_fndef), and a path that
+    // falls off the body must reach it rather than run into whatever block is laid out next
+    if (c->errable_storage && errable_value_type(c->fndef->return_type).kind == TYPE_VOID) {
+        return false;
+    }
+
     lir_operand_t *operand = op->output;
     if (operand->assert_type != LIR_OPERAND_SYMBOL_LABEL) {
         return false;
