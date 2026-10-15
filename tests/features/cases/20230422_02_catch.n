@@ -1,6 +1,6 @@
-errset HELLO_ERROR
-errset WORLD_ERROR
-errset WRAPPED_ERROR
+errdef HELLO_ERROR
+errdef WORLD_ERROR
+errdef WRAPPED_ERROR
 
 fn hello():void! {
     println('hello nature')

@@ -9,8 +9,8 @@ import runtime
 import strings
 import fs
 
-errset EMPTY_ARGUMENT
-errset ARCHIVE_ERROR
+errdef EMPTY_ARGUMENT
+errdef ARCHIVE_ERROR
 
 i32 ARCHIVE_EOF = 1
 i32 ARCHIVE_OK = 0

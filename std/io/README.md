@@ -2,19 +2,19 @@
 
 Input/output interfaces and buffer implementation for reading and writing data.
 
-## errset
+## errdef
 
 ```
-errset EOF
-errset NOT_FOUND
-errset PERMISSION_DENIED
-errset ALREADY_EXISTS
-errset CLOSED
-errset TIMEOUT
-errset CONNECTION_REFUSED
-errset CONNECTION_RESET
-errset ADDR_IN_USE
-errset OTHER
+errdef EOF
+errdef NOT_FOUND
+errdef PERMISSION_DENIED
+errdef ALREADY_EXISTS
+errdef CLOSED
+errdef TIMEOUT
+errdef CONNECTION_REFUSED
+errdef CONNECTION_RESET
+errdef ADDR_IN_USE
+errdef OTHER
 ```
 
 The errors of reading, writing and the other system calls of fs, net and process. A libuv or errno code without an errset of its own is `OTHER`.

@@ -763,7 +763,7 @@ static token_type_t scanner_ident(char *word, int length) {
                 case 'n':
                     return scanner_rest(word, length, 2, 2, "um", TOKEN_ENUM);
                 case 'r':
-                    return scanner_rest(word, length, 2, 4, "rset", TOKEN_ERRSET);
+                    return scanner_rest(word, length, 2, 4, "rdef", TOKEN_ERRDEF);
             }
 
         case 'f': {

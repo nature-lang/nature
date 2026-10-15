@@ -1,8 +1,8 @@
 === test_errset
 --- main.x
-errset TIMEOUT
-errset CLOSED
-errset LATE
+errdef TIMEOUT 'read timed out'
+errdef CLOSED
+errdef LATE
 
 fn read(int mode):int! {
     if mode == 1 {
@@ -176,6 +176,8 @@ fn main() {
     if n is shape.circle v {
         println('circle', v)
     }
+
+    println(TIMEOUT.msg(), CLOSED.msg())
 }
 --- output.txt
 42
@@ -198,6 +200,7 @@ defer true false
 defer only true
 -12
 circle -1
+read timed out main.CLOSED
 
 === test_same_name_in_two_modules_is_two_errors
 --- main.x
@@ -217,7 +220,7 @@ fn forward()! {
     throw LATE
 }
 
-errset LATE
+errdef LATE
 
 fn main() {
     var a = io.read(1) catch e {
@@ -251,7 +254,7 @@ fn main() {
     }
 }
 --- io.x
-errset TIMEOUT
+errdef TIMEOUT
 
 pub fn read(int mode):int! {
     if mode == 1 {
@@ -260,7 +263,7 @@ pub fn read(int mode):int! {
     return 7
 }
 --- fmt.x
-errset TIMEOUT
+errdef TIMEOUT
 
 pub fn read(int mode):int! {
     if mode == 1 {
@@ -269,7 +272,7 @@ pub fn read(int mode):int! {
     return 8
 }
 --- lib.n
-errset TIMEOUT
+errdef TIMEOUT
 --- output.txt
 true false false
 -1
@@ -353,15 +356,15 @@ panic: 'index out of range [5] with length 1' at nature-test/main.x:9:19
 === test_errset_inside_fn_rejected
 --- main.x
 fn main() {
-    errset TIMEOUT
+    errdef TIMEOUT
 }
 --- output.txt
-nature-test/main.x:2:10: cannot parser ident 'errset'
+nature-test/main.x:2:10: cannot parser ident 'errdef'
 
 === test_duplicate_errset
 --- main.x
-errset TIMEOUT
-errset TIMEOUT
+errdef TIMEOUT
+errdef TIMEOUT
 
 fn main() {}
 --- output.txt
@@ -369,7 +372,7 @@ nature-test/main.x:2:6: ident 'main.TIMEOUT' redeclared
 
 === test_missing_error_handler
 --- main.x
-errset TIMEOUT
+errdef TIMEOUT
 
 fn fail():int! {
     throw TIMEOUT
@@ -383,8 +386,8 @@ nature-test/main.x:8:20: calling an errable! fn `fail` requires the current `fn 
 
 === test_match_without_default_rejected
 --- main.x
-errset TIMEOUT
-errset CLOSED
+errdef TIMEOUT
+errdef CLOSED
 
 fn fail():int! {
     throw TIMEOUT
@@ -403,7 +406,7 @@ nature-test/main.x:12:23: match expression lacks a default case '_'
 
 === test_u32_is_not_an_errset
 --- main.x
-errset TIMEOUT
+errdef TIMEOUT
 
 fn fail():int! {
     throw TIMEOUT

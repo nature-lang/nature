@@ -42,12 +42,12 @@ fn assert(bool cond)
 
 断言条件为真，如果为假则 panic。
 
-## errset INDEX_OUT_OF_RANGE、KEY_NOT_FOUND、TYPE_ASSERT_FAILED
+## errdef INDEX_OUT_OF_RANGE、KEY_NOT_FOUND、TYPE_ASSERT_FAILED
 
 ```
-errset INDEX_OUT_OF_RANGE
-errset KEY_NOT_FOUND
-errset TYPE_ASSERT_FAILED
+errdef INDEX_OUT_OF_RANGE
+errdef KEY_NOT_FOUND
+errdef TYPE_ASSERT_FAILED
 ```
 
 索引或切片越界、map 里没有这个 key、`as` 失败都会 panic。catch 紧跟在这类表达式后面时，会把 panic 当作其中一个 errset 接住，`.x` 和 `.n` 都一样：
@@ -73,7 +73,7 @@ fn chan<T>.new(...[int] args):chan<T>
 
 ## type chan
 
-在已关闭的通道上发送、接收或再次关闭，会以内置的 `errset CHAN_CLOSED` 出错。
+在已关闭的通道上发送、接收或再次关闭，会以内置的 `errdef CHAN_CLOSED` 出错。
 
 ### chan.send
 
@@ -211,7 +211,7 @@ type errable<T,E> = union{
 
 ```nature
 // .x 中
-errset BAD
+errdef BAD
 
 fn parse(string s):errable<int,string> {
     if s == '' {
@@ -229,12 +229,12 @@ fn load(string s):int! {
 
 跟在返回 `errable<T,E>` 的函数调用后面的 catch 只处理这个调用的错误，`e` 的类型就是它的错误类型。参数中的调用不在范围内：它们的错误照常向外传播，错误类型由编译器检查，所以 `check(parse(1)) catch e { ... }` 只处理 `check`。其他情况都不会进入 catch。`go` 运行以 errset 出错的函数，await 以协程的 errset 出错。
 
-## errset
+## errdef
 
 ```nature
 // 在 io 模块中
-errset TIMEOUT
-errset CLOSED
+errdef TIMEOUT 'request timed out'
+errdef CLOSED
 
 pub fn read(int mode):int! {
     if mode == 1 {
@@ -249,14 +249,14 @@ import "io.x"
 fn main() {
     var n = io.read(1) catch e {
         if e == io.TIMEOUT {
-            println('timeout')
+            println(e.msg()) // request timed out
         }
         -1
     }
 }
 ```
 
-`errset` 声明注册一个具名错误。它的身份就是这条声明本身：编译器为其分配全程序唯一的 id，因此 `io.TIMEOUT` 与 `fmt.TIMEOUT` 即使同名也是两个不同的错误。errset 不携带消息和数据，可以用 `==`、`!=` 比较，也可以用 `match e { TIMEOUT -> ... _ -> ... }` 分支。errset 的集合是开放的，所以 `match` 必须有 `_` 分支。
+`errdef` 声明注册一个具名错误，即一个 errset。它的身份就是这条声明本身：编译器为其分配全程序唯一的 id，因此 `io.TIMEOUT` 与 `fmt.TIMEOUT` 即使同名也是两个不同的错误。errset 不携带数据，可以用 `==`、`!=` 比较，也可以用 `match e { TIMEOUT -> ... _ -> ... }` 分支。errset 的集合是开放的，所以 `match` 必须有 `_` 分支。名字后面的字符串字面量是这个 errset 的消息：`e.msg()` 返回它，`errdef` 没写消息时返回名字。
 
 声明只能出现在模块顶层，且始终对外公开，不需要写 `pub`；写了 `pub` 也会被忽略。errset 的值类型是内置的 `errset_t`，运行时存成 `u32` 的 id。只有 errset 名字能产生 `errset_t` 的值：整数字面量和 `u32` 的值都不能转换为它，所以 `throw 5`、把 `u32 a = 12` 和 errset 比较都是类型错误。`print`、`println` 和 `fmt` 的 `%v` 把 `errset_t` 打印成它的名字，比如 `io.EOF`。没有被 catch 的错误会结束程序，并打印错误名和它经过的函数：
 

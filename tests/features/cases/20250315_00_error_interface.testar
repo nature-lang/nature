@@ -17,7 +17,7 @@ nature-test/main.n:2:22: type inconsistency, expect=errset_t(u32), actual=string
 
 === test_throw
 --- main.n
-errset BAR_ERROR
+errdef BAR_ERROR
 
 fn bar():void! {
     throw BAR_ERROR
@@ -83,3 +83,34 @@ fn main():void! {
 
 --- output.txt
 catch err: true
+
+=== test_errdef_msg
+--- main.n
+import io
+
+errdef TIMEOUT 'request timed out'
+errdef CLOSED
+
+fn read(int mode):int! {
+    if mode == 1 {
+        throw TIMEOUT
+    }
+    throw CLOSED
+}
+
+fn main() {
+    var a = read(1) catch e {
+        println(e, e.msg())
+        0
+    }
+    var b = read(2) catch e {
+        println(e, e.msg())
+        0
+    }
+    println(io.EOF.msg())
+}
+
+--- output.txt
+main.TIMEOUT request timed out
+main.CLOSED main.CLOSED
+io.EOF

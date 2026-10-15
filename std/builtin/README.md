@@ -42,12 +42,12 @@ fn assert(bool cond)
 
 Assert that the condition is true, panic if false.
 
-## errset INDEX_OUT_OF_RANGE, KEY_NOT_FOUND, TYPE_ASSERT_FAILED
+## errdef INDEX_OUT_OF_RANGE, KEY_NOT_FOUND, TYPE_ASSERT_FAILED
 
 ```
-errset INDEX_OUT_OF_RANGE
-errset KEY_NOT_FOUND
-errset TYPE_ASSERT_FAILED
+errdef INDEX_OUT_OF_RANGE
+errdef KEY_NOT_FOUND
+errdef TYPE_ASSERT_FAILED
 ```
 
 An index or slice out of range, a missing map key and a failed `as` panic. A catch right after such an expression gets the panic as one of these errsets instead, in `.x` and `.n`:
@@ -73,7 +73,7 @@ Create a new channel with optional buffer size.
 
 ## type chan
 
-A send, receive or close on a closed channel fails with the builtin `errset CHAN_CLOSED`.
+A send, receive or close on a closed channel fails with the builtin `errdef CHAN_CLOSED`.
 
 ### chan.send
 
@@ -211,7 +211,7 @@ An error propagates only into a function that fails with the same type. A call t
 
 ```nature
 // in .x
-errset BAD
+errdef BAD
 
 fn parse(string s):errable<int,string> {
     if s == '' {
@@ -229,12 +229,12 @@ fn load(string s):int! {
 
 A catch after a call of a function that returns `errable<T,E>` handles only that call's error, and `e` has its error type. The calls in its arguments are not covered: their errors propagate as usual and the compiler checks their error types, so in `check(parse(1)) catch e { ... }` only `check` is caught. Nothing else reaches a catch. `go` runs a function that fails with an errset; await fails with the errset the coroutine failed with.
 
-## errset
+## errdef
 
 ```nature
 // in the io module
-errset TIMEOUT
-errset CLOSED
+errdef TIMEOUT 'request timed out'
+errdef CLOSED
 
 pub fn read(int mode):int! {
     if mode == 1 {
@@ -249,16 +249,16 @@ import "io.x"
 fn main() {
     var n = io.read(1) catch e {
         if e == io.TIMEOUT {
-            println('timeout')
+            println(e.msg()) // request timed out
         }
         -1
     }
 }
 ```
 
-An `errset` declaration registers a named error. Its identity is the declaration itself: the compiler gives it a program-wide id, so `io.TIMEOUT` and `fmt.TIMEOUT` are different errors even though they share a name. An errset carries no message and no data, so it is compared with `==` and `!=`, or matched with `match e { TIMEOUT -> ... _ -> ... }`. The set of errsets is open, so a `match` needs a `_` arm.
+An `errdef` declaration registers a named error, an errset. Its identity is the declaration itself: the compiler gives it a program-wide id, so `io.TIMEOUT` and `fmt.TIMEOUT` are different errors even though they share a name. An errset carries no data, so it is compared with `==` and `!=`, or matched with `match e { TIMEOUT -> ... _ -> ... }`. The set of errsets is open, so a `match` needs a `_` arm. A string literal after the name is the errset's message: `e.msg()` returns it, or the name when the `errdef` has none.
 
-Declarations are module-level only and always public, so `pub` is not needed; a `pub` before `errset` is accepted and ignored. An errset value has the builtin type `errset_t` and is stored as a `u32` id at run time. Only an errset name produces an `errset_t` value: neither an integer literal nor a `u32` value converts to it, so `throw 5` and comparing `u32 a = 12` with an errset are type errors. `print`, `println` and `%v` in `fmt` print an `errset_t` as its name, such as `io.EOF`. An error nothing catches ends the program with its name and the trace of the functions it passed through:
+Declarations are module-level only and always public, so `pub` is not needed; a `pub` before `errdef` is accepted and ignored. An errset value has the builtin type `errset_t` and is stored as a `u32` id at run time. Only an errset name produces an `errset_t` value: neither an integer literal nor a `u32` value converts to it, so `throw 5` and comparing `u32 a = 12` with an errset are type errors. `print`, `println` and `%v` in `fmt` print an `errset_t` as its name, such as `io.EOF`. An error nothing catches ends the program with its name and the trace of the functions it passed through:
 
 ```
 coroutine 'main' uncaught error: io.NOT_FOUND at main.n:5:42

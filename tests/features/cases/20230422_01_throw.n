@@ -1,4 +1,4 @@
-errset WORLD_ERROR
+errdef WORLD_ERROR
 
 fn hello():void! {
     println('hello nature')

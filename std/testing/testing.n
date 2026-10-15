@@ -1,6 +1,6 @@
 mod testing
 
-errset ASSERTION_FAILED
+errdef ASSERTION_FAILED
 
 pub fn assert(bool cond):void! {
     if !cond {

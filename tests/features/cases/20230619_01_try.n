@@ -1,4 +1,4 @@
-errset DIVISOR_ZERO
+errdef DIVISOR_ZERO
 
 fn main():void! {
     // list index

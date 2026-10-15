@@ -6,15 +6,15 @@ import unsafe
 import runtime
 
 // the input is not valid JSON
-errset SYNTAX
+errdef SYNTAX
 // the input is larger than DEFAULT_MAX_BYTES
-errset TOO_LARGE
+errdef TOO_LARGE
 // arrays and objects nest deeper than the max depth
-errset TOO_DEEP
+errdef TOO_DEEP
 // a number does not fit the type it is read into
-errset OUT_OF_RANGE
+errdef OUT_OF_RANGE
 // the value can't be read into or written from this type
-errset UNSUPPORTED_TYPE
+errdef UNSUPPORTED_TYPE
 
 var null_hash = @reflect_hash(null) 
 

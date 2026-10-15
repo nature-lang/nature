@@ -2798,17 +2798,21 @@ static ast_stmt_t *parser_constdef_stmt(module_t *m, bool is_pub) {
 }
 
 /**
- * errset NAME
+ * errdef NAME 'message'
  *
- * Registers a named error. It carries no value and no message, its identity is the declaration.
+ * Registers a named error, an errset. It carries no value, its identity is the declaration. The message
+ * is an optional string literal.
  */
 static ast_stmt_t *parser_errset_stmt(module_t *m) {
     ast_stmt_t *result = stmt_new(m);
 
-    parser_must(m, TOKEN_ERRSET);
+    parser_must(m, TOKEN_ERRDEF);
     ast_errset_stmt_t *errset = NEW(ast_errset_stmt_t);
     token_t *ident_token = parser_must(m, TOKEN_IDENT);
     errset->ident = ident_token->literal;
+    if (parser_is(m, TOKEN_LITERAL_STRING)) {
+        errset->msg = parser_must(m, TOKEN_LITERAL_STRING)->literal;
+    }
 
     result->assert_type = AST_STMT_ERRSET;
     result->value = errset;
@@ -3326,7 +3330,7 @@ static ast_stmt_t *parser_global_stmt(module_t *m) {
         return parser_var_begin_stmt(m, is_pub);
     } else if (parser_is(m, TOKEN_CONST)) {
         return parser_constdef_stmt(m, is_pub);
-    } else if (parser_is(m, TOKEN_ERRSET)) {
+    } else if (parser_is(m, TOKEN_ERRDEF)) {
         // an errset is always public, a `pub` before it is accepted and ignored
         return parser_errset_stmt(m);
     } else if (is_type_begin_stmt(m)) {

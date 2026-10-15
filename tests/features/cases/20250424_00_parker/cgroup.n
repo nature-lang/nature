@@ -7,9 +7,9 @@ import strings
 import parker.log as *
 import fs
 
-errset INVALID_PID
-errset CGROUP_NOT_FOUND
-errset UNKNOWN_CGROUP_VERSION
+errdef INVALID_PID
+errdef CGROUP_NOT_FOUND
+errdef UNKNOWN_CGROUP_VERSION
 
 u8 version1 = 1
 u8 version2 = 2

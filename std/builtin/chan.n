@@ -1,7 +1,7 @@
 import co
 
 // send, recv or close on a closed chan
-errset CHAN_CLOSED
+errdef CHAN_CLOSED
 
 // var ch = chan<T>.new()
 pub fn chan<T>.new(...[int] args):chan<T> {

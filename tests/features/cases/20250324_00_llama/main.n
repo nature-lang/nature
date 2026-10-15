@@ -9,7 +9,7 @@ import unsafe
 import io
 import io.buf
 
-errset INVALID_ARGS
+errdef INVALID_ARGS
 
 fn logf(string format, ...[any] args) {
     var msg = fmt.sprintf(format, ...args)

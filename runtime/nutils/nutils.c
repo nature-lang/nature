@@ -881,6 +881,20 @@ n_string_t rt_errset_name(uint32_t errset) {
     return string_new(name, strlen(name));
 }
 
+// the message is in the strtable of the binary, so the string refers to it there like a string literal
+// and allocates nothing
+n_string_t rt_errset_msg(uint32_t errset) {
+    char *msg = ERRSET_MSG(errset);
+    int64_t length = (int64_t) strlen(msg);
+    return (n_string_t) {
+        .data = (uint8_t *) msg,
+        .length = length,
+        .capacity = length + 1,
+        .element_size = 1,
+        .hash = string_rtype.hash,
+    };
+}
+
 // the io errset of an errno or, on windows, a GetLastError code
 uint32_t rt_sys_errset(n_int_t code) {
     return rt_find_errset(rti_uv_errset(uv_translate_sys_error((int) code)));

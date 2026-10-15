@@ -9,9 +9,9 @@ import libc
 import fs
 import strings
 
-errset READ_FAILED
-errset EMPTY_TGZ
-errset PDEATHSIG_FAILED
+errdef READ_FAILED
+errdef EMPTY_TGZ
+errdef PDEATHSIG_FAILED
 
 const charset = 'abcdefghijklmnopqrstuvwxyz0123456789'
 

@@ -77,6 +77,8 @@ void rt_panic(n_string_t msg);
 
 n_string_t rt_errset_name(uint32_t errset);
 
+n_string_t rt_errset_msg(uint32_t errset);
+
 uint32_t rt_sys_errset(n_int_t code);
 
 void rt_dump_stack_backtrace(void);
