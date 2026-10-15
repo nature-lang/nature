@@ -1,4 +1,6 @@
 import runtime
+// the string methods of the strings module, such as split and trim, are available to every module
+import strings
 
 #linkid rt_string_length
 pub fn string.len(*self):int

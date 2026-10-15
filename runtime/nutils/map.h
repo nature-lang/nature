@@ -17,7 +17,7 @@ void map_grow(n_map_t *m);
 
 n_anyptr_t rt_map_assign(n_map_t *m, void *key_ref);
 
-n_anyptr_t rt_map_access(n_map_t *m, void *key_ref);
+n_anyptr_t rt_map_access(n_map_t *m, void *key_ref, bool caught);
 
 void rt_map_delete(n_map_t *m, void *key_ref);
 

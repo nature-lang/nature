@@ -161,7 +161,7 @@ static void uv_async_tls_write(inner_tls_conn_t *conn, char *buf, size_t len) {
         coroutine_t *write_co = conn->write_co;
         assert(write_co);
         conn->write_co = NULL;
-        rti_co_throw(write_co, tlsprintf("TLS write failed: %s", uv_strerror(result)), false);
+        rti_co_throw(write_co, rti_uv_errset(result));
         co_ready(write_co);
     }
 }
@@ -294,7 +294,7 @@ static inline void on_tls_connect_cb(uv_connect_t *conn_req, int status) {
 
     if (status < 0) {
         DEBUGF("[on_tls_connect_cb] connection failed: %s", uv_strerror(status));
-        rti_co_throw(conn->connect_co, tlsprintf("TLS connection failed: %s", uv_strerror(status)), false);
+        rti_co_throw(conn->connect_co, rti_uv_errset(status));
         if (!uv_is_closing((uv_handle_t *) &conn->handle)) {
             uv_close((uv_handle_t *) &conn->handle, on_tls_close_cb);
         }
@@ -314,7 +314,7 @@ static inline void on_tls_timeout_cb(uv_timer_t *handle) {
         uv_close((uv_handle_t *) &conn->handle, on_tls_close_cb);
     }
 
-    rti_co_throw(conn->connect_co, "TLS connection timeout", 0);
+    rti_co_throw(conn->connect_co, "io.TIMEOUT");
     co_ready(conn->connect_co);
 }
 
@@ -330,7 +330,7 @@ static void uv_async_tls_connect(inner_tls_conn_t *conn, struct sockaddr_in *des
     }
 }
 
-void rt_uv_tls_connect(n_tls_conn_t *n_conn, n_string_t addr, n_int64_t port, n_int64_t timeout_ms) {
+n_errable_t rt_uv_tls_connect(n_tls_conn_t *n_conn, n_string_t addr, n_int64_t port, n_int64_t timeout_ms) {
     DEBUGF("[rt_uv_tls_connect] start, addr %s, port %ld, timeout_ms %ld", (char *) rt_string_ref(&addr), port,
            timeout_ms)
 
@@ -356,27 +356,25 @@ void rt_uv_tls_connect(n_tls_conn_t *n_conn, n_string_t addr, n_int64_t port, n_
     // 初始化 TLS 上下文
     int ret = tls_init_ssl_context(conn, &addr);
     if (ret != 0) {
-        char error_buf[256];
-        mbedtls_strerror(ret, error_buf, sizeof(error_buf));
-        rti_co_throw(co, tlsprintf("TLS init failed: %s", error_buf), false);
+        rti_co_throw(co, "net.tls.HANDSHAKE_FAILED");
 
         tls_cleanup_ssl_context(conn);
         free(conn);
         n_conn->conn = NULL;
         n_conn->closed = true;
-        return;
+        return rti_errable(0);
     }
 
     struct sockaddr_in *dest = malloc(sizeof(struct sockaddr_in));
     ret = uv_ip4_addr(rt_string_ref(&addr), (int) port, dest);
     if (ret != 0) {
-        rti_co_throw(co, tlsprintf("invalid TLS IPv4 address: %s", rt_string_ref(&addr)), false);
+        rti_co_throw(co, rti_uv_errset(ret));
         free(dest);
         tls_cleanup_ssl_context(conn);
         free(conn);
         n_conn->conn = NULL;
         n_conn->closed = true;
-        return;
+        return rti_errable(0);
     }
 
     global_waiting_send(uv_async_tls_connect, conn, dest, (void *) timeout_ms);
@@ -384,7 +382,7 @@ void rt_uv_tls_connect(n_tls_conn_t *n_conn, n_string_t addr, n_int64_t port, n_
     if (conn->timeout || uv_is_closing((uv_handle_t *) &conn->handle)) {
         n_conn->closed = true;
         tls_release_conn(conn);
-        return;
+        return rti_errable(0);
     }
 
     DEBUGF("[rt_uv_tls_connect] tcp connect success, will handshake handle");
@@ -400,32 +398,31 @@ void rt_uv_tls_connect(n_tls_conn_t *n_conn, n_string_t addr, n_int64_t port, n_
             // handshake more data
             continue;
         } else {
-            char error_buf[256];
-            mbedtls_strerror(ret, error_buf, sizeof(error_buf));
-            rti_co_throw(conn->connect_co, tlsprintf("tls handshake failed: %s", error_buf), false);
+            rti_co_throw(conn->connect_co, "net.tls.HANDSHAKE_FAILED");
             n_conn->closed = true;
             global_async_send(uv_async_conn_close, conn, 0, 0);
             tls_release_conn(conn);
-            return;
+            return rti_errable(0);
         }
     }
 
     DEBUGF("[rt_uv_tls_connect] resume, TLS connect and handshake success, will return conn=%p", conn)
     tls_release_conn(conn);
+    return rti_errable(0);
 }
 
-int64_t rt_uv_tls_read(n_tls_conn_t *n_conn, n_vec_t buf) {
+n_errable_t rt_uv_tls_read(n_tls_conn_t *n_conn, n_vec_t buf) {
     coroutine_t *co = coroutine_get();
     if (n_conn->closed) {
-        rti_co_throw(co, "tls conn closed", false);
-        return 0;
+        rti_co_throw(co, "io.CLOSED");
+        return rti_errable(0);
     }
     inner_tls_conn_t *conn = n_conn->conn;
     conn->read_co = co;
 
     if (!conn->handshake_done) {
-        rti_co_throw(co, "tls conn handshake failed, cannot read", false);
-        return 0;
+        rti_co_throw(co, "net.tls.HANDSHAKE_FAILED");
+        return rti_errable(0);
     }
     conn->handle.data = conn;
     conn->user_buf = buf;
@@ -439,30 +436,30 @@ int64_t rt_uv_tls_read(n_tls_conn_t *n_conn, n_vec_t buf) {
     bool closed = n_conn->closed;
     tls_release_conn(conn);
     if (closed) {
-        rti_co_throw(co, "tls conn closed", false);
-        return 0;
+        rti_co_throw(co, "io.CLOSED");
+        return rti_errable(0);
     }
     if (read_timeout) {
-        rti_co_throw(co, "tls read timeout", false);
-        return 0;
+        rti_co_throw(co, "io.TIMEOUT");
+        return rti_errable(0);
     }
     if (ret < 0) {
-        rti_co_throw(co, tlsprintf("TLS read failed: %s", uv_strerror(ret)), false);
-        return 0;
+        rti_co_throw(co, rti_uv_errset(ret));
+        return rti_errable(0);
     }
 
-    return ret;
+    return rti_errable(ret);
 }
 
 static int tls_mbedtls_write_record(void *ctx, const unsigned char *buf, size_t len) {
     return mbedtls_ssl_write((mbedtls_ssl_context *) ctx, buf, len);
 }
 
-int64_t rt_uv_tls_write(n_tls_conn_t *n_conn, n_vec_t buf) {
+n_errable_t rt_uv_tls_write(n_tls_conn_t *n_conn, n_vec_t buf) {
     coroutine_t *co = coroutine_get();
     if (n_conn->closed) {
-        rti_co_throw(co, "tls conn closed", false);
-        return 0;
+        rti_co_throw(co, "io.CLOSED");
+        return rti_errable(0);
     }
 
     inner_tls_conn_t *conn = n_conn->conn;
@@ -470,8 +467,8 @@ int64_t rt_uv_tls_write(n_tls_conn_t *n_conn, n_vec_t buf) {
     conn->user_buf = buf;
 
     if (!conn->handshake_done) {
-        rti_co_throw(co, "tls handshake not completed, cannot write", false);
-        return 0;
+        rti_co_throw(co, "net.tls.HANDSHAKE_FAILED");
+        return rti_errable(0);
     }
 
     // mbedtls_ssl_write() writes at most one TLS record and may therefore
@@ -481,17 +478,15 @@ int64_t rt_uv_tls_write(n_tls_conn_t *n_conn, n_vec_t buf) {
     int64_t written = tls_write_all_records(&conn->ssl, tls_mbedtls_write_record,
                                             (const unsigned char *) buf.data, (size_t) buf.length);
     if (written < 0) {
-        char error_buf[256];
-        mbedtls_strerror((int) written, error_buf, sizeof(error_buf));
-        rti_co_throw(co, tlsprintf("TLS write failed: %s", error_buf), false);
-        return 0;
+        rti_co_throw(co, "io.OTHER");
+        return rti_errable(0);
     }
     if (written == 0 && buf.length > 0) {
-        rti_co_throw(co, "TLS write made no progress", false);
-        return 0;
+        rti_co_throw(co, "io.OTHER");
+        return rti_errable(0);
     }
 
-    return written;
+    return rti_errable(written);
 }
 
 static void uv_async_conn_close(inner_tls_conn_t *conn) {

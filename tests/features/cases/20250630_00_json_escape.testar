@@ -27,14 +27,14 @@ import json
 fn main() {
     var j = '"hello\n world"'
     var s = json.deserialize<string>(j) catch e {
-        panic(e.msg())
-        ''
+        println(e)
+        return
     }
     println(s)
 }
 
 --- output.txt
-panic: 'invalid character in string literal at position 6' at nature-test/main.n:6:15
+json.SYNTAX
 
 
 === test_json_escape_failed2
@@ -44,14 +44,14 @@ import json
 fn main() {
     var j = '"hello\\ world"'
     var s = json.deserialize<string>(j) catch e {
-        panic(e.msg())
-        ''
+        println(e)
+        return
     }
     println(s)
 }
 
 --- output.txt
-panic: 'invalid escape sequence at position 7' at nature-test/main.n:6:15
+json.SYNTAX
 
 === test_json_escape
 --- main.n
@@ -60,8 +60,8 @@ import json
 fn main() {
     var j = '"hello\\nworld"'
     var s = json.deserialize<string>(j) catch e {
-        panic(e.msg())
-        ''
+        println(e)
+        return
     }
     println(s)
 }
@@ -77,8 +77,8 @@ import json
 fn main() {
     var j = `"hello\nworld"`
     var s = json.deserialize<string>(j) catch e {
-        panic(e.msg())
-        ''
+        println(e)
+        return
     }
     println(s)
 }

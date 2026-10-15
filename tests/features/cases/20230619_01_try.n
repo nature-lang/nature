@@ -1,15 +1,17 @@
+errdef DIVISOR_ZERO
+
 fn main():void! {
     // list index
     var list = [1, 2, 3]
     var item = list[5] catch err {
-        print('catch vec index err=', err.msg(), '\n')
+        print('catch vec index err=', err == INDEX_OUT_OF_RANGE, '\n')
         0
     }
     println(item)
 
     any a1 = 1 as i8
     var i1 = a1 as i16 catch err1 {
-        print('catch type assert err=', err1.msg(), '\n')
+        print('catch type assert err=', err1 == TYPE_ASSERT_FAILED, '\n')
         0
     }
 
@@ -24,7 +26,7 @@ fn main():void! {
         list: [1, 2, 3, 4, 5],
         div: fn(int a, int b):int! {
             if b == 0 {
-                throw errorf('divisor cannot zero')
+                throw DIVISOR_ZERO
             }
             return a / b
         },
@@ -35,12 +37,12 @@ fn main():void! {
 
     // 异常处理
     var a2 = foo.list[8] catch err2 {
-        print('chain access vec err=', err2.msg(), '\n')
+        print('chain access vec err=', err2 == INDEX_OUT_OF_RANGE, '\n')
         0
     }
 
     var a3 = foo.div(10, 0) catch err3 {
-        print("chain access call err=", err3.msg(), '\n')
+        print("chain access call err=", err3, '\n')
         0
     }
 

@@ -1,13 +1,13 @@
 mod runtime
 
 #linkid rt_vec_new
-pub fn vec_new<T>(int hash, int element_hash, int len, anyptr value_ref):vec<T>!
+pub fn vec_new<T>(int hash, int element_hash, int len, anyptr value_ref):vec<T>
 
 #linkid rt_vec_cap
-pub fn vec_cap<T>(int hash, int element_hash, int cap):vec<T>!
+pub fn vec_cap<T>(int hash, int element_hash, int cap):vec<T>
 
 #linkid rt_vec_alloc
-fn vec_alloc(int hash, int element_hash, int cap):anyptr!
+fn vec_alloc(int hash, int element_hash, int cap):anyptr
 
 #linkid rt_vec_new_out
 pub fn vec_new_out(anyptr out, int hash, int element_hash, int cap)
@@ -19,7 +19,7 @@ pub fn vec_push(anyptr list, int element_hash, anyptr val)
 pub fn vec_grow(anyptr list, int element_hash, int custom_capacity)
 
 #linkid rt_vec_slice
-pub fn vec_slice<T>(anyptr list, int start, int end):vec<T>!
+pub fn vec_slice<T>(anyptr list, int start, int end):vec<T>
 
 #linkid rt_vec_append
 pub fn vec_append(anyptr list1, anyptr list2, int element_hash)
@@ -92,3 +92,6 @@ pub fn string_find_after(anyptr self, anyptr sub, int after):int
 
 #linkid rt_in_heap
 pub fn in_heap(anyptr addr):bool
+
+#linkid rt_errset_name
+pub fn errset_name(errset_t e):string

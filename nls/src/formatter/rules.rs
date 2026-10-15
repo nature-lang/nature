@@ -385,6 +385,7 @@ impl<'a> Formatter<'a> {
             | TokenType::Var
             | TokenType::Pub
             | TokenType::Const
+            | TokenType::Errdef
             | TokenType::Test
             | TokenType::Fn
             | TokenType::Import
@@ -394,7 +395,6 @@ impl<'a> Formatter<'a> {
             | TokenType::Enum
             | TokenType::Union
             | TokenType::Throw
-            | TokenType::Try
             | TokenType::Catch
             | TokenType::Match
             | TokenType::Select

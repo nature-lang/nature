@@ -292,6 +292,20 @@ impl WorkspaceIndex {
                 continue;
             }
 
+            // errdef <name> 'message', always public
+            if let Some(rest) = declaration.strip_prefix("errdef ") {
+                let name: String = rest.trim_start().chars().take_while(|c| c.is_alphanumeric() || *c == '_').collect();
+                if !name.is_empty() {
+                    symbols.push(IndexedSymbol {
+                        name,
+                        kind: IndexedSymbolKind::Constant,
+                        is_pub: true,
+                        file_path: file_path.to_string(),
+                    });
+                }
+                continue;
+            }
+
             // var <name> = ... OR <type> <name> = ...
             if declaration.starts_with("var ") {
                 if let Some(name) = Self::extract_var_name(declaration) {

@@ -1,9 +1,3 @@
-import fmt
-
-pub type throwable = interface{
-	fn msg():string
-}
-
 pub type trace_t = struct{
     string path
     string ident
@@ -11,19 +5,8 @@ pub type trace_t = struct{
     int column
 }
 
-pub type errort:throwable = struct{
-	string message
-	bool is_panic
+// `T!` returns errable<T,errset_t>: the value, or an errset.
+pub type errable<T,E> = union{
+    T value
+    E error
 }
-
-pub fn errort.msg(&self):string {
-	return self.message
-}
-
-pub fn errorf(string format, ...[any] args):ref<errort> {
-	var msg = fmt.sprintf(format, ...args)
-	return new errort(message = msg)
-}
-
-
-pub type errable<T> = errort|T

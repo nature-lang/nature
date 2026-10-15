@@ -304,6 +304,11 @@ impl<'a> CompletionProvider<'a> {
                 let display_ident = extract_last_ident_part(&typedef.ident);
                 (display_ident.clone(), CompletionItemKind::Struct, Some(detail), display_ident, 1)
             }
+            SymbolKind::Errset(errset) => {
+                let errset = errset.lock().unwrap();
+                let display_ident = extract_last_ident_part(&errset.ident);
+                (display_ident.clone(), CompletionItemKind::Constant, Some("errset_t".to_string()), display_ident, 3)
+            }
         };
 
         CompletionItem {
@@ -344,7 +349,6 @@ impl<'a> CompletionProvider<'a> {
             ("false", "false", "Boolean false"),
             ("null", "null", "Null value"),
             ("throw", "throw $0", "Throw error"),
-            ("try", "try {\n\t$0\n} catch err {\n\t\n}", "Try-catch block"),
             ("catch", "catch $0 {\n\t\n}", "Catch clause"),
             ("go", "go $0", "Spawn coroutine"),
             ("select", "select {\n\t$0\n}", "Select statement"),

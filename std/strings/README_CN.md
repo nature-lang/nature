@@ -152,7 +152,7 @@ fn string.replace(self, string sub_old, string sub_new):string
 fn string.to_int(self):int!
 ```
 
-将字符串转换为整数，格式无效时可能抛出错误
+将字符串转换为整数。格式无效时以 `strings.INVALID_NUMBER` 出错，数字过大时以 `strings.OUT_OF_RANGE` 出错
 
 ## fn string.to_float
 
@@ -160,7 +160,7 @@ fn string.to_int(self):int!
 fn string.to_float(self):float!
 ```
 
-将字符串转换为浮点数，格式无效时可能抛出错误
+将字符串转换为浮点数。格式无效时以 `strings.INVALID_NUMBER` 出错
 
 ## fn string.to_lower
 

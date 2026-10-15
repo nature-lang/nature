@@ -28,10 +28,6 @@ extern rtype_t string_ref_rtype;
 // GC_RTYPE(TYPE_STRUCT, 4, TYPE_GC_SCAN, TYPE_GC_SCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN);
 extern rtype_t errort_trace_rtype;
 
-extern rtype_t throwable_rtype;
-
-extern rtype_t errort_rtype;
-
 // GC_RTYPE(TYPE_GC_ENV, 2, TYPE_GC_SCAN, TYPE_GC_NOSCAN);
 extern rtype_t envs_rtype;
 
@@ -146,15 +142,6 @@ static inline void builtin_rtype_init() {
                                   TYPE_GC_NOSCAN,
                                   TYPE_GC_NOSCAN, TYPE_GC_NOSCAN);
     sc_map_put_64v(&rt_rtype_map, errort_trace_rtype.hash, &errort_trace_rtype);
-
-    throwable_rtype = GC_RTYPE(TYPE_INTERFACE, 4, TYPE_GC_SCAN, TYPE_GC_SCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN);
-    sc_map_put_64v(&rt_rtype_map, throwable_rtype.hash, &throwable_rtype);
-
-    // 初始化错误 rtype
-    errort_rtype = GC_RTYPE(TYPE_STRUCT, 6,
-                            TYPE_GC_SCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN,
-                            TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN);
-    sc_map_put_64v(&rt_rtype_map, errort_rtype.hash, &errort_rtype);
 
     // 初始化环境变量 rtype
     envs_rtype = GC_RTYPE(TYPE_GC_ENV, 2, TYPE_GC_SCAN, TYPE_GC_NOSCAN);

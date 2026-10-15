@@ -1,3 +1,5 @@
+errdef INVALID_URL 'invalid url format'
+
 pub type url_t = struct{
     string url
     string scheme
@@ -20,7 +22,7 @@ const FRAGMENT = 5
 
 pub fn parse(string url):url_t! {
     if url.len() == 0 {
-        throw errorf('url cannot empty')
+        throw INVALID_URL
     }
 
     var result = url_t{url: url}
@@ -41,7 +43,7 @@ pub fn parse(string url):url_t! {
                         i += 2  // skip //
                         start = i + 1
                     } else {
-                       throw errorf('invalid url format')
+                       throw INVALID_URL
                     }
                 }
             }
@@ -90,7 +92,7 @@ pub fn parse(string url):url_t! {
     // handle last state
     match state {
         SCHEME -> {
-            throw errorf('invalid url format')
+            throw INVALID_URL
         }
         AUTHORITY -> { // scheme://authority
             parse_authority(&result, url.slice(start, i))

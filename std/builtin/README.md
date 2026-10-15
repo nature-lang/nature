@@ -42,6 +42,25 @@ fn assert(bool cond)
 
 Assert that the condition is true, panic if false.
 
+## errdef INDEX_OUT_OF_RANGE, KEY_NOT_FOUND, TYPE_ASSERT_FAILED
+
+```
+errdef INDEX_OUT_OF_RANGE 'index out of range'
+errdef KEY_NOT_FOUND 'key not found in map'
+errdef TYPE_ASSERT_FAILED 'type assert failed'
+```
+
+An index or slice out of range, a missing map key and a failed `as` panic. A catch right after such an expression gets the panic as one of these errsets instead, in `.x` and `.n`:
+
+```nature
+var a = list[5] catch e {
+    // e == INDEX_OUT_OF_RANGE
+    -1
+}
+```
+
+Only the expression the catch follows is covered: in `list[list[5]] catch e { ... }` the inner index still panics. A panic inside a called function, `panic()` and `assert()` always end the program.
+
 # [chan](https://github.com/nature-lang/nature/blob/master/std/builtin/chan.n)
 
 ## fn chan<T>.new
@@ -53,6 +72,8 @@ fn chan<T>.new(...[int] args):chan<T>
 Create a new channel with optional buffer size.
 
 ## type chan
+
+A send, receive or close on a closed channel fails with the builtin `errdef CHAN_CLOSED`.
 
 ### chan.send
 
@@ -134,7 +155,7 @@ Check if the last operation was successful.
 type future_t<T> = struct{
     i64 size
     ptr<T> result
-    throwable? error
+    errset_t error
     anyptr co
 }
 ```
@@ -175,50 +196,78 @@ Return a result from a coroutine.
 
 # [error](https://github.com/nature-lang/nature/blob/master/std/builtin/error.n)
 
-## type throwable
-
-```
-type throwable = interface{
-    fn msg():string
-}
-```
-
-Interface for throwable objects.
-
-## type errort
-
-```
-type errort:throwable = struct{
-    string message
-    bool is_panic
-}
-```
-
-Error type implementing throwable interface.
-
-### errort.msg
-
-```
-fn errort.msg():string
-```
-
-Get the error message.
-
 ## type errable
 
 ```
-type errable<T> = errort|T
+type errable<T,E> = union{
+    T value
+    E error
+}
 ```
 
-Union type for error handling.
+A function that returns `errable<T,E>` is errable, in `.x` and `.n`: `return` gives a `T`, `throw` gives an `E`, and the error comes back in the return value. `T!` is shorthand for `errable<T,errset_t>`, and a `T!` function bound to C returns it too. A `!` after `errable<T,E>` is rejected.
 
-## fn errorf
+An error propagates only into a function that fails with the same type. A call that fails with another type has to be caught and converted, which the compiler checks:
+
+```nature
+// in .x
+errdef BAD
+
+fn parse(string s):errable<int,string> {
+    if s == '' {
+        throw 'empty input'
+    }
+    return 1
+}
+
+fn load(string s):int! {
+    return parse(s) catch msg {
+        throw BAD
+    }
+}
+```
+
+A catch after a call of a function that returns `errable<T,E>` handles only that call's error, and `e` has its error type. The calls in its arguments are not covered: their errors propagate as usual and the compiler checks their error types, so in `check(parse(1)) catch e { ... }` only `check` is caught. Nothing else reaches a catch. `go` runs a function that fails with an errset; await fails with the errset the coroutine failed with.
+
+## errdef
+
+```nature
+// in the io module
+errdef TIMEOUT 'request timed out'
+errdef CLOSED
+
+pub fn read(int mode):int! {
+    if mode == 1 {
+        throw TIMEOUT
+    }
+    return 42
+}
+
+// elsewhere
+import "io.x"
+
+fn main() {
+    var n = io.read(1) catch e {
+        if e == io.TIMEOUT {
+            println(e.msg()) // request timed out
+        }
+        -1
+    }
+}
+```
+
+An `errdef` declaration registers a named error, an errset. Its identity is the declaration itself: the compiler gives it a program-wide id, so `io.TIMEOUT` and `fmt.TIMEOUT` are different errors even though they share a name. An errset carries no data, so it is compared with `==` and `!=`, or matched with `match e { TIMEOUT -> ... _ -> ... }`. The set of errsets is open, so a `match` needs a `_` arm. A string literal after the name is the errset's message: `e.msg()` returns it, or the name when the `errdef` has none.
+
+Declarations are module-level only and always public, so `pub` is not needed; a `pub` before `errdef` is accepted and ignored. An errset value has the builtin type `errset_t` and is stored as a `u32` id at run time. Only an errset name produces an `errset_t` value: neither an integer literal nor a `u32` value converts to it, so `throw 5` and comparing `u32 a = 12` with an errset are type errors. `print`, `println` and `%v` in `fmt` print an `errset_t` as its name, such as `io.EOF`. An error nothing catches ends the program with its name and the trace of the functions it passed through:
 
 ```
-fn errorf(string format, ...[any] args):ref<errort>
+coroutine 'main' uncaught error: io.NOT_FOUND at main.n:5:42
+stack backtrace:
+0:	main.load
+		at main.n:5:42
+1:	main.main
+		at main.n:9:9
 ```
-
-Create a formatted error.
 
 # [map](https://github.com/nature-lang/nature/blob/master/std/builtin/map.n)
 

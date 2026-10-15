@@ -1,4 +1,6 @@
 import http
+// the C fns fail with io errsets
+import io
 
 type header_t = struct{
     anyptr name_at

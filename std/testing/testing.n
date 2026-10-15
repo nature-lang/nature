@@ -1,7 +1,9 @@
 mod testing
 
+errdef ASSERTION_FAILED 'assertion failed'
+
 pub fn assert(bool cond):void! {
     if !cond {
-        throw errorf("assertion failed")
+        throw ASSERTION_FAILED
     }
 }

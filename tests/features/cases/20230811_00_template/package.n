@@ -3,6 +3,8 @@ mod package
 import syscall
 import package.zlib
 
+errdef WRITE_FAILED
+
 fn main():void! {
     var input = 'mock/input.txt'
     var output = 'output.gz'
@@ -24,7 +26,7 @@ fn main():void! {
             syscall.close(fd)
             zlib.gzclose(gzfile)
 
-            throw errorf('write failed')
+            throw WRITE_FAILED
         }
 
         println('gz write success, len:', write_len)

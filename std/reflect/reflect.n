@@ -3,6 +3,9 @@ mod reflect
 import unsafe
 import libc
 
+errdef INVALID_HASH 'hash must be greater than 0'
+errdef UNSUPPORTED_TYPE 'unsupported type'
+
 pub const NULL = 1
 pub const BOOL = 2
 pub const I8 = 3
@@ -101,7 +104,7 @@ fn find_strtable(int offset):libc.cstr
 
 pub fn typeof_hash(i64 hash):ref<type_t>! {
     if hash <= 0 {
-        throw errorf('hash must be greater than 0')
+        throw INVALID_HASH
     }
 
     var r = find_rtype(hash)
@@ -228,7 +231,7 @@ type value_t = struct{
 pub fn valueof<T>(T v):ref<value_t>! {
     var t = typeof<T>(v)
     if t.kind != VEC && t.kind != MAP && t.kind != SET {
-        throw errorf('not value support type')
+        throw UNSUPPORTED_TYPE
     }
 
     var result = new value_t(

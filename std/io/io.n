@@ -1,6 +1,21 @@
 mod io
 
-import syscall
+// errors of reading, writing and the other system calls of fs, net and process, shared with the C fns
+// they bind. A libuv or errno code without an errset of its own is OTHER.
+errdef EOF 'end of file'
+errdef NOT_FOUND 'not found'
+errdef PERMISSION_DENIED 'permission denied'
+errdef ALREADY_EXISTS 'already exists'
+errdef CLOSED 'file or connection closed'
+errdef TIMEOUT 'timed out'
+errdef CONNECTION_REFUSED 'connection refused'
+errdef CONNECTION_RESET 'connection reset by peer'
+errdef ADDR_IN_USE 'address already in use'
+errdef OTHER 'other system error'
+
+// the errset of an errno or, on windows, a GetLastError code
+#linkid rt_sys_errset
+pub fn sys_errset(int code):errset_t
 
 pub type reader = interface{
     fn read([u8] buf):int!
@@ -42,7 +57,7 @@ pub fn buffer.read(&self, [u8] buf):int! {
             return 0
         }
 
-        throw errorf('EOF')
+        throw EOF
     }
 
     int n = buf.copy(self.buf.slice(self.offset, self.buf.len()))

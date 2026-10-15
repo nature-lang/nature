@@ -100,9 +100,9 @@ static inline void signal_process(int64_t sig) {
     sc_map_foreach(&signal_handlers, key, mask) {
         n_chan_t *ch = (n_chan_t *) key;
         if ((uint64_t) mask & (1ULL << sig)) {
-            bool result = rt_chan_send(ch, &sig, true);
+            n_errable_t result = rt_chan_send(ch, &sig, true);
             DEBUGF("[runtime.signal_process] signal %ld mask, will send to channel %p, send result = %d", sig, ch,
-                   result);
+                   (int) result.value);
         }
     }
 }

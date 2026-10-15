@@ -137,6 +137,7 @@ static void symbol_register_builtin_types() {
     symbol_table_set("map", SYMBOL_TYPE, builtin_typedef_map("map"), false);
     symbol_table_set("chan", SYMBOL_TYPE, builtin_typedef_chan("chan"), false);
     symbol_table_set("tup", SYMBOL_TYPE, builtin_typedef_tuple("tup"), false);
+    symbol_table_set(ERRSET_IDENT, SYMBOL_TYPE, builtin_typedef_simple(ERRSET_IDENT, TYPE_UINT32), false);
 }
 
 void symbol_init() {

@@ -112,6 +112,7 @@ string token_type_to_str[] = {
         [TOKEN_ELSE_IF] = "TOKEN_ELSE_IF",
         [TOKEN_VAR] = "TOKEN_VAR",
         [TOKEN_CONST] = "TOKEN_CONST",
+        [TOKEN_ERRDEF] = "TOKEN_ERRDEF",
         [TOKEN_STRING] = "TOKEN_STRING",
         [TOKEN_BOOL] = "TOKEN_BOOL",
         [TOKEN_FLOAT] = "TOKEN_FLOAT",

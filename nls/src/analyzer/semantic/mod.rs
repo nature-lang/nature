@@ -478,7 +478,7 @@ impl<'a> Semantic<'a> {
             match &symbol.kind {
                 SymbolKind::Fn(_) => SemanticTokenType::FUNCTION,
                 SymbolKind::Type(_) => SemanticTokenType::TYPE,
-                SymbolKind::Const(_) => SemanticTokenType::MACRO,
+                SymbolKind::Const(_) | SymbolKind::Errset(_) => SemanticTokenType::MACRO,
                 SymbolKind::Var(_) => SemanticTokenType::VARIABLE,
             }
         } else {
@@ -502,7 +502,7 @@ impl<'a> Semantic<'a> {
             match &symbol.kind {
                 SymbolKind::Fn(_) => SemanticTokenType::FUNCTION,
                 SymbolKind::Type(_) => SemanticTokenType::TYPE,
-                SymbolKind::Const(_) => SemanticTokenType::MACRO,
+                SymbolKind::Const(_) | SymbolKind::Errset(_) => SemanticTokenType::MACRO,
                 SymbolKind::Var(_) => SemanticTokenType::PROPERTY,
             }
         } else {
@@ -543,7 +543,7 @@ impl<'a> Semantic<'a> {
                         let sem_type = match &symbol.kind {
                             SymbolKind::Fn(_) => SemanticTokenType::FUNCTION,
                             SymbolKind::Type(_) => SemanticTokenType::TYPE,
-                            SymbolKind::Const(_) => SemanticTokenType::MACRO,
+                            SymbolKind::Const(_) | SymbolKind::Errset(_) => SemanticTokenType::MACRO,
                             SymbolKind::Var(_) => SemanticTokenType::VARIABLE,
                         };
                         let sem_idx = semantic_token_type_index(sem_type);

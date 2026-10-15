@@ -599,6 +599,45 @@ pub fn register_global_symbol(m: &mut Module, symbol_table: &mut SymbolTable, st
                     symbol_table.set_symbol_source_path(symbol_id, &m.path);
                 }
             }
+            AstNode::ErrsetDef(errset_mutex) => {
+                let mut errset = errset_mutex.lock().unwrap();
+                errset.ident = format_global_ident(m.ident.clone(), errset.ident.clone());
+
+                // always public: callers need the name to compare against what they catch
+                match symbol_table.define_symbol_in_scope_with_visibility(
+                    errset.ident.clone(),
+                    SymbolKind::Errset(errset_mutex.clone()),
+                    errset.symbol_start,
+                    m.module_scope_id,
+                    true,
+                ) {
+                    Ok(symbol_id) => {
+                        errset.symbol_id = symbol_id;
+                        symbol_table.set_symbol_source_path(symbol_id, &m.path);
+                    }
+                    Err(e) => {
+                        errors_push(
+                            m,
+                            AnalyzerError {
+                                start: errset.symbol_start,
+                                end: errset.symbol_end,
+                                message: e,
+                                is_warning: false,
+                            },
+                        );
+                    }
+                }
+
+                if let Ok(symbol_id) = symbol_table.define_global_symbol_with_visibility(
+                    errset.ident.clone(),
+                    SymbolKind::Errset(errset_mutex.clone()),
+                    errset.symbol_start,
+                    m.module_scope_id,
+                    true,
+                ) {
+                    symbol_table.set_symbol_source_path(symbol_id, &m.path);
+                }
+            }
             AstNode::Typedef(typedef_mutex) => {
                 let mut typedef = typedef_mutex.lock().unwrap();
                 typedef.ident = format_global_ident(m.ident.clone(), typedef.ident.clone());

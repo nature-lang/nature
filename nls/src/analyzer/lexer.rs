@@ -249,8 +249,6 @@ pub enum TokenType {
     Struct,
     #[strum(serialize = "throw")]
     Throw,
-    #[strum(serialize = "try")]
-    Try,
     #[strum(serialize = "catch")]
     Catch,
     #[strum(serialize = "match")]
@@ -279,6 +277,9 @@ pub enum TokenType {
 
     #[strum(serialize = "const")]
     Const,
+
+    #[strum(serialize = "errdef")]
+    Errdef,
 
     #[strum(serialize = "test")]
     Test,
@@ -422,6 +423,7 @@ impl Token {
             | TokenType::Var
             | TokenType::Pub
             | TokenType::Const
+            | TokenType::Errdef
             | TokenType::Test
             | TokenType::Fn
             | TokenType::Import
@@ -433,7 +435,6 @@ impl Token {
             | TokenType::Enum
             | TokenType::Union
             | TokenType::Throw
-            | TokenType::Try
             | TokenType::Catch
             | TokenType::Match
             | TokenType::Select
@@ -584,12 +585,12 @@ impl Lexer {
             "struct" => TokenType::Struct,
             "throw" => TokenType::Throw,
             "true" => TokenType::True,
-            "try" => TokenType::Try,
             // "tup" => TokenType::Tup,
             "type" => TokenType::Type,
             "uint" => TokenType::Uint,
             "var" => TokenType::Var,
             "const" => TokenType::Const,
+            "errdef" => TokenType::Errdef,
             "test" => TokenType::Test,
             // "vec" => TokenType::Vec,
             "void" => TokenType::Void,

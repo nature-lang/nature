@@ -1,0 +1,241 @@
+=== test_errable
+--- main.x
+errdef BAD
+
+type position_error_t = struct{
+    int position
+    string reason
+}
+
+fn parse(int at):errable<int,string> {
+    if at < 0 {
+        throw 'negative position'
+    }
+    return at * 2
+}
+
+fn relay(int at):errable<int,string> {
+    return parse(at)
+}
+
+fn add(int a, int b):errable<int,string> {
+    return a + b
+}
+
+fn sum(int at):errable<int,string> {
+    var total = add(parse(at), 1) catch msg {
+        -100
+    }
+    return total
+}
+
+fn locate(int at):errable<int,position_error_t> {
+    if at > 9 {
+        throw position_error_t{position: at, reason: 'too far'}
+    }
+    return at
+}
+
+fn convert(int at):int! {
+    var v = relay(at) catch msg {
+        throw BAD
+    }
+    return v
+}
+
+type reader_t = interface{
+    fn read(int at):errable<int,string>
+}
+
+type source_t:reader_t = int
+
+fn source_t.read(self, int at):errable<int,string> {
+    return parse(at)
+}
+
+fn main() {
+    var a = relay(2) catch msg {
+        -1
+    }
+    println(a)
+
+    var b = sum(-1) catch msg {
+        println('string', msg)
+        -2
+    }
+    println(b)
+
+    var c = locate(12) catch e {
+        println('struct', e.position, e.reason)
+        -3
+    }
+    println(c)
+
+    var d = convert(-1) catch e {
+        println('converted', e == BAD)
+        -4
+    }
+    println(d)
+
+    source_t source = 0
+    reader_t reader = source
+    var f = reader.read(-1) catch msg {
+        println('interface', msg)
+        -5
+    }
+    println(f)
+}
+--- output.txt
+4
+string negative position
+-2
+struct 12 too far
+-3
+converted true
+-4
+interface negative position
+-5
+
+=== test_errable_in_n
+--- main.n
+import "util.x"
+
+errdef OLD_ERROR
+errdef CONVERTED
+
+fn parse(int at):errable<int,string> {
+    if at < 0 {
+        throw 'negative position'
+    }
+    return at * 2
+}
+
+fn old_style(int at):int! {
+    if at < 0 {
+        throw OLD_ERROR
+    }
+    return at
+}
+
+fn convert(int at):int! {
+    var v = parse(at) catch msg {
+        throw CONVERTED
+    }
+    return v
+}
+
+fn main() {
+    var a = parse(2) catch msg {
+        -1
+    }
+    println(a)
+
+    var b = parse(-1) catch msg {
+        println('value', msg)
+        -2
+    }
+    println(b)
+
+    var c = old_style(-1) catch e {
+        println('errset', e)
+        -3
+    }
+    println(c)
+
+    var d = convert(-1) catch e {
+        println(e)
+        -4
+    }
+    println(d)
+
+    var list = [1, 2]
+    var f = list[5] catch e {
+        println('panic', e == INDEX_OUT_OF_RANGE)
+        -5
+    }
+    println(f)
+
+    util.fail() catch e {
+        println('from .x', e == util.TIMEOUT)
+    }
+}
+--- util.x
+errdef TIMEOUT
+
+pub fn fail()! {
+    throw TIMEOUT
+}
+--- output.txt
+4
+value negative position
+-2
+errset main.OLD_ERROR
+-3
+main.CONVERTED
+-4
+panic true
+-5
+from .x true
+
+=== test_error_type_must_match_to_propagate
+--- main.x
+fn parse(int at):errable<int,string> {
+    if at < 0 {
+        throw 'negative position'
+    }
+    return at
+}
+
+fn load(int at):int! {
+    return parse(at)
+}
+
+fn main() {}
+--- output.txt
+nature-test/main.x:9:19: `parse` fails with string, which cannot propagate into `fn load` that fails with errset_t(u32), catch and convert it
+
+=== test_catch_covers_only_the_call_it_follows
+--- main.x
+errdef BAD
+
+fn parse(int at):errable<int,string> {
+    throw 'negative position'
+}
+
+fn check(int v):int! {
+    throw BAD
+}
+
+fn main() {
+    var a = check(parse(1)) catch e {
+        0
+    }
+}
+--- output.txt
+nature-test/main.x:12:25: calling an errable! fn `parse` requires the current `fn main` errable! as well or be caught.
+
+=== test_bang_after_errable_rejected
+--- main.x
+fn typed():errable<int,i32>! {
+    return 1
+}
+
+fn main() {}
+--- output.txt
+nature-test/main.x:1:3: a fn returning errable<T,E> is already errable, `!` is not needed
+
+=== test_x_error_propagates_into_n
+--- main.n
+import "util.x"
+
+fn main() {
+    util.fail()
+}
+--- util.x
+errdef TIMEOUT
+
+pub fn fail()! {
+    throw TIMEOUT
+}
+--- output.txt
+coroutine 'main' uncaught error: nature-test.util.TIMEOUT at nature-test/main.n:4:14

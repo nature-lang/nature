@@ -870,7 +870,6 @@ impl<'a> Syntax {
                                 | TokenType::If
                                 | TokenType::For
                                 | TokenType::Match
-                                | TokenType::Try
                                 | TokenType::Continue
                                 | TokenType::Const
                                 | TokenType::Break
@@ -3340,6 +3339,29 @@ impl<'a> Syntax {
         Ok(stmt)
     }
 
+    // errdef NAME 'message', the message is optional
+    fn parser_errset_stmt(&mut self) -> Result<Box<Stmt>, SyntaxError> {
+        let mut stmt: Box<Stmt> = self.stmt_new();
+
+        self.must(TokenType::Errdef)?;
+        let ident = self.must(TokenType::Ident)?.clone();
+        let msg = if self.is(TokenType::StringLiteral) {
+            Some(self.must(TokenType::StringLiteral)?.literal.clone())
+        } else {
+            None
+        };
+
+        stmt.node = AstNode::ErrsetDef(Arc::new(Mutex::new(AstErrsetDef {
+            ident: ident.literal.clone(),
+            msg,
+            symbol_id: 0,
+            symbol_start: ident.start,
+            symbol_end: ident.end,
+        })));
+
+        Ok(stmt)
+    }
+
     fn is_impl_fn(&self) -> bool {
         if self.is_basic_type() {
             return true;
@@ -3780,6 +3802,9 @@ impl<'a> Syntax {
             self.parser_typedef_stmt(is_pub)?
         } else if self.is(TokenType::Const) {
             self.parser_constdef_stmt(is_pub)?
+        } else if self.is(TokenType::Errdef) {
+            // an errset is always public, a `pub` before it is accepted and ignored
+            self.parser_errset_stmt()?
         } else {
             return Err(SyntaxError(
                 self.peek().start,
@@ -3864,8 +3889,6 @@ impl<'a> Syntax {
             self.fake_new(expr)
         } else if self.is(TokenType::Select) {
             self.parser_select_stmt()?
-        } else if self.is(TokenType::Try) {
-            self.parser_try_catch_stmt()?
         } else if self.is(TokenType::MacroIdent) {
             let expr = self.parser_expr_with_precedence()?;
             self.fake_new(expr)
@@ -4122,35 +4145,6 @@ impl<'a> Syntax {
         fndef.body = AstBody { stmts: stmt_list, start, end };
 
         fndef
-    }
-
-    fn parser_try_catch_stmt(&mut self) -> Result<Box<Stmt>, SyntaxError> {
-        let mut stmt = self.stmt_new();
-        self.must(TokenType::Try)?;
-
-        let try_body = self.parser_body(false)?;
-
-        self.must(TokenType::Catch)?;
-
-        let error_ident = self.must(TokenType::Ident)?;
-
-        let catch_err = Arc::new(Mutex::new(VarDeclExpr {
-            type_: Type::default(),
-            ident: error_ident.literal.clone(),
-            symbol_start: error_ident.start,
-            symbol_end: error_ident.end,
-            be_capture: false,
-            heap_ident: None,
-            symbol_id: 0,
-            is_pub: false,
-        }));
-
-        let catch_body = self.parser_body(false)?;
-
-        stmt.node = AstNode::TryCatch(try_body, catch_err, catch_body);
-        stmt.end = self.prev().unwrap().end;
-
-        Ok(stmt)
     }
 
     fn parser_select_stmt(&mut self) -> Result<Box<Stmt>, SyntaxError> {
