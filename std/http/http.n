@@ -223,7 +223,6 @@ fn conn_handler():void! {
     var arg = co.arg()
     if arg == 0 {
         panic('conn_handler arg is null')
-        // throw errorf('conn_handler arg is null')
     }
     var conn = arg as ptr<uv.conn_t>
 
