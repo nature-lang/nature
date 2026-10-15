@@ -45,9 +45,9 @@ Assert that the condition is true, panic if false.
 ## errdef INDEX_OUT_OF_RANGE, KEY_NOT_FOUND, TYPE_ASSERT_FAILED
 
 ```
-errdef INDEX_OUT_OF_RANGE
-errdef KEY_NOT_FOUND
-errdef TYPE_ASSERT_FAILED
+errdef INDEX_OUT_OF_RANGE 'index out of range'
+errdef KEY_NOT_FOUND 'key not found in map'
+errdef TYPE_ASSERT_FAILED 'type assert failed'
 ```
 
 An index or slice out of range, a missing map key and a failed `as` panic. A catch right after such an expression gets the panic as one of these errsets instead, in `.x` and `.n`:

@@ -3,8 +3,8 @@ mod reflect
 import unsafe
 import libc
 
-errdef INVALID_HASH
-errdef UNSUPPORTED_TYPE
+errdef INVALID_HASH 'hash must be greater than 0'
+errdef UNSUPPORTED_TYPE 'unsupported type'
 
 pub const NULL = 1
 pub const BOOL = 2

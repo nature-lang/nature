@@ -3,7 +3,7 @@ mod elf
 import syscall
 import io
 
-errdef INVALID_ELF
+errdef INVALID_ELF 'not a valid elf file'
 
 int EI_MAG0 = 0
 u8 ELFMAG0 = 0x7f

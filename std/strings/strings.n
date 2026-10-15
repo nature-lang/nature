@@ -4,8 +4,8 @@ import syscall
 import libc
 import runtime
 
-errdef INVALID_NUMBER
-errdef OUT_OF_RANGE
+errdef INVALID_NUMBER 'invalid number format'
+errdef OUT_OF_RANGE 'number too large'
 
 fn copy_bytes(anyptr dst, int dst_offset, anyptr src, int src_offset, int length) {
     if length == 0 {

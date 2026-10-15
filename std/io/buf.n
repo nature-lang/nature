@@ -1,10 +1,8 @@
 import io
 
-// a reader keeps returning no data
-errdef NO_PROGRESS
+errdef NO_PROGRESS 'reader returns no data'
 
-// a write after one that failed
-errdef WRITE_FAILED
+errdef WRITE_FAILED 'a previous write failed'
 
 pub type reader<T>:io.reader = struct{
     T rd
