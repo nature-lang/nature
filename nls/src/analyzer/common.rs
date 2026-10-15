@@ -250,7 +250,7 @@ impl Type {
             }
             TypeKind::Fn(type_fn) => {
                 let fn_prefix = if type_fn.x { "xfn" } else { "fn" };
-                format!("{}(...):{}{}", fn_prefix, type_fn.return_type, if type_fn.errable { "!" } else { "" })
+                format!("{}(...):{}", fn_prefix, type_fn.return_display())
             }
             TypeKind::Ref(value_type) => {
                 format!("ref<{}>", value_type)
@@ -365,6 +365,23 @@ impl Type {
         };
 
         return *any;
+    }
+
+    // errable<T,E>, which an errable fn returns: the value T or the error E
+    pub fn is_errable(t: &Type) -> bool {
+        t.ident == "errable" && matches!(t.kind, TypeKind::TaggedUnion(..))
+    }
+
+    // T of errable<T,E>, the builtin definition puts the value first
+    pub fn errable_value(t: &Type) -> Type {
+        let TypeKind::TaggedUnion(_, elements) = &t.kind else { unreachable!() };
+        elements[0].type_.clone()
+    }
+
+    // E of errable<T,E>
+    pub fn errable_error(t: &Type) -> Type {
+        let TypeKind::TaggedUnion(_, elements) = &t.kind else { unreachable!() };
+        elements[1].type_.clone()
     }
 
     pub fn is_origin_type(kind: &TypeKind) -> bool {
@@ -653,6 +670,19 @@ pub struct TypeFn {
     pub rest: bool,
     pub x: bool,
     pub tpl: bool,
+}
+
+impl TypeFn {
+    // the return type as it is written: errable<T,errset_t> is T!
+    pub fn return_display(&self) -> String {
+        if Type::is_errable(&self.return_type) && Type::errable_error(&self.return_type).ident == "errset_t" {
+            return format!("{}!", Type::errable_value(&self.return_type));
+        }
+        if self.errable {
+            return format!("{}!", self.return_type);
+        }
+        self.return_type.to_string()
+    }
 }
 
 // #[derive(Debug, Clone)]
@@ -1029,6 +1059,7 @@ pub enum AstNode {
     Typedef(Arc<Mutex<TypedefStmt>>),
     FnDef(Arc<Mutex<AstFnDef>>),
     ConstDef(Arc<Mutex<AstConstDef>>),
+    ErrsetDef(Arc<Mutex<AstErrsetDef>>),
 }
 
 impl AstNode {
@@ -1109,6 +1140,17 @@ pub struct AstConstDef {
     pub symbol_start: usize,
     pub symbol_end: usize,
     pub is_pub: bool,
+}
+
+// `errdef NAME 'message'` declares a named error, an errset. It is always public, and its value has the
+// builtin type errset_t.
+#[derive(Debug, Clone)]
+pub struct AstErrsetDef {
+    pub ident: String,
+    pub msg: Option<String>,
+    pub symbol_id: NodeId,
+    pub symbol_start: usize,
+    pub symbol_end: usize,
 }
 
 #[derive(Debug, Clone)]

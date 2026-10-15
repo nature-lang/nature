@@ -401,6 +401,14 @@ impl<'a> Semantic<'a> {
         }
     }
 
+    /// The type a call of fndef has: T for a fn returning errable<T,E>, else the declared return type.
+    fn call_type(fndef: &AstFnDef) -> Type {
+        if fndef.return_type.ident == "errable" && fndef.return_type.args.len() == 2 {
+            return fndef.return_type.args[0].clone();
+        }
+        fndef.return_type.clone()
+    }
+
     /// Infer type from a function call by looking up the function's return type.
     fn infer_type_from_call(&self, call: &AstCall) -> Option<Type> {
         // The called function is typically an Ident or a SelectExpr (module.fn_name)
@@ -411,7 +419,7 @@ impl<'a> Semantic<'a> {
                         if let SymbolKind::Fn(fndef) = &symbol.kind {
                             let fndef = fndef.lock().unwrap();
                             if !fndef.return_type.kind.is_unknown() {
-                                return Some(fndef.return_type.clone());
+                                return Some(Self::call_type(&fndef));
                             }
                         }
                     }
@@ -429,7 +437,7 @@ impl<'a> Semantic<'a> {
                                 if let SymbolKind::Fn(fndef) = &symbol.kind {
                                     let fndef = fndef.lock().unwrap();
                                     if !fndef.return_type.kind.is_unknown() {
-                                        return Some(fndef.return_type.clone());
+                                        return Some(Self::call_type(&fndef));
                                     }
                                 }
                             }

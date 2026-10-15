@@ -304,6 +304,11 @@ impl<'a> CompletionProvider<'a> {
                 let display_ident = extract_last_ident_part(&typedef.ident);
                 (display_ident.clone(), CompletionItemKind::Struct, Some(detail), display_ident, 1)
             }
+            SymbolKind::Errset(errset) => {
+                let errset = errset.lock().unwrap();
+                let display_ident = extract_last_ident_part(&errset.ident);
+                (display_ident.clone(), CompletionItemKind::Constant, Some("errset_t".to_string()), display_ident, 3)
+            }
         };
 
         CompletionItem {
