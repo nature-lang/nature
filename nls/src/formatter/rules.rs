@@ -385,6 +385,7 @@ impl<'a> Formatter<'a> {
             | TokenType::Var
             | TokenType::Pub
             | TokenType::Const
+            | TokenType::Errdef
             | TokenType::Test
             | TokenType::Fn
             | TokenType::Import

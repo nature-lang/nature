@@ -295,11 +295,7 @@ fn format_signature_from_type(
         .map(|t| type_display(t))
         .collect();
     let fn_prefix = if fn_type.x { "xfn" } else { "fn" };
-    let mut sig = format!("{} {}({}): {}", fn_prefix, name, params.join(", "), fn_type.return_type);
-    if fn_type.errable {
-        sig.push('!');
-    }
-    sig
+    format!("{} {}({}): {}", fn_prefix, name, params.join(", "), fn_type.return_display())
 }
 
 /// Prefer the type's ident for display.

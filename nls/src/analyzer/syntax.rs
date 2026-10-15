@@ -3339,6 +3339,29 @@ impl<'a> Syntax {
         Ok(stmt)
     }
 
+    // errdef NAME 'message', the message is optional
+    fn parser_errset_stmt(&mut self) -> Result<Box<Stmt>, SyntaxError> {
+        let mut stmt: Box<Stmt> = self.stmt_new();
+
+        self.must(TokenType::Errdef)?;
+        let ident = self.must(TokenType::Ident)?.clone();
+        let msg = if self.is(TokenType::StringLiteral) {
+            Some(self.must(TokenType::StringLiteral)?.literal.clone())
+        } else {
+            None
+        };
+
+        stmt.node = AstNode::ErrsetDef(Arc::new(Mutex::new(AstErrsetDef {
+            ident: ident.literal.clone(),
+            msg,
+            symbol_id: 0,
+            symbol_start: ident.start,
+            symbol_end: ident.end,
+        })));
+
+        Ok(stmt)
+    }
+
     fn is_impl_fn(&self) -> bool {
         if self.is_basic_type() {
             return true;
@@ -3779,6 +3802,9 @@ impl<'a> Syntax {
             self.parser_typedef_stmt(is_pub)?
         } else if self.is(TokenType::Const) {
             self.parser_constdef_stmt(is_pub)?
+        } else if self.is(TokenType::Errdef) {
+            // an errset is always public, a `pub` before it is accepted and ignored
+            self.parser_errset_stmt()?
         } else {
             return Err(SyntaxError(
                 self.peek().start,

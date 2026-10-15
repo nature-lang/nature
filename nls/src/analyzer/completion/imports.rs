@@ -106,6 +106,7 @@ impl<'a> CompletionProvider<'a> {
                             let c = c.lock().unwrap();
                             (CompletionItemKind::Constant, format!("const: {}", c.type_))
                         }
+                        SymbolKind::Errset(_) => (CompletionItemKind::Constant, "errset_t".to_string()),
                     };
 
                     completions.push(CompletionItem {
@@ -174,6 +175,7 @@ impl<'a> CompletionProvider<'a> {
                         match &symbol.kind {
                             SymbolKind::Var(_) => "Var",
                             SymbolKind::Const(_) => "Const",
+                            SymbolKind::Errset(_) => "Errset",
                             SymbolKind::Fn(_) => "Fn",
                             SymbolKind::Type(_) => "Type",
                         }
@@ -366,6 +368,7 @@ impl<'a> CompletionProvider<'a> {
                             let const_def = const_mutex.lock().unwrap();
                             (CompletionItemKind::Constant, format!("const: {}", const_def.type_), local_name.clone())
                         }
+                        SymbolKind::Errset(_) => (CompletionItemKind::Constant, "errset_t".to_string(), local_name.clone()),
                     }
                 } else {
                     // Symbol not found in symbol table; still offer it as a basic completion

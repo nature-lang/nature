@@ -576,7 +576,7 @@
                 },
                 {
                     "name": "keyword.other.n",
-                    "match": "\\b(var|let|const|type)\\b"
+                    "match": "\\b(var|let|const|type|errdef)\\b"
                 },
                 {
                     "comment": "struct/enum/union keywords",

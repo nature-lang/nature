@@ -278,6 +278,9 @@ pub enum TokenType {
     #[strum(serialize = "const")]
     Const,
 
+    #[strum(serialize = "errdef")]
+    Errdef,
+
     #[strum(serialize = "test")]
     Test,
 
@@ -420,6 +423,7 @@ impl Token {
             | TokenType::Var
             | TokenType::Pub
             | TokenType::Const
+            | TokenType::Errdef
             | TokenType::Test
             | TokenType::Fn
             | TokenType::Import
@@ -586,6 +590,7 @@ impl Lexer {
             "uint" => TokenType::Uint,
             "var" => TokenType::Var,
             "const" => TokenType::Const,
+            "errdef" => TokenType::Errdef,
             "test" => TokenType::Test,
             // "vec" => TokenType::Vec,
             "void" => TokenType::Void,

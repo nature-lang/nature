@@ -327,7 +327,6 @@ pub struct Typesys<'a> {
     current_fn_mutex: Arc<Mutex<AstFnDef>>,
     worklist: Vec<Arc<Mutex<AstFnDef>>>,
     generics_args_stack: Vec<HashMap<String, Type>>,
-    be_caught: usize,
     ret_target_types: Vec<Type>,
     in_for_count: usize,
     errors: Vec<AnalyzerError>,
@@ -341,7 +340,6 @@ impl<'a> Typesys<'a> {
             worklist: Vec::new(),
             generics_args_stack: Vec::new(),
             current_fn_mutex: Arc::new(Mutex::new(AstFnDef::default())),
-            be_caught: 0,
             ret_target_types: Vec::new(),
             in_for_count: 0,
             errors: Vec::new(),
@@ -744,6 +742,7 @@ impl<'a> Typesys<'a> {
             }
             TypeKind::Fn(type_fn) => {
                 type_fn.return_type = self.reduction_type_visited(type_fn.return_type.clone(), visited)?;
+                self.errable_return(type_fn)?;
 
                 for formal_type in type_fn.param_types.iter_mut() {
                     *formal_type = self.reduction_type_visited(formal_type.clone(), visited)?;
@@ -1731,6 +1730,10 @@ impl<'a> Typesys<'a> {
 
                 return self.infer_fn_decl(fndef_mutex.clone(), Type::default());
             }
+            // an errset is a global name of the builtin type errset_t
+            SymbolKind::Errset(_) => {
+                return self.errset_type();
+            }
             _ => {
                 return Err(AnalyzerError {
                     start: start,
@@ -2449,8 +2452,16 @@ impl<'a> Typesys<'a> {
 
         let fn_type = async_expr.origin_call.left.type_.clone();
 
+        // the runtime takes the error of a coroutine from the errable<void,errset_t> its fn returns, so only
+        // a fn():void! runs without a wrapping closure
+        let mut is_errable_void = false;
         if let TypeKind::Fn(type_fn) = fn_type.kind {
             async_expr.return_type = type_fn.return_type.clone();
+            if type_fn.errable && Type::is_errable(&type_fn.return_type) {
+                is_errable_void =
+                    Type::errable_value(&type_fn.return_type).kind == TypeKind::Void && Type::errable_error(&type_fn.return_type).ident == "errset_t";
+                async_expr.return_type = Type::errable_value(&type_fn.return_type);
+            }
         } else {
             return Err(AnalyzerError {
                 start: expr.start,
@@ -2461,13 +2472,9 @@ impl<'a> Typesys<'a> {
         }
 
         // 构造异步调用
-        let first_arg = if async_expr.return_type.kind == TypeKind::Void && async_expr.origin_call.args.is_empty() {
+        let first_arg = if is_errable_void && async_expr.origin_call.args.is_empty() {
             // 如果没有返回值和参数，直接使用原始函数
-            let mut left = async_expr.origin_call.left.clone();
-
-            if let TypeKind::Fn(type_fn) = &mut left.type_.kind {
-                type_fn.errable = true;
-            }
+            let left = async_expr.origin_call.left.clone();
 
             // 清空闭包函数体以避免推导异常
             {
@@ -2827,7 +2834,8 @@ impl<'a> Typesys<'a> {
             return Ok(infer_target_type);
         }
 
-        if Type::is_integer(&literal_type.kind) && Type::is_integer(&target_kind) {
+        // an errset_t value only comes from an errset name, never from an integer literal
+        if Type::is_integer(&literal_type.kind) && Type::is_integer(&target_kind) && infer_target_type.ident != "errset_t" {
             let (literal_value, is_negative) = if literal_value.starts_with('-') {
                 (literal_value[1..].to_string(), true)
             } else {
@@ -3168,17 +3176,27 @@ impl<'a> Typesys<'a> {
         catch_err_mutex: &Arc<Mutex<VarDeclExpr>>,
         catch_body: &mut AstBody,
     ) -> Result<Type, AnalyzerError> {
-        self.be_caught += 1;
+        // A catch takes the error of the errable<T,E> call it follows: that call is inferred with its error
+        // check off, and the calls in its arguments propagate as usual. An index, map access, slice or `as`
+        // hands its panic to the catch right after it as a builtin errset.
+        let mut error_type = self.errset_type()?;
+        if matches!(try_expr.node, AstNode::Call(..)) && !self.try_rewrite_tagged_union_call(try_expr, &Type::default())? {
+            let (start, end) = (try_expr.start, try_expr.end);
+            let AstNode::Call(call) = &mut try_expr.node else { unreachable!() };
+            let t = self.infer_call(call, Type::default(), start, end, false)?;
+            if let TypeKind::Fn(type_fn) = &call.left.type_.kind {
+                if type_fn.errable && Type::is_errable(&type_fn.return_type) {
+                    error_type = Type::errable_error(&type_fn.return_type);
+                }
+            }
+            try_expr.type_ = self.reduction_type(t)?;
+        }
 
         let right_type = self.infer_right_expr(try_expr, Type::default())?;
 
-        self.be_caught -= 1;
-
-        // reduction errort
         {
             let mut catch_err = catch_err_mutex.lock().unwrap();
-            let errort = self.interface_throwable();
-            catch_err.type_ = errort;
+            catch_err.type_ = error_type;
         }
 
         self.rewrite_var_decl(catch_err_mutex.clone());
@@ -4163,21 +4181,52 @@ impl<'a> Typesys<'a> {
             }
         }
 
+        // the error propagates into the current fn, which must fail with the same type
         if type_fn.errable && check_errable {
-            // 当前 fn 必须允许 is_errable 或者当前位于 be_caught 中
-            let current_fn = self.current_fn_mutex.lock().unwrap();
-            if self.be_caught == 0 && !current_fn.is_errable {
-                return Err(AnalyzerError {
+            let (fn_name, fn_error_type) = {
+                let current_fn = self.current_fn_mutex.lock().unwrap();
+                let fn_error_type = match &current_fn.type_.kind {
+                    TypeKind::Fn(current_type_fn) if current_type_fn.errable && Type::is_errable(&current_type_fn.return_type) => {
+                        Some(Type::errable_error(&current_type_fn.return_type))
+                    }
+                    _ => None,
+                };
+                (current_fn.fn_name.clone(), fn_error_type)
+            };
+            let callee = if type_fn.name.is_empty() {
+                "lambda".to_string()
+            } else {
+                type_fn.name.clone()
+            };
+
+            match fn_error_type {
+                None => self.errors_push(
                     start,
                     end,
-                    message: format!(
+                    format!(
                         "calling an errable! fn `{}` requires the current `fn {}` errable! as well or be caught.",
-                        if type_fn.name.is_empty() { "lambda".to_string() } else { type_fn.name },
-                        current_fn.fn_name
+                        callee, fn_name
                     ),
-                    is_warning: false,
-                                    });
+                ),
+                Some(fn_error_type) if Type::is_errable(&type_fn.return_type) => {
+                    let error_type = Type::errable_error(&type_fn.return_type);
+                    if !self.type_compare(&fn_error_type, &error_type) {
+                        self.errors_push(
+                            start,
+                            end,
+                            format!(
+                                "`{}` fails with {}, which cannot propagate into `fn {}` that fails with {}, catch and convert it",
+                                callee, error_type, fn_name, fn_error_type
+                            ),
+                        );
+                    }
+                }
+                Some(_) => {}
             }
+        }
+
+        if type_fn.errable && Type::is_errable(&type_fn.return_type) {
+            return Ok(Type::errable_value(&type_fn.return_type));
         }
 
         return Ok(type_fn.return_type.clone());
@@ -4274,13 +4323,41 @@ impl<'a> Typesys<'a> {
         self.in_for_count -= 1;
     }
 
-    pub fn interface_throwable(&mut self) -> Type {
-        let mut result = Type::ident_new("throwable".to_string(), TypeIdentKind::Interface);
+    // a type the builtin module declares, such as errset_t or errable
+    fn builtin_type(&mut self, ident: &str, args: Vec<Type>) -> Result<Type, AnalyzerError> {
+        let Some(symbol_id) = self.symbol_table.find_symbol_id(ident, self.symbol_table.global_scope_id) else {
+            return Err(AnalyzerError {
+                start: 0,
+                end: 0,
+                message: format!("builtin type '{}' not found", ident),
+                is_warning: false,
+            });
+        };
 
-        // find symbol id from global
-        let symbol_id = self.symbol_table.find_symbol_id("throwable", self.symbol_table.global_scope_id).unwrap();
+        let mut result = Type::ident_new(ident.to_string(), TypeIdentKind::Def);
         result.symbol_id = symbol_id;
-        return self.reduction_type(result).unwrap();
+        result.args = args;
+        self.reduction_type(result)
+    }
+
+    // the builtin type of an errset value
+    pub fn errset_type(&mut self) -> Result<Type, AnalyzerError> {
+        self.builtin_type("errset_t", Vec::new())
+    }
+
+    // A fn returning errable<T,E> is errable with error type E. `T!` is shorthand for errable<T,errset_t>.
+    pub fn errable_return(&mut self, type_fn: &mut TypeFn) -> Result<(), AnalyzerError> {
+        if Type::is_errable(&type_fn.return_type) {
+            type_fn.errable = true;
+            return Ok(());
+        }
+        if !type_fn.errable {
+            return Ok(());
+        }
+
+        let errset_type = self.errset_type()?;
+        type_fn.return_type = self.builtin_type("errable", vec![type_fn.return_type.clone(), errset_type])?;
+        Ok(())
     }
 
     pub fn infer_stmt(&mut self, stmt: &mut Box<Stmt>) -> Result<(), AnalyzerError> {
@@ -4414,12 +4491,17 @@ impl<'a> Typesys<'a> {
             }
             AstNode::Throw(expr) => {
                 {
-                    let (is_errable, fn_name, return_type) = {
+                    // a throw gives the error of the errable<T,E> the current fn returns
+                    let (error_type, fn_name, return_type) = {
                         let current_fn = self.current_fn_mutex.lock().unwrap();
-                        (current_fn.is_errable, current_fn.fn_name.clone(), current_fn.return_type.clone())
+                        let error_type = match &current_fn.type_.kind {
+                            TypeKind::Fn(type_fn) if type_fn.errable && Type::is_errable(&type_fn.return_type) => Type::errable_error(&type_fn.return_type),
+                            _ => Type::default(),
+                        };
+                        (error_type, current_fn.fn_name.clone(), current_fn.return_type.clone())
                     };
 
-                    if !is_errable {
+                    if error_type.kind.is_unknown() {
                         //  "can't use throw stmt in a fn without an errable! declaration. example: fn %s(...):%s!",
                         self.errors_push(
                             expr.start,
@@ -4430,14 +4512,18 @@ impl<'a> Typesys<'a> {
                             ),
                         );
                     }
-                    let target_type = self.interface_throwable();
-                    self.infer_right_expr(expr, target_type)?;
+                    self.infer_right_expr(expr, error_type)?;
                 }
             }
             AstNode::Return(expr_option) => {
+                // a fn returning errable<T,E> checks `return v` against T
                 let target_type = {
                     let current_fn = self.current_fn_mutex.lock().unwrap();
-                    current_fn.return_type.clone()
+                    if Type::is_errable(&current_fn.return_type) {
+                        Type::errable_value(&current_fn.return_type)
+                    } else {
+                        current_fn.return_type.clone()
+                    }
                 };
 
                 if let Some(expr) = expr_option {
@@ -5005,7 +5091,7 @@ impl<'a> Typesys<'a> {
         }
 
         // type done
-        let mut result = Type::new(TypeKind::Fn(Box::new(TypeFn {
+        let mut type_fn = TypeFn {
             return_type,
             name: fndef.fn_name.clone(),
             tpl: fndef.is_tpl,
@@ -5013,7 +5099,16 @@ impl<'a> Typesys<'a> {
             rest: fndef.rest_param,
             x: fndef.is_x,
             param_types,
-        })));
+        };
+        if fndef.is_errable && Type::is_errable(&type_fn.return_type) {
+            self.errors_push(
+                fndef.symbol_start,
+                fndef.symbol_end,
+                "a fn returning errable<T,E> is already errable, `!` is not needed".to_string(),
+            );
+        }
+        self.errable_return(&mut type_fn)?;
+        let mut result = Type::new(TypeKind::Fn(Box::new(type_fn)));
 
         if target_type.kind.is_exist() {
             if self.type_compare_no_ident(target_type.clone(), result.clone()) {

@@ -2,7 +2,7 @@ use log::{debug, trace};
 
 use crate::utils::format_global_ident;
 
-use super::common::{AstConstDef, AstFnDef, GenericsParam, Type, TypeIdentKind, TypeKind, TypedefStmt, VarDeclExpr};
+use super::common::{AstConstDef, AstErrsetDef, AstFnDef, GenericsParam, Type, TypeIdentKind, TypeKind, TypedefStmt, VarDeclExpr};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
@@ -51,6 +51,7 @@ pub enum SymbolKind {
     Fn(Arc<Mutex<AstFnDef>>),
     Type(Arc<Mutex<TypedefStmt>>),
     Const(Arc<Mutex<AstConstDef>>),
+    Errset(Arc<Mutex<AstErrsetDef>>),
 }
 
 // symbol table 可以同时处理多个文件的 scope, 存在一个 global scope 管理所有的全局 scope, 符号注册到 global scope 时，define_ident 需要携带 package_name 保证符号的唯一性
@@ -152,6 +153,8 @@ impl SymbolTable {
         builtins.push(("f32".to_string(), Vec::new(), Type::new(TypeKind::Float32)));
         builtins.push(("f64".to_string(), Vec::new(), Type::new(TypeKind::Float64)));
         builtins.push(("string".to_string(), Vec::new(), Type::new(TypeKind::String)));
+        // the type of an errset value, a u32 id at run time
+        builtins.push(("errset_t".to_string(), Vec::new(), Type::new(TypeKind::Uint32)));
 
         let mut vec_params = Vec::new();
         vec_params.push(GenericsParam::new("T".to_string()));
