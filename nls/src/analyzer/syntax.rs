@@ -509,7 +509,7 @@ impl<'a> Syntax {
                 infix: None,
                 infix_precedence: SyntaxPrecedence::Null,
             },
-            Chan => ParserRule {
+            Chan | TokenType::String => ParserRule {
                 prefix: Some(Self::parser_ident_expr),
                 infix: None,
                 infix_precedence: SyntaxPrecedence::Null,
@@ -2111,8 +2111,11 @@ impl<'a> Syntax {
 
     fn parser_ident_expr(&mut self) -> Result<Box<Expr>, SyntaxError> {
         let mut expr = self.expr_new();
+        // chan and string are keyword tokens, a static call such as string.alloc() starts with one
         let ident_token = if self.is(TokenType::Chan) {
             self.must(TokenType::Chan)?
+        } else if self.is(TokenType::String) {
+            self.must(TokenType::String)?
         } else {
             self.must(TokenType::Ident)?
         };

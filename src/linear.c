@@ -420,12 +420,15 @@ static lir_operand_t *linear_default_string(module_t *m, type_t t, lir_operand_t
     lir_operand_t *elem_size_dst = indirect_addr_operand(m, type_kind_new(TYPE_INT64), target,
                                                          offsetof(n_string_t, element_size));
     lir_operand_t *hash_dst = indirect_addr_operand(m, type_kind_new(TYPE_INT64), target, offsetof(n_string_t, hash));
+    lir_operand_t *allocator_dst = indirect_addr_operand(m, type_kind_new(TYPE_ANYPTR), target,
+                                                         offsetof(n_string_t, allocator));
 
     OP_PUSH(lir_op_move(data_dst, int_operand(0)));
     OP_PUSH(lir_op_move(len_dst, int_operand(0)));
     OP_PUSH(lir_op_move(cap_dst, int_operand(0)));
     OP_PUSH(lir_op_move(elem_size_dst, int_operand(type_kind_sizeof(TYPE_UINT8))));
     OP_PUSH(lir_op_move(hash_dst, int_operand(type_hash(t))));
+    OP_PUSH(lir_op_move(allocator_dst, int_operand(0)));
 
     return target;
 }
@@ -443,6 +446,8 @@ static lir_operand_t *linear_string(module_t *m, type_t t, lir_operand_t *raw_st
     lir_operand_t *elem_size_dst = indirect_addr_operand(m, type_kind_new(TYPE_INT64), target,
                                                          offsetof(n_string_t, element_size));
     lir_operand_t *hash_dst = indirect_addr_operand(m, type_kind_new(TYPE_INT64), target, offsetof(n_string_t, hash));
+    lir_operand_t *allocator_dst = indirect_addr_operand(m, type_kind_new(TYPE_ANYPTR), target,
+                                                         offsetof(n_string_t, allocator));
 
     // string 是不可变对象，literal 可以直接引用 .data 段 raw_string
     OP_PUSH(lir_op_move(data_dst, raw_string));
@@ -450,6 +455,8 @@ static lir_operand_t *linear_string(module_t *m, type_t t, lir_operand_t *raw_st
     OP_PUSH(lir_op_move(cap_dst, int_operand(length + 1)));
     OP_PUSH(lir_op_move(elem_size_dst, int_operand(type_kind_sizeof(TYPE_UINT8))));
     OP_PUSH(lir_op_move(hash_dst, int_operand(type_hash(t))));
+    // a literal owns no memory, string.deinit leaves it alone
+    OP_PUSH(lir_op_move(allocator_dst, int_operand(0)));
 
     return target;
 }

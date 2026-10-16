@@ -1651,7 +1651,8 @@ static ast_expr_t parser_ident_expr(module_t *m) {
     // 这里传递一个 precedence 参数, 基于该参数判断是否
     ast_expr_t result = expr_new(m);
     token_t *ident_token = NULL;
-    if (parser_is(m, TOKEN_CHAN)) {
+    // chan and string are keyword tokens, a static call such as string.alloc() starts with one
+    if (parser_is(m, TOKEN_CHAN) || parser_is(m, TOKEN_STRING)) {
         ident_token = parser_advance(m);
     } else {
         ident_token = parser_must(m, TOKEN_IDENT);
@@ -3396,6 +3397,7 @@ static parser_rule rules[] = {
     // 以 ident 开头的前缀表达式
     [TOKEN_IDENT] = {parser_ident_expr, NULL, PRECEDENCE_NULL},
     [TOKEN_CHAN] = {parser_ident_expr, NULL, PRECEDENCE_NULL},
+    [TOKEN_STRING] = {parser_ident_expr, NULL, PRECEDENCE_NULL},
     [TOKEN_EOF] = {NULL, NULL, PRECEDENCE_NULL},
 };
 
