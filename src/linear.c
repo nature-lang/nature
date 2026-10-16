@@ -1139,6 +1139,23 @@ static lir_operand_t *linear_ident(module_t *m, ast_expr_t expr, lir_operand_t *
     exit(1);
 }
 
+// a value with pointers, such as a string or a struct, copied as a block where the gc may have scanned already
+static bool linear_need_barrier_rtype(type_t t) {
+    return t.storage_kind == STORAGE_KIND_IND && ct_rtype_has_ptr(t);
+}
+
+/**
+ * write_barrier_rtype copies the value and has the gc scan the object it lands in again, as write_barrier does
+ * for a single pointer
+ * @param dst_ref the address the value goes to
+ * @param src the value
+ */
+static void linear_write_barrier_rtype(module_t *m, type_t t, lir_operand_t *dst_ref, lir_operand_t *src) {
+    lir_operand_t *src_ref = lea_operand_pointer(m, src);
+    push_rt_call(m, RT_CALL_WRITE_BARRIER_RTYPE, NULL, 4, dst_ref, src_ref, int_operand(t.storage_size),
+                 int_operand(type_hash(t)));
+}
+
 /**
  * - 一旦将 addr 地址暴露出来，如果在 linear_expr 中存在 list push 操作就会造成 list.data 整体迁移，导致 addr 地址失效
  * - 应该总是优先编译右值，然后将右值 move 到左值中，避免出现 addr grow 的问题
@@ -1158,6 +1175,8 @@ static void linear_vec_assign(module_t *m, ast_assign_stmt_t *stmt) {
     if (vec_element_type.storage_kind == STORAGE_KIND_PTR || vec_element_type.kind == TYPE_ANYPTR) {
         // target 已经是指针了，不需要再次计算 slot
         push_rt_call(m, RT_CALL_WRITE_BARRIER, NULL, 2, target, src);
+    } else if (linear_need_barrier_rtype(vec_element_type)) {
+        linear_write_barrier_rtype(m, vec_element_type, target, src);
     } else {
         if (vec_element_type.storage_kind == STORAGE_KIND_DIR) {
             target = indirect_addr_operand(m, vec_element_type, target, 0);
@@ -1175,6 +1194,10 @@ static void linear_array_assign(module_t *m, ast_assign_stmt_t *stmt) {
         lir_operand_t *dst_slot = lea_operand_pointer(m, target);
 
         push_rt_call(m, RT_CALL_WRITE_BARRIER, NULL, 2, dst_slot, new_obj);
+    } else if (linear_need_barrier_rtype(stmt->left.type)) {
+        lir_operand_t *src = linear_expr(m, stmt->right, NULL);
+        lir_operand_t *dst_ref = lea_operand_pointer(m, target);
+        linear_write_barrier_rtype(m, stmt->left.type, dst_ref, src);
     } else {
         linear_expr(m, stmt->right, target);
     }
@@ -1196,6 +1219,10 @@ static void linear_tuple_assign(module_t *m, ast_assign_stmt_t *stmt) {
         lir_operand_t *obj = linear_expr(m, stmt->right, NULL);
         lir_operand_t *dst_slot = lea_operand_pointer(m, dst);
         push_rt_call(m, RT_CALL_WRITE_BARRIER, NULL, 2, dst_slot, obj);
+    } else if (linear_need_barrier_rtype(stmt->left.type)) {
+        lir_operand_t *src = linear_expr(m, stmt->right, NULL);
+        lir_operand_t *dst_ref = lea_operand_pointer(m, dst);
+        linear_write_barrier_rtype(m, stmt->left.type, dst_ref, src);
     } else {
         if (stmt->left.type.storage_kind == STORAGE_KIND_IND) {
             dst = lea_operand_pointer(m, dst);
@@ -1244,7 +1271,9 @@ static void linear_env_assign(module_t *m, ast_assign_stmt_t *stmt) {
         lir_operand_t *dst_ptr = temp_var_operand(m, type_refof(stmt->right.type));
         OP_PUSH(lir_op_move(dst_ptr, env_offset_operand)); // mov env_values[0] -> dst_ptr
 
-        if (stmt->left.type.storage_kind == STORAGE_KIND_IND) {
+        if (linear_need_barrier_rtype(stmt->left.type)) {
+            linear_write_barrier_rtype(m, stmt->left.type, dst_ptr, src);
+        } else if (stmt->left.type.storage_kind == STORAGE_KIND_IND) {
             linked_concat(m->current_closure->operations, lir_memory_mov(m, size, dst_ptr, src));
         } else {
             lir_operand_t *dst = indirect_addr_operand(m, stmt->left.type, dst_ptr, 0);
@@ -1273,6 +1302,9 @@ static void linear_map_assign(module_t *m, ast_assign_stmt_t *stmt) {
         // 不包含 struct/array
         lir_operand_t *obj = linear_expr(m, stmt->right, NULL);
         push_rt_call(m, RT_CALL_WRITE_BARRIER, NULL, 2, dst, obj);
+    } else if (linear_need_barrier_rtype(stmt->left.type)) {
+        lir_operand_t *src = linear_expr(m, stmt->right, NULL);
+        linear_write_barrier_rtype(m, stmt->left.type, dst, src);
     } else {
         if (stmt->right.type.storage_kind != STORAGE_KIND_IND) {
             dst = indirect_addr_operand(m, stmt->right.type, dst, 0);
@@ -1316,6 +1348,10 @@ static void linear_struct_assign(module_t *m, ast_assign_stmt_t *stmt) {
         //        obj = lea_operand_pointer(m, obj);
 
         push_rt_call(m, RT_CALL_WRITE_BARRIER, NULL, 2, dst_slot, obj);
+    } else if (linear_need_barrier_rtype(stmt->left.type)) {
+        lir_operand_t *src = linear_expr(m, stmt->right, NULL);
+        lir_operand_t *dst_ref = lea_operand_pointer(m, dst_slot);
+        linear_write_barrier_rtype(m, stmt->left.type, dst_ref, src);
     } else {
         // lea [rax+16], rcx
         if (stmt->left.type.storage_kind == STORAGE_KIND_IND) {
@@ -1334,6 +1370,17 @@ static void linear_ia_ptr_assign(module_t *m, ast_assign_stmt_t *stmt) {
     lir_operand_t *src = linear_expr(m, stmt->right, NULL);
 
     lir_operand_t *ptr_operand = linear_expr(m, unary_expr->operand, NULL);
+
+    // the pointer can point into the heap, as a field or an element does
+    if (is_gc_alloc(stmt->left.type.kind)) {
+        push_rt_call(m, RT_CALL_WRITE_BARRIER, NULL, 2, ptr_operand, src);
+        return;
+    }
+
+    if (linear_need_barrier_rtype(stmt->left.type)) {
+        linear_write_barrier_rtype(m, stmt->left.type, ptr_operand, src);
+        return;
+    }
 
     // *ptr = [a, b, c]
     // *ptr = 12

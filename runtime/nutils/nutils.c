@@ -805,6 +805,17 @@ void write_barrier(void *slot, void *new_obj) {
     rti_write_barrier_ptr(slot, new_obj, false);
 }
 
+// compiled code stores a value with pointers, such as a string or a struct, through here. the copy and the
+// barrier happen in one call, so no preemption can fall between them
+void write_barrier_rtype(void *dst, void *src, int64_t size, int64_t rtype_hash) {
+    if (!gc_barrier_get()) {
+        memmove(dst, src, size);
+        return;
+    }
+
+    rti_write_barrier_rtype(dst, src, rt_find_rtype(rtype_hash));
+}
+
 void rti_write_barrier_rtype(void *dst, void *src, rtype_t *rtype) {
     memmove(dst, src, rtype->storage_size);
 
