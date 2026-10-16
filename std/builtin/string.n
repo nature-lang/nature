@@ -1,13 +1,3 @@
 import runtime
 // the string methods of the strings module, such as split and trim, are available to every module
 import strings
-
-#linkid rt_string_length
-pub fn string.len(*self):int
-
-#linkid rt_string_ref
-pub fn string.ref(*self):anyptr
-
-pub fn string.char(*self):u8 {
-    return (*self)[0]
-}
