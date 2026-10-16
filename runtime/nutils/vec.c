@@ -204,24 +204,7 @@ void rti_vec_assign(n_vec_t *l, uint64_t index, void *ref, rtype_t *element_rtyp
     uint64_t offset = l->element_size * index; // (size unit byte) * index
     void *p = l->data + offset;
 
-    memmove(p, ref, l->element_size);
-
-    if (!gc_barrier_get() || element_rtype->last_ptr == 0) {
-        return;
-    }
-
-    uint8_t *gc_bits = RTDATA(element_rtype->malloc_gc_bits_offset);
-    if (element_rtype->malloc_gc_bits_offset == -1) {
-        gc_bits = (uint8_t *) &element_rtype->gc_bits;
-    }
-    uint64_t slot_count = align_up(element_rtype->storage_size, POINTER_SIZE) / POINTER_SIZE;
-    for (uint64_t i = 0; i < slot_count; ++i) {
-        if (!bitmap_test(gc_bits, i)) {
-            continue;
-        }
-        void **slot = (void **) ((uint8_t *) p + (i * POINTER_SIZE));
-        rti_write_barrier_ptr(slot, *slot, false);
-    }
+    rti_write_barrier_rtype(p, ref, element_rtype);
 }
 
 uint64_t rt_vec_length(n_vec_t *l) {
@@ -449,6 +432,10 @@ uint64_t rt_vec_copy(n_vec_t *dst, n_vec_t src) {
     uint64_t copy_len = src.length < dst->length ? src.length : dst->length;
 
     if (copy_len > 0) {
+        // the elements the copy overwrites can live on in a stack the gc has scanned
+        if (gc_barrier_get()) {
+            shade_range_grey(dst->data, copy_len * src.element_size);
+        }
         memmove(dst->data, src.data, copy_len * src.element_size);
     }
 

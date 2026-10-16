@@ -52,9 +52,10 @@ void map_grow(n_map_t *m) {
 
     m->length = 0;
     m->capacity *= 2;
-    m->key_data = rti_array_new(key_rtype, m->capacity);
-    m->value_data = rti_array_new(value_rtype, m->capacity);
-    m->hash_table = rti_gc_malloc(sizeof(int64_t) * m->capacity, NULL);
+    // the barrier shades the old arrays, the values reach the new ones by a plain copy below
+    rti_write_barrier_ptr(&m->key_data, rti_array_new(key_rtype, m->capacity), false);
+    rti_write_barrier_ptr(&m->value_data, rti_array_new(value_rtype, m->capacity), false);
+    rti_write_barrier_ptr(&m->hash_table, rti_gc_malloc(sizeof(int64_t) * m->capacity, NULL), false);
 
     // 对所有的 key 进行 rehash, i 就是 data_index
     for (int data_index = 0; data_index < old_map.length; ++data_index) {
@@ -266,6 +267,9 @@ void rt_map_delete(n_map_t *m, void *key_ref) {
     }
 
     m->hash_table[hash_index] = (1ULL << HASH_SET) | (1ULL << HASH_DELETED);
+    // the cleared key and value can live on in a stack the gc has scanned
+    rti_shade_rtype(m->key_data + last_data_index * key_size, key_rtype);
+    rti_shade_rtype(m->value_data + last_data_index * value_size, value_rtype);
     memset(m->key_data + last_data_index * key_size, 0, key_size);
     memset(m->value_data + last_data_index * value_size, 0, value_size);
     m->length--;

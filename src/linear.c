@@ -1408,6 +1408,21 @@ static void linear_ident_assign(module_t *m, ast_assign_stmt_t *stmt) {
     lir_operand_t *dst = linear_ident(m, stmt->left, NULL); // ident
 
     assert(stmt->left.type.kind > 0 && stmt->left.type.kind != TYPE_UNKNOWN);
+
+    // a local the heap holds, a captured one, a large array or a param moved to the heap, takes the barrier a
+    // field does
+    if (linear_need_barrier_rtype(stmt->left.type)) {
+        ast_ident *ident = stmt->left.value;
+        symbol_t *s = symbol_table_get_noref(ident->literal);
+        if (s && s->type == SYMBOL_VAR && s->is_local) {
+            ast_var_decl_t *var_decl = s->ast_value;
+            if (var_decl->type.in_heap || var_decl->heap_ident) {
+                linear_write_barrier_rtype(m, stmt->left.type, lea_operand_pointer(m, dst), src);
+                return;
+            }
+        }
+    }
+
     linear_super_move(m, stmt->left.type, dst, src);
 }
 

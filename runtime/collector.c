@@ -60,6 +60,43 @@ void shade_obj_grey(void *obj) {
     }
 }
 
+/**
+ * the deletion barrier: a store drops ptr from the heap while a stack the gc has scanned can still hold it. the
+ * object joins the worklist unless the gc has marked it, so it lives through this cycle
+ */
+void shade_ptr_grey(void *ptr) {
+    addr_t addr = (addr_t) ptr;
+    if (!in_heap(addr)) {
+        return;
+    }
+
+    mspan_t *span = span_of(addr);
+    if (!span) {
+        return;
+    }
+
+    // marked already, a store in a loop would otherwise queue the same object again and again. a racy read can
+    // only see the bit late, which queues the object once more
+    uint64_t obj_index = (addr - span->base) / span->obj_size;
+    if (bitmap_test(span->gcmark_bits, obj_index)) {
+        return;
+    }
+
+    n_processor_t *p = processor_get();
+    if (p && p->gc_work_finished < memory->gc_count) {
+        insert_gc_worklist(&p->gc_worklist, ptr);
+    } else {
+        insert_gc_worklist(&global_gc_worklist, ptr);
+    }
+}
+
+// the deletion barrier for memory whose pointer slots are unknown, every word that points into the heap is kept
+void shade_range_grey(void *start, uint64_t size) {
+    for (uint64_t offset = 0; offset + POINTER_SIZE <= size; offset += POINTER_SIZE) {
+        shade_ptr_grey((void *) fetch_addr_value((addr_t) start + offset));
+    }
+}
+
 void rt_shade_obj_with_barrier(void *new_obj) {
     //    n_processor_t *p = processor_get();
     // 独享线程进行 write barrier 之前需要尝试获取线程锁, 避免与 gc_work 冲突
@@ -866,7 +903,9 @@ static void inject_gc_work_coroutine() {
         coroutine_t *gc_co = rt_coroutine_new((void *) gc_work, FLAG(CO_FLAG_RTFN) | FLAG(CO_FLAG_DIRECT), 0, NULL);
 
         rt_linked_fixalloc_push(&p->co_list, gc_co);
-        rt_linked_fixalloc_push(&p->runnable_list, gc_co);
+        // first in line, so the processor scans its stacks before any of them runs again: with the deletion barrier
+        // the cycle then keeps everything that was reachable when it started
+        rt_linked_fixalloc_push_heap(&p->runnable_list, gc_co);
     }
 
     RDEBUGF("[runtime_gc.inject_gc_work_coroutine] inject gc work coroutine completed");
