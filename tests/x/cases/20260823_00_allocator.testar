@@ -103,6 +103,8 @@ fn main() {
     defer ar.deinit()
 
     var list = vec<int>.alloc(ar, 0, 3)
+    // the allocator box (32) and the elements (24) both come from the arena
+    println(ar.current.used)
     for int i = 0; i < 3; i += 1 {
         list[i] = i * 10
     }
@@ -111,6 +113,7 @@ fn main() {
 }
 
 --- output.txt
+56
 4 0 20 99
 
 === test_vec_from_n

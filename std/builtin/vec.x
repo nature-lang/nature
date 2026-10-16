@@ -2,7 +2,6 @@
 // vec_t header or the allocator behind it. an allocator backed vec never takes the gc branch,
 // the allocator == 0 guard keeps that path for gc owned vecs built from .n.
 import allocator.types.{allocatable}
-import allocator as ac
 import reflect.{vec_t}
 import libc
 
@@ -20,7 +19,10 @@ pub fn vec<T>.alloc(allocatable a, T default_value, int len):vec<T> {
 
     int cap = len
 
-    var ap = ac.new<allocatable>(a)
+    // the header has room for a pointer only, so the allocator is boxed, in memory from the allocator
+    // itself: deinit frees the box through it, and an arena releases it together with the elements
+    ptr<allocatable> ap = a.alloc(@sizeof(allocatable)) as ptr<allocatable>
+    *ap = a
 
     var temp = vec_t{
         data: 0,
