@@ -966,22 +966,23 @@ static inline void ct_register_rtype(type_t t) {
         rtype_t rtype = reflect_type(t);
         assert(rtype.gc_heap_size >= 0);
         assert(rtype.hash == hash);
-        rtype_t *mem_rtype = rtype_push(rtype);
-        table_set(ct_rtype_table, itoa(rtype.hash), mem_rtype);
+        rtype_push(rtype);
+        // the index plus one, a pointer into ct_rtype_list would dangle once the list grows
+        table_set(ct_rtype_table, itoa(rtype.hash), (void *) ct_rtype_list->length);
     }
 }
 
 // the index of a registered rtype in rt_rtype_data, which is ct_rtype_list in registration order
 static inline int64_t ct_rtype_index(int64_t hash) {
-    for (int64_t i = 0; i < ct_rtype_list->length; ++i) {
-        rtype_t *rtype = ct_list_value(ct_rtype_list, i);
-        if (rtype->hash == hash) {
-            return i;
-        }
-    }
+    int64_t index = (int64_t) table_get(ct_rtype_table, itoa(hash)) - 1;
+    assertf(index >= 0, "rtype %ld is not registered", hash);
+    return index;
+}
 
-    assertf(false, "rtype %ld is not registered", hash);
-    return -1;
+// whether a value of the type holds a pointer the gc traces
+static inline bool ct_rtype_has_ptr(type_t t) {
+    rtype_t *rtype = ct_list_value(ct_rtype_list, ct_rtype_index(type_hash(t)));
+    return rtype->last_ptr > 0;
 }
 
 #endif //NATURE_SRC_RTYPE_H_

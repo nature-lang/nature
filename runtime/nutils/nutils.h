@@ -67,7 +67,11 @@ void rti_write_barrier_ptr(void *slot, void *new_obj, bool mark_black_new_obj);
 
 void rti_write_barrier_rtype(void *dst, void *src, rtype_t *rtype);
 
+void rti_shade_rtype(void *p, rtype_t *rtype);
+
 void write_barrier(void *slot, void *new_obj);
+
+void write_barrier_rtype(void *dst, void *src, int64_t size, int64_t rtype_hash);
 
 void ptr_valid(void *ptr);
 

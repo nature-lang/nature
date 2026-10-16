@@ -1,0 +1,203 @@
+=== test_moved_pointers_survive_gc
+--- main.n
+import co
+import fmt
+import runtime
+
+type holder_t = struct{
+    string s
+}
+
+type bag_t = struct{
+    [string] list
+}
+
+bool swapping = true
+bool trashing = true
+[string;64] kept_global = ['';64]
+
+// every value is 41 bytes, the size class the trash below reuses
+fn value_of(int id):string {
+    return fmt.sprintf('value-%08d-abcdefghijklmnopqrstuvwxyz', id)
+}
+
+// the id of a value, -1 once its bytes were reused for something else
+fn id_of(string s):int {
+    if s.len() != 41 {
+        return -1
+    }
+
+    if s[0] != 118 || s[1] != 97 || s[2] != 108 || s[3] != 117 || s[4] != 101 || s[5] != 45 {
+        return -1
+    }
+
+    int id = 0
+    for int k = 6; k < 14; k += 1 {
+        int d = (s[k] as int) - 48
+        if d < 0 || d > 9 {
+            return -1
+        }
+        id = id * 10 + d
+    }
+
+    return id
+}
+
+fn next(int seed):int {
+    return (seed * 1103515245 + 12345) % 2147483648
+}
+
+fn make_holders(int n):[ref<holder_t>] {
+    var holders = vec<ref<holder_t>>.cap_of(n)
+    for int i = 0; i < n; i += 1 {
+        holders.push(new holder_t(s = value_of(i)))
+    }
+    return holders
+}
+
+// strings that die at once, so a buffer the gc wrongly frees is soon reused
+fn trash():int {
+    int count = 0
+    for trashing {
+        for int k = 0; k < 1000; k += 1 {
+            var s = fmt.sprintf('trash-%08d-ZZZZZZZZZZZZZZZZZZZZZZZZZZ', count)
+            count += s.len() - 40
+        }
+        co.sleep(1)
+    }
+
+    return count
+}
+
+// the string moves between two objects while the gc may have scanned one of them and not the other
+fn swap(ref<holder_t> a, ref<holder_t> b) {
+    var t = a.s
+    a.s = b.s
+    b.s = t
+}
+
+fn mutate([ref<holder_t>] holders, int seed):int {
+    int n = holders.len()
+    int rounds = 0
+    for swapping {
+        for int r = 0; r < 1000; r += 1 {
+            seed = next(seed)
+            int i = seed % n
+            seed = next(seed)
+            int j = seed % n
+            swap(holders[i], holders[j])
+        }
+        rounds += 1
+    }
+
+    return rounds
+}
+
+// main moves strings out of the objects itself, between turns of the gc coroutine on its processor: that scans
+// this stack when a cycle starts, then marks objects in batches. a string moves to a stack array, a global array
+// and a new object, places the gc has passed already, and then leaves the object it came from
+fn move_out([ref<holder_t>] holders, [ref<holder_t>] outs, [ref<bag_t>] bags):int {
+    int n = holders.len()
+    int lost = 0
+    int seed = 7
+    [string;64] kept = ['';64]
+    [int;64] ids = [0;64]
+    for int c = 0; c < 25; c += 1 {
+        runtime.gc()
+        co.yield()
+        for int j = 0; j < 64; j += 1 {
+            seed = next(seed)
+            int i = seed % n
+            kept[j] = holders[i].s
+            kept_global[j] = holders[i].s
+            ids[j] = id_of(holders[i].s)
+            outs[i] = new holder_t(s = holders[i].s)
+            holders[i].s = value_of(i)
+
+            // past the capacity, append copies the strings into a new array and drops the old one
+            int b = i % bags.len()
+            if bags[b].list.len() == 4 {
+                var extra = vec<string>.cap_of(1)
+                extra.push(value_of(b))
+                bags[b].list.append(extra)
+            }
+            co.yield()
+        }
+
+        co.sleep(20)
+
+        for int j = 0; j < 64; j += 1 {
+            if id_of(kept[j]) != ids[j] || id_of(kept_global[j]) != ids[j] {
+                lost += 1
+            }
+        }
+    }
+
+    return lost
+}
+
+fn main() {
+    int n = 20000
+    var holders = make_holders(n)
+    var outs = make_holders(n)
+    var bags = vec<ref<bag_t>>.cap_of(5000)
+    for int b = 0; b < 5000; b += 1 {
+        var list = vec<string>.cap_of(4)
+        for int k = 0; k < 4; k += 1 {
+            list.push(value_of(n + b * 4 + k))
+        }
+        bags.push(new bag_t(list = list))
+    }
+
+    var trasher = go trash()
+    var mutator = go mutate(holders, 11)
+    for int k = 0; k < 50; k += 1 {
+        runtime.gc()
+        co.sleep(10)
+    }
+    swapping = false
+    mutator.await()
+
+    // the swaps keep every value exactly once
+    var seen = vec<bool>.cap_of(n)
+    for int i = 0; i < n; i += 1 {
+        seen.push(false)
+    }
+    int swapped_lost = 0
+    for int i = 0; i < n; i += 1 {
+        int id = id_of(holders[i].s)
+        if id < 0 || id >= n || seen[id] {
+            swapped_lost += 1
+            continue
+        }
+        seen[id] = true
+    }
+
+    int moved_lost = move_out(holders, outs, bags)
+    trashing = false
+    trasher.await()
+
+    for int i = 0; i < n; i += 1 {
+        if id_of(holders[i].s) < 0 || id_of(outs[i].s) < 0 {
+            moved_lost += 1
+        }
+    }
+
+    int appended_lost = 0
+    for int b = 0; b < 5000; b += 1 {
+        for int k = 0; k < 4; k += 1 {
+            if id_of(bags[b].list[k]) != n + b * 4 + k {
+                appended_lost += 1
+            }
+        }
+    }
+
+    if swapped_lost == 0 && moved_lost == 0 && appended_lost == 0 {
+        println('ok')
+    } else {
+        println('lost', swapped_lost, moved_lost, appended_lost)
+    }
+}
+
+--- output.txt
+ok
