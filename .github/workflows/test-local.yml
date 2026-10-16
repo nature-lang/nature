@@ -17,9 +17,8 @@ jobs:
     name: Test (${{ matrix.target }})
     strategy:
       fail-fast: false
-      # Both runners are on one Mac mini and OrbStack forwards the Linux VM's ports to the host,
-      # so tests that listen on fixed ports conflict when the two jobs run at once.
-      max-parallel: 1
+      # Both runners are on one Mac mini. OrbStack's machines.forward_ports is off there, so the
+      # fixed ports the tests listen on in the Linux VM don't collide with the macOS job's.
       matrix:
         include:
           - target: linux-arm64
