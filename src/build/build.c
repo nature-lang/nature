@@ -564,7 +564,7 @@ static void elf_assembler_module(module_t *m) {
 
         for (int j = 0; j < symbol->relocs->count; ++j) {
             asm_global_reloc_t *reloc = symbol->relocs->take[j];
-            elf_put_rel_addr(ctx, ctx->data_section, data_offsets[i] + reloc->offset, reloc->name,
+            elf_put_rel_data(ctx, ctx->data_section, data_offsets[i] + reloc->offset, reloc->name,
                              reloc->is_fn ? STT_FUNC : STT_OBJECT, reloc->addend);
         }
     }

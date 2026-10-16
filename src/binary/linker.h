@@ -128,10 +128,8 @@ Elf64_Rela *elf_put_relocate(elf_context_t *ctx, section_t *sym_section, section
                              uint64_t offset, int type, int sym_index, int64_t addend);
 
 Elf64_Rela *
-elf_put_rel_data(elf_context_t *ctx, section_t *apply_section, uint64_t rel_offset, char *name, uint64_t symbol_type);
-
-Elf64_Rela *elf_put_rel_addr(elf_context_t *ctx, section_t *apply_section, uint64_t rel_offset, char *name,
-                             uint64_t symbol_type, int64_t addend);
+elf_put_rel_data(elf_context_t *ctx, section_t *apply_section, uint64_t rel_offset, char *name, uint64_t symbol_type,
+                 int64_t addend);
 
 void elf_relocate_symbols(elf_context_t *ctx, section_t *sym_section);
 
@@ -216,7 +214,7 @@ static inline uint64_t collect_fndef_list(void *ctx) {
 
         if (BUILD_OS == OS_LINUX) {
             elf_context_t *elf_ctx = ctx;
-            elf_put_rel_data(ctx, elf_ctx->data_fndef_section, rel_offset, c->linkident, STT_FUNC);
+            elf_put_rel_data(ctx, elf_ctx->data_fndef_section, rel_offset, c->linkident, STT_FUNC, 0);
         } else if (BUILD_OS == OS_DARWIN) {
             mach_context_t *mach_ctx = ctx;
             mach_put_rel_data(ctx, mach_ctx->data_fndef_section, rel_offset, c->linkident, N_UNDF | N_EXT);
@@ -255,7 +253,7 @@ static inline uint64_t collect_symdef_list(void *ctx) {
         // 注册重定位完成堆 base 的处理
         if (BUILD_OS == OS_LINUX) {
             elf_context_t *elf_ctx = ctx;
-            elf_put_rel_data(ctx, elf_ctx->data_symdef_section, rel_offset, var_decl->ident, STT_OBJECT);
+            elf_put_rel_data(ctx, elf_ctx->data_symdef_section, rel_offset, var_decl->ident, STT_OBJECT, 0);
         } else if (BUILD_OS == OS_DARWIN) {
             mach_context_t *mach_ctx = ctx;
             mach_put_rel_data(ctx, mach_ctx->data_symdef_section, rel_offset, var_decl->ident, N_UNDF | N_EXT);

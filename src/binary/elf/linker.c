@@ -1033,22 +1033,9 @@ REDO:
     }
 }
 
-// the relocation type that writes an 8 byte absolute address
-static int elf_abs64_reloc_type() {
-    if (BUILD_ARCH == ARCH_AMD64) {
-        return R_X86_64_64;
-    } else if (BUILD_ARCH == ARCH_ARM64) {
-        return R_AARCH64_ABS64; // 使用适合 ARM64 的重定位类型
-    } else if (BUILD_ARCH == ARCH_RISCV64) {
-        return R_RISCV_64; // 使用适合 RISC-V 64 的重定位类型
-    }
-
-    assert(false && "Unsupported architecture");
-    return 0;
-}
-
 Elf64_Rela *
-elf_put_rel_data(elf_context_t *ctx, section_t *apply_section, uint64_t rel_offset, char *name, uint64_t symbol_type) {
+elf_put_rel_data(elf_context_t *ctx, section_t *apply_section, uint64_t rel_offset, char *name, uint64_t symbol_type,
+                 int64_t addend) {
     Elf64_Sym sym = {
             .st_shndx = 0,
             .st_size = 0,
@@ -1058,32 +1045,25 @@ elf_put_rel_data(elf_context_t *ctx, section_t *apply_section, uint64_t rel_offs
     };
     // 如果遍历没有找到符号则会添加一条  UND 符号信息到符号表中
     //  10: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND string_new
-    uint64_t sym_index = elf_put_sym(ctx->symtab_section, ctx->symtab_hash, &sym, name);
-
-    return elf_put_relocate(ctx, ctx->symtab_section, apply_section, rel_offset, elf_abs64_reloc_type(),
-                            (int) sym_index, 0);
-}
-
-/**
- * an 8 byte absolute address, name + addend, at rel_offset of apply_section. a symbol the object already
- * has is reused, so a fn defined in the module is not added again as undefined
- */
-Elf64_Rela *elf_put_rel_addr(elf_context_t *ctx, section_t *apply_section, uint64_t rel_offset, char *name,
-                             uint64_t symbol_type, int64_t addend) {
     uint64_t sym_index = (uint64_t) table_get(ctx->symtab_hash, name);
     if (sym_index == 0) {
-        Elf64_Sym sym = {
-                .st_shndx = 0,
-                .st_size = 0,
-                .st_info = ELF64_ST_INFO(STB_GLOBAL, symbol_type),
-                .st_other = 0,
-                .st_value = 0,
-        };
         sym_index = elf_put_sym(ctx->symtab_section, ctx->symtab_hash, &sym, name);
     }
 
-    return elf_put_relocate(ctx, ctx->symtab_section, apply_section, rel_offset, elf_abs64_reloc_type(),
-                            (int) sym_index, addend);
+
+    int reloc_type;
+    if (BUILD_ARCH == ARCH_AMD64) {
+        reloc_type = R_X86_64_64;
+    } else if (BUILD_ARCH == ARCH_ARM64) {
+        reloc_type = R_AARCH64_ABS64; // 使用适合 ARM64 的重定位类型
+    } else if (BUILD_ARCH == ARCH_RISCV64) {
+        reloc_type = R_RISCV_64; // 使用适合 RISC-V 64 的重定位类型
+    } else {
+        assert(false && "Unsupported architecture");
+    }
+
+    return elf_put_relocate(ctx, ctx->symtab_section, apply_section, rel_offset, reloc_type, (int) sym_index,
+                            addend);
 }
 
 /**
