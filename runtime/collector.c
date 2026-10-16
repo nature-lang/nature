@@ -75,10 +75,18 @@ void shade_ptr_grey(void *ptr) {
         return;
     }
 
-    // marked already, a store in a loop would otherwise queue the same object again and again. a racy read can
-    // only see the bit late, which queues the object once more
+    // a word that only looks like a pointer can sit past the last object of the span, or in a freed one, and the
+    // mark bits end with obj_count, so check the index before reading them
     uint64_t obj_index = (addr - span->base) / span->obj_size;
-    if (bitmap_test(span->gcmark_bits, obj_index)) {
+    if (!span_object_is_allocated(span, obj_index)) {
+        return;
+    }
+
+    // marked already, a store in a loop would otherwise queue the same object again and again
+    mutex_lock(&span->gcmark_locker);
+    bool marked = bitmap_test(span->gcmark_bits, obj_index);
+    mutex_unlock(&span->gcmark_locker);
+    if (marked) {
         return;
     }
 
