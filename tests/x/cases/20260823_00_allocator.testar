@@ -78,7 +78,7 @@ hello 1.100000
 import allocator as ac
 
 fn main() {
-    var list = vec<u8>.alloc(ac.heap, 200 as u8, 10)
+    var list = vec<u8>.alloc(&ac.heap, 200 as u8, 10)
     defer list.deinit()
 
     println(list[0], list[9])
@@ -124,7 +124,7 @@ import "vops.x"
 // the allocatable box is built here where gc is available, the .x side then
 // reads, writes and pushes on the same allocator backed vec
 fn main() {
-    var list = vec<u8>.alloc(ac.heap, 0 as u8, 4)
+    var list = vec<u8>.alloc(&ac.heap, 0 as u8, 4)
     defer list.deinit()
 
     vops.fill(list, 10)
@@ -166,7 +166,7 @@ import libc
 
 fn main() {
     string lit = 'hello'
-    var s = string.alloc(ac.heap, lit.ref(), lit.len())
+    var s = string.alloc(&ac.heap, lit.ref(), lit.len())
     defer s.deinit()
     println(s, s.len(), s.char(), s == lit)
 
@@ -199,7 +199,7 @@ import "sops.x"
 // the allocatable box is built here where gc is available, the .x side then
 // reads the same allocator backed string
 fn main() {
-    var s = string.alloc(ac.heap, 'nature'.ref(), 6)
+    var s = string.alloc(&ac.heap, 'nature'.ref(), 6)
     defer s.deinit()
 
     println(s, s.len(), s == 'nature', s + '!')
@@ -229,14 +229,14 @@ nature 6 true nature!
 --- main.x
 import allocator as ac
 
-// ac.heap becomes an allocatable inside the helpers. the vec and the string keep it, so push and
+// &ac.heap becomes an allocatable inside the helpers. the vec and the string keep it, so push and
 // deinit call through its vtable after the helpers return
 fn make_list():vec<int> {
-    return vec<int>.alloc(ac.heap, 0, 2)
+    return vec<int>.alloc(&ac.heap, 0, 2)
 }
 
 fn make_name():string {
-    return string.alloc(ac.heap, 'nature'.ref(), 6)
+    return string.alloc(&ac.heap, 'nature'.ref(), 6)
 }
 
 fn main() {

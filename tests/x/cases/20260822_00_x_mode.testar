@@ -88,8 +88,8 @@ fn square.area(*self):int {
 // an as without a catch checks for a panic right after it, which x mode keeps without a coroutine
 fn main() {
     square sq = square{side: 3}
-    shape s = sq
-    var back = s as square
+    shape s = &sq
+    var back = s as ptr<square>
     println(back.side)
 
     any a = 42

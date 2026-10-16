@@ -617,9 +617,9 @@ typedef struct {
 } n_tagged_union_t;
 
 /**
- * the vtable of an interface value, one per type and interface in a module. it is static data:
- * the linker fills in the rtype and the fn addresses, so an interface value never depends on the
- * frame that built it.
+ * the vtable of an interface value, one per type and interface in a module. it is static data the
+ * linker fills in with the rtype and the fn addresses, so it never depends on the frame that
+ * converted the value.
  */
 typedef struct {
     rtype_t *rtype; // the type of the value behind the interface

@@ -151,7 +151,7 @@ fn main() {
     println(i, j)
 
     source_t source = 0
-    reader_t reader = source
+    reader_t reader = &source
     var k = reader.get(1) catch e {
         println('interface', e == TIMEOUT)
         -10
@@ -315,7 +315,8 @@ fn main() {
     }
     println(a)
 
-    reader_t r = file_t{fd: 3}
+    file_t f = file_t{fd: 3}
+    reader_t r = &f
     var s = r as sock_t catch e {
         println('as', e == TYPE_ASSERT_FAILED)
         sock_t{port: 0}
@@ -332,7 +333,7 @@ index true
 -1
 as true
 0
-panic: 'index out of range [5] with length 3' at nature-test/main.x:37:23
+panic: 'index out of range [5] with length 3' at nature-test/main.x:38:23
 
 === test_tuple_operand_panic_is_not_caught
 --- main.x

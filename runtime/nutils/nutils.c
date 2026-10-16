@@ -309,9 +309,8 @@ bool interface_is(n_interface_t *mu, int64_t target_rtype_hash) {
  * @param out
  * @param vtable static data of the value's type and the interface, every interface value shares it
  * @param value_ref
- * @param is_x
  */
-void interface_casting(n_interface_t *out, n_vtable_t *vtable, void *value_ref, n_bool_t is_x) {
+void interface_casting(n_interface_t *out, n_vtable_t *vtable, void *value_ref) {
     assert(out && "interface_casting out is null");
     rtype_t *rtype = vtable->rtype;
     assert(rtype && "interface_casting vtable has no rtype");
@@ -332,14 +331,10 @@ void interface_casting(n_interface_t *out, n_vtable_t *vtable, void *value_ref, 
     if (rtype->storage_kind != STORAGE_KIND_PTR) {
         // TODO number 可以直接存储在 value 中
         // union 进行了数据的额外缓存，并进行值 copy，不需要担心 arr/struct 这样的大数据的丢失问题
-        if (is_x) {
-            // x mode does no gc_malloc, the original address is referenced directly.
-            out->value.ptr_value = value_ref;
-        } else {
-            void *new_value = rti_gc_malloc(rtype->gc_heap_size, rtype);
-            memmove(new_value, value_ref, stack_size);
-            out->value.ptr_value = new_value;
-        }
+        // only .n gets here, .x converts only a pointer to an interface
+        void *new_value = rti_gc_malloc(rtype->gc_heap_size, rtype);
+        memmove(new_value, value_ref, stack_size);
+        out->value.ptr_value = new_value;
     } else {
         // 特殊类型参数处理，为了兼容 fn method 中的 self 自动化参数, self 如果是 int/struct 等类型，会自动转换为 ref<int>
         // 如果是 vec/string 等类型，self 的类型依旧是 vec/string 等，而不是 ref<vec>/ref<string> 这有点多余, 因为 vec/string

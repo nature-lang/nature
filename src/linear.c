@@ -3583,8 +3583,7 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
     }
 
     if (as_expr->target_type.kind == TYPE_INTERFACE) {
-        // x mode has no gc, interface_casting aliases the boxed value instead
-        bool is_x = m->is_x;
+        // infer lets .x convert only a pointer, so the value is boxed in .n only
         lir_operand_t *interface_value;
         if (as_expr->src.type.storage_kind == STORAGE_KIND_IND) {
             interface_value = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
@@ -3622,7 +3621,7 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
         lir_operand_t *vtable_ref = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
         OP_PUSH(lir_op_lea(vtable_ref, operand_new(LIR_OPERAND_SYMBOL_VAR, vtable_symbol)));
 
-        push_rt_call(m, RT_CALL_INTERFACE_CASTING, NULL, 4, out_ptr, vtable_ref, interface_value, bool_operand(is_x));
+        push_rt_call(m, RT_CALL_INTERFACE_CASTING, NULL, 3, out_ptr, vtable_ref, interface_value);
         return target;
     }
 
