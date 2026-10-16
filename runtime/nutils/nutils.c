@@ -684,8 +684,9 @@ void throw_index_out_error(n_int_t *index, n_int_t *len) {
 
 // a panic a catch takes never gets here, the runtime call reports it by its return value instead
 uint8_t co_has_panic(char *path, char *fn_name, n_int_t line, n_int_t column) {
-    coroutine_t *co = coroutine_get();
-    if (!co->panic_msg) {
+    // x mode has no coroutine, rti_panic keeps the msg in x_panic_msg instead
+    char *panic_msg = user_main_is_fn() ? coroutine_get()->panic_msg : x_panic_msg;
+    if (!panic_msg) {
         return 0;
     }
 
@@ -693,7 +694,7 @@ uint8_t co_has_panic(char *path, char *fn_name, n_int_t line, n_int_t column) {
     assert(line >= 0 && line < 1000000);
     assert(column >= 0 && column < 1000000);
 
-    char *dump_msg = tlsprintf("panic: '%s' at %s:%d:%d\n", co->panic_msg, path, line, column);
+    char *dump_msg = tlsprintf("panic: '%s' at %s:%d:%d\n", panic_msg, path, line, column);
 
     VOID write(STDOUT_FILENO, dump_msg, strlen(dump_msg));
     // panic msg
