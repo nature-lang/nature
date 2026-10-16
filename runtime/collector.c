@@ -808,6 +808,13 @@ static void gc_work() {
             insert_gc_worklist(&share_p->gc_worklist, wait_co->arg);
         }
 
+        // Once a chan op pops the linkco of a waiting coroutine, only the coroutine refers to it until it runs
+        // again: through co->waiting (select chains the rest by waitlink) and its C frames, which scan_stack
+        // skips. Without this the linkco could be swept and reused, and the wakeup misread as a closed chan.
+        if (span_of((addr_t) wait_co->waiting)) {
+            insert_gc_worklist(&share_p->gc_worklist, wait_co->waiting);
+        }
+
         // 只有第一次 resume 时才会初始化 co, 申请堆栈，并且绑定对应的 p
         if (!wait_co->aco.inited) {
             DEBUGF("[runtime_gc.gc_work] co=%p, fn=%p not init, will skip", wait_co, wait_co->fn);
