@@ -384,16 +384,16 @@ static inline rtype_t rtype_set(type_t t) {
 
 static inline rtype_t rtype_interface(type_t t) {
     rtype_t rtype = {
-            .gc_heap_size = POINTER_SIZE * 4, // element_rtype + value(并不知道 value 的类型)
+            .gc_heap_size = POINTER_SIZE * 2, // value + vtable
             .hash = type_hash(t),
             .kind = TYPE_INTERFACE,
-            .last_ptr = POINTER_SIZE * 2,
+            .last_ptr = POINTER_SIZE,
             .malloc_gc_bits_offset = data_put(NULL, calc_gc_bits_size(POINTER_SIZE * 2, POINTER_SIZE)),
             .hashes_offset = -1,
     };
 
+    // the vtable is static data, only the value can point into the gc heap
     bitmap_set(CTDATA(rtype.malloc_gc_bits_offset), 0);
-    bitmap_set(CTDATA(rtype.malloc_gc_bits_offset), 1);
 
     return rtype;
 }
@@ -661,8 +661,11 @@ static inline int64_t rtype_builtin_gc_bits(int64_t gc_bits_offset, int64_t *off
         ptr_slots = 1;
     } else if (t.kind == TYPE_MAP) {
         ptr_slots = 3;
-    } else if (t.kind == TYPE_SET || t.kind == TYPE_INTERFACE) {
+    } else if (t.kind == TYPE_SET) {
         ptr_slots = 2;
+    } else if (t.kind == TYPE_INTERFACE) {
+        // value, the vtable after it is static data
+        ptr_slots = 1;
     } else {
         return 0;
     }
@@ -966,6 +969,19 @@ static inline void ct_register_rtype(type_t t) {
         rtype_t *mem_rtype = rtype_push(rtype);
         table_set(ct_rtype_table, itoa(rtype.hash), mem_rtype);
     }
+}
+
+// the index of a registered rtype in rt_rtype_data, which is ct_rtype_list in registration order
+static inline int64_t ct_rtype_index(int64_t hash) {
+    for (int64_t i = 0; i < ct_rtype_list->length; ++i) {
+        rtype_t *rtype = ct_list_value(ct_rtype_list, i);
+        if (rtype->hash == hash) {
+            return i;
+        }
+    }
+
+    assertf(false, "rtype %ld is not registered", hash);
+    return -1;
 }
 
 #endif //NATURE_SRC_RTYPE_H_

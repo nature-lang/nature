@@ -3767,6 +3767,10 @@ static ast_expr_t as_to_interface(module_t *m, ast_expr_t *expr, type_t interfac
     // 禁止鸭子类型
     INFER_ASSERTF(found, "type '%s' not impl '%s' interface", type_format(src_type), type_format(interface_type));
 
+    // x mode has no gc to copy a value into, the interface would keep the address of the value unseen
+    INFER_ASSERTF(!m->is_x || expr->type.storage_kind == STORAGE_KIND_PTR,
+                  "converting a value to an interface is not supported in .x, use a pointer such as &value");
+
     // auto as to interface, expr as interface_union, will handle in linear
     return ast_type_as(*expr, interface_type);
 }

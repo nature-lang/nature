@@ -36,3 +36,71 @@ pub fn fib(int n):int {
 }
 --- output.txt
 55
+
+=== test_x_interface
+--- main.x
+import allocator as ac
+
+type shape = interface{
+    fn area():int
+}
+
+type square:shape = struct{
+    int side
+}
+
+fn square.area(*self):int {
+    return self.side * self.side
+}
+
+// the square is converted to shape here, the interface value outlives this frame
+fn make(ptr<square> p):shape {
+    return p
+}
+
+fn main() {
+    ptr<square> p = ac.new(square{side: 3})
+    var s = make(p)
+    // a call in between reuses the stack make() ran on
+    println('made')
+    println(s.area(), s is ptr<square>)
+    ac.free(p)
+}
+
+--- output.txt
+made
+9 true
+
+=== test_x_as
+--- main.x
+type shape = interface{
+    fn area():int
+}
+
+type square:shape = struct{
+    int side
+}
+
+fn square.area(*self):int {
+    return self.side * self.side
+}
+
+// an as without a catch checks for a panic right after it, which x mode keeps without a coroutine
+fn main() {
+    square sq = square{side: 3}
+    shape s = &sq
+    var back = s as ptr<square>
+    println(back.side)
+
+    any a = 42
+    var i = a as int
+    println(i)
+
+    var f = a as f64
+    println(f)
+}
+
+--- output.txt
+3
+42
+panic: 'type assert failed' at nature-test/main.x:24:13

@@ -522,6 +522,10 @@ struct n_processor_t {
 
 void rti_panic(char *msg);
 
+// a program whose main is in a .x file runs without coroutines, rti_panic keeps the msg here until
+// co_has_panic reports it
+extern char *x_panic_msg;
+
 // A C fn reports an errset by its display name, such as io.EOF. The module binding the fn declares
 // or imports it, so the program has it whenever the fn can be called.
 void rti_throw(char *errset_name);

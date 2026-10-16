@@ -93,3 +93,31 @@ pub type allocatable = interface{
 
 --- output.txt
 nature-test/main.n:7:2: the fn 'alloc' of type 'main.heap_t' mismatch interface 'nature-test.iface.allocatable'
+
+=== test_value_to_interface
+--- main.x
+type shape = interface{
+    fn area():int
+}
+
+type square:shape = struct{
+    int side
+}
+
+fn square.area(*self):int {
+    return self.side * self.side
+}
+
+// the interface would keep the address of sq, which is gone once make returns
+fn make(int side):shape {
+    square sq = square{side: side}
+    return sq
+}
+
+fn main() {
+    var s = make(3)
+    println(s.area())
+}
+
+--- output.txt
+nature-test/main.x:16:13: converting a value to an interface is not supported in .x, use a pointer such as &value

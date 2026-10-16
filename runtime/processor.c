@@ -629,9 +629,17 @@ coroutine_t *coroutine_get() {
     return uv_key_get(&tls_coroutine_key);
 }
 
+char *x_panic_msg = NULL;
+
 // a panic msg can live in a reused tls buffer, so it is copied until co_has_panic reports it
 void rti_panic(char *msg) {
     DEBUGF("[runtime.rti_panic] msg=%s", msg);
+    // x mode never creates the coroutine tls key, so there is no coroutine to read
+    if (!user_main_is_fn()) {
+        x_panic_msg = strdup(msg);
+        return;
+    }
+
     coroutine_get()->panic_msg = strdup(msg);
 }
 

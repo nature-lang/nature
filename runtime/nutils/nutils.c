@@ -215,16 +215,16 @@ n_ptr_t *ptr_assert(n_ptr_t *ptr, bool caught) {
 }
 
 bool interface_assert(n_interface_t *mu, int64_t target_rtype_hash, void *value_ref, bool caught) {
-    if (mu->rtype->hash != target_rtype_hash) {
-        DEBUGF("[interface_assert] type assert failed, mu->rtype->kind: %s, target_rtype_hash: %ld",
-               type_kind_str[mu->rtype->kind],
+    rtype_t *rtype = mu->vtable->rtype;
+    if (rtype->hash != target_rtype_hash) {
+        DEBUGF("[interface_assert] type assert failed, rtype->kind: %s, target_rtype_hash: %ld",
+               type_kind_str[rtype->kind],
                target_rtype_hash);
 
         if (!caught) rti_panic("type assert failed");
         return false;
     }
 
-    rtype_t *rtype = rt_find_rtype(target_rtype_hash);
     uint64_t size = rtype->storage_size;
 
     if (rtype->storage_kind != STORAGE_KIND_PTR) {
@@ -235,7 +235,7 @@ bool interface_assert(n_interface_t *mu, int64_t target_rtype_hash, void *value_
     DEBUGF(
         "[interface_assert] success, interface_base: %p, interface_rtype_kind: %s, heap_out_size: %lu, interface_i64_value: %ld, "
         "values_ref: %p",
-        mu, type_kind_str[mu->rtype->kind], size, mu->value.i64_value, value_ref);
+        mu, type_kind_str[rtype->kind], size, mu->value.i64_value, value_ref);
     return true;
 }
 
@@ -301,64 +301,40 @@ bool any_is(n_any_t *mu, int64_t target_rtype_hash) {
 }
 
 bool interface_is(n_interface_t *mu, int64_t target_rtype_hash) {
-    return mu->rtype->hash == target_rtype_hash;
+    return mu->vtable->rtype->hash == target_rtype_hash;
 }
 
 /**
  * interface 参考 any 处理 storage_ind 类型
  * @param out
- * @param input_rtype_hash
+ * @param vtable static data of the value's type and the interface, every interface value shares it
  * @param value_ref
- * @param method_count
- * @param methods
  */
-void interface_casting(n_interface_t *out, uint64_t input_rtype_hash, void *value_ref, int64_t method_count,
-                       int64_t *methods, n_bool_t is_x) {
+void interface_casting(n_interface_t *out, n_vtable_t *vtable, void *value_ref) {
     assert(out && "interface_casting out is null");
-    // - 根据 input_rtype_hash 找到对应的
-    rtype_t *rtype = rt_find_rtype(input_rtype_hash);
-    assert(rtype && "cannot find rtype by hash");
+    rtype_t *rtype = vtable->rtype;
+    assert(rtype && "interface_casting vtable has no rtype");
 
     ASSERT_ADDR(value_ref);
 
     TRACEF("[interface_casting] input_kind=%s", type_kind_str[rtype->kind]);
-
-    if (method_count > 0) {
-        out->method_count = method_count;
-        if (is_x) {
-            // x mode has no gc to hold a copy, the caller's method table is referenced directly.
-            // its contents are compile time fn addresses, so only the table's lifetime matters.
-            out->methods = methods;
-        } else {
-            out->methods = (int64_t *) rti_array_new(&uint64_rtype, method_count); // TODO
-            // 进行数据 copy TODO write barrier
-            memmove(out->methods, methods, method_count * POINTER_SIZE);
-        }
-    } else {
-        out->method_count = 0;
-        out->methods = NULL;
-    }
 
     DEBUGF(
         "[interface_casting] union_base: %p, memmove value_ref(%p) -> any->value(%p), size=%lu, fetch_value_8byte=%p",
         out, value_ref,
         &out->value, rtype->storage_size, (void *) fetch_addr_value((addr_t) value_ref));
 
-    out->rtype = rtype;
+    out->vtable = vtable;
     uint64_t stack_size = rtype->storage_size;
     out->value.i64_value = 0;
 
     if (rtype->storage_kind != STORAGE_KIND_PTR) {
         // TODO number 可以直接存储在 value 中
         // union 进行了数据的额外缓存，并进行值 copy，不需要担心 arr/struct 这样的大数据的丢失问题
-        if (is_x) {
-            // x mode does no gc_malloc, the original address is referenced directly.
-            out->value.ptr_value = value_ref;
-        } else {
-            void *new_value = rti_gc_malloc(rtype->gc_heap_size, rtype);
-            memmove(new_value, value_ref, stack_size);
-            out->value.ptr_value = new_value;
-        }
+        // only .n gets here, .x converts only a pointer to an interface
+        void *new_value = rti_gc_malloc(rtype->gc_heap_size, rtype);
+        memmove(new_value, value_ref, stack_size);
+        out->value.ptr_value = new_value;
     } else {
         // 特殊类型参数处理，为了兼容 fn method 中的 self 自动化参数, self 如果是 int/struct 等类型，会自动转换为 ref<int>
         // 如果是 vec/string 等类型，self 的类型依旧是 vec/string 等，而不是 ref<vec>/ref<string> 这有点多余, 因为 vec/string
@@ -369,7 +345,7 @@ void interface_casting(n_interface_t *out, uint64_t input_rtype_hash, void *valu
 
     DEBUGF("[interface_casting] success, union_base: %p, union_rtype: %p, union_i64_value: %ld, union_ptr_value: %p",
            out,
-           out->rtype,
+           out->vtable->rtype,
            out->value.i64_value, out->value.ptr_value);
 }
 
@@ -703,8 +679,9 @@ void throw_index_out_error(n_int_t *index, n_int_t *len) {
 
 // a panic a catch takes never gets here, the runtime call reports it by its return value instead
 uint8_t co_has_panic(char *path, char *fn_name, n_int_t line, n_int_t column) {
-    coroutine_t *co = coroutine_get();
-    if (!co->panic_msg) {
+    // x mode has no coroutine, rti_panic keeps the msg in x_panic_msg instead
+    char *panic_msg = user_main_is_fn() ? coroutine_get()->panic_msg : x_panic_msg;
+    if (!panic_msg) {
         return 0;
     }
 
@@ -712,7 +689,7 @@ uint8_t co_has_panic(char *path, char *fn_name, n_int_t line, n_int_t column) {
     assert(line >= 0 && line < 1000000);
     assert(column >= 0 && column < 1000000);
 
-    char *dump_msg = tlsprintf("panic: '%s' at %s:%d:%d\n", co->panic_msg, path, line, column);
+    char *dump_msg = tlsprintf("panic: '%s' at %s:%d:%d\n", panic_msg, path, line, column);
 
     VOID write(STDOUT_FILENO, dump_msg, strlen(dump_msg));
     // panic msg

@@ -1034,7 +1034,8 @@ REDO:
 }
 
 Elf64_Rela *
-elf_put_rel_data(elf_context_t *ctx, section_t *apply_section, uint64_t rel_offset, char *name, uint64_t symbol_type) {
+elf_put_rel_data(elf_context_t *ctx, section_t *apply_section, uint64_t rel_offset, char *name, uint64_t symbol_type,
+                 int64_t addend) {
     Elf64_Sym sym = {
             .st_shndx = 0,
             .st_size = 0,
@@ -1044,7 +1045,10 @@ elf_put_rel_data(elf_context_t *ctx, section_t *apply_section, uint64_t rel_offs
     };
     // 如果遍历没有找到符号则会添加一条  UND 符号信息到符号表中
     //  10: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND string_new
-    uint64_t sym_index = elf_put_sym(ctx->symtab_section, ctx->symtab_hash, &sym, name);
+    uint64_t sym_index = (uint64_t) table_get(ctx->symtab_hash, name);
+    if (sym_index == 0) {
+        sym_index = elf_put_sym(ctx->symtab_section, ctx->symtab_hash, &sym, name);
+    }
 
 
     int reloc_type;
@@ -1058,7 +1062,8 @@ elf_put_rel_data(elf_context_t *ctx, section_t *apply_section, uint64_t rel_offs
         assert(false && "Unsupported architecture");
     }
 
-    return elf_put_relocate(ctx, ctx->symtab_section, apply_section, rel_offset, reloc_type, (int) sym_index, 0);
+    return elf_put_relocate(ctx, ctx->symtab_section, apply_section, rel_offset, reloc_type, (int) sym_index,
+                            addend);
 }
 
 /**

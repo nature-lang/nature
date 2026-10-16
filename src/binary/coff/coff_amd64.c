@@ -483,6 +483,24 @@ static coff_writer_status_t coff_amd64_emit_globals(
                 LD_COFF_STORAGE_CLASS_EXTERNAL, NULL);
         if (status != COFF_WRITER_OK)
             return coff_amd64_writer_status(context, status);
+
+        // the addresses in the symbol, such as a vtable's. a fn defined later in the module turns the
+        // reference into its definition
+        for (int j = 0; symbol->relocs && j < symbol->relocs->count; j++) {
+            const asm_global_reloc_t *reloc = symbol->relocs->take[j];
+            uint32_t symbol_index = 0U;
+            status = coff_object_get_or_add_symbol_reference(
+                    context->object, reloc->name, true,
+                    reloc->is_fn ? COFF_SYMBOL_TYPE_FUNCTION : 0U,
+                    &symbol_index);
+            if (status != COFF_WRITER_OK)
+                return coff_amd64_writer_status(context, status);
+            status = coff_section_add_relocation_with_addend(
+                    context->data, offset + (uint32_t) reloc->offset,
+                    symbol_index, LD_COFF_REL_AMD64_ADDR64, reloc->addend);
+            if (status != COFF_WRITER_OK)
+                return coff_amd64_writer_status(context, status);
+        }
     }
     return COFF_WRITER_OK;
 }

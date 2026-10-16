@@ -78,7 +78,7 @@ fn main() {
     println(d)
 
     source_t source = 0
-    reader_t reader = source
+    reader_t reader = &source
     var f = reader.read(-1) catch msg {
         println('interface', msg)
         -5
