@@ -130,6 +130,9 @@ Elf64_Rela *elf_put_relocate(elf_context_t *ctx, section_t *sym_section, section
 Elf64_Rela *
 elf_put_rel_data(elf_context_t *ctx, section_t *apply_section, uint64_t rel_offset, char *name, uint64_t symbol_type);
 
+Elf64_Rela *elf_put_rel_addr(elf_context_t *ctx, section_t *apply_section, uint64_t rel_offset, char *name,
+                             uint64_t symbol_type, int64_t addend);
+
 void elf_relocate_symbols(elf_context_t *ctx, section_t *sym_section);
 
 void elf_relocate_sections(elf_context_t *ctx);

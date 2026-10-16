@@ -616,11 +616,22 @@ typedef struct {
     value_casting value;
 } n_tagged_union_t;
 
+/**
+ * the vtable of an interface value, one per type and interface in a module. it is static data:
+ * the linker fills in the rtype and the fn addresses, so an interface value never depends on the
+ * frame that built it.
+ */
+typedef struct {
+    rtype_t *rtype; // the type of the value behind the interface
+    void *methods[]; // fn addresses in the order the interface declares them
+} n_vtable_t;
+
+/**
+ * layout: value -> vtable, the gc only traces the value
+ */
 typedef struct {
     value_casting value;
-    int64_t *methods; // methods
-    rtype_t *rtype;
-    int64_t method_count;
+    n_vtable_t *vtable;
 } n_interface_t;
 
 typedef struct {
@@ -911,16 +922,12 @@ static inline list_t *type_abi_struct(type_t t) {
         return result;
     }
 
-    // n_interface_t: { value_casting value; int64_t *methods; rtype_t *rtype; int64_t method_count; }
+    // n_interface_t: { value_casting value; n_vtable_t *vtable; }
     if (t.kind == TYPE_INTERFACE) {
         type_t value_type = type_kind_new(TYPE_ANYPTR); // value_casting
-        type_t methods_type = type_kind_new(TYPE_ANYPTR); // int64_t*
-        type_t rtype_type = type_kind_new(TYPE_ANYPTR); // rtype_t*
-        type_t count_type = type_kind_new(TYPE_INT64); // method_count
+        type_t vtable_type = type_kind_new(TYPE_ANYPTR); // n_vtable_t*
         ct_list_push(result, &value_type);
-        ct_list_push(result, &methods_type);
-        ct_list_push(result, &rtype_type);
-        ct_list_push(result, &count_type);
+        ct_list_push(result, &vtable_type);
         return result;
     }
 

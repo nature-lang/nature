@@ -215,16 +215,16 @@ n_ptr_t *ptr_assert(n_ptr_t *ptr, bool caught) {
 }
 
 bool interface_assert(n_interface_t *mu, int64_t target_rtype_hash, void *value_ref, bool caught) {
-    if (mu->rtype->hash != target_rtype_hash) {
-        DEBUGF("[interface_assert] type assert failed, mu->rtype->kind: %s, target_rtype_hash: %ld",
-               type_kind_str[mu->rtype->kind],
+    rtype_t *rtype = mu->vtable->rtype;
+    if (rtype->hash != target_rtype_hash) {
+        DEBUGF("[interface_assert] type assert failed, rtype->kind: %s, target_rtype_hash: %ld",
+               type_kind_str[rtype->kind],
                target_rtype_hash);
 
         if (!caught) rti_panic("type assert failed");
         return false;
     }
 
-    rtype_t *rtype = rt_find_rtype(target_rtype_hash);
     uint64_t size = rtype->storage_size;
 
     if (rtype->storage_kind != STORAGE_KIND_PTR) {
@@ -235,7 +235,7 @@ bool interface_assert(n_interface_t *mu, int64_t target_rtype_hash, void *value_
     DEBUGF(
         "[interface_assert] success, interface_base: %p, interface_rtype_kind: %s, heap_out_size: %lu, interface_i64_value: %ld, "
         "values_ref: %p",
-        mu, type_kind_str[mu->rtype->kind], size, mu->value.i64_value, value_ref);
+        mu, type_kind_str[rtype->kind], size, mu->value.i64_value, value_ref);
     return true;
 }
 
@@ -301,50 +301,31 @@ bool any_is(n_any_t *mu, int64_t target_rtype_hash) {
 }
 
 bool interface_is(n_interface_t *mu, int64_t target_rtype_hash) {
-    return mu->rtype->hash == target_rtype_hash;
+    return mu->vtable->rtype->hash == target_rtype_hash;
 }
 
 /**
  * interface 参考 any 处理 storage_ind 类型
  * @param out
- * @param input_rtype_hash
+ * @param vtable static data of the value's type and the interface, every interface value shares it
  * @param value_ref
- * @param method_count
- * @param methods
+ * @param is_x
  */
-void interface_casting(n_interface_t *out, uint64_t input_rtype_hash, void *value_ref, int64_t method_count,
-                       int64_t *methods, n_bool_t is_x) {
+void interface_casting(n_interface_t *out, n_vtable_t *vtable, void *value_ref, n_bool_t is_x) {
     assert(out && "interface_casting out is null");
-    // - 根据 input_rtype_hash 找到对应的
-    rtype_t *rtype = rt_find_rtype(input_rtype_hash);
-    assert(rtype && "cannot find rtype by hash");
+    rtype_t *rtype = vtable->rtype;
+    assert(rtype && "interface_casting vtable has no rtype");
 
     ASSERT_ADDR(value_ref);
 
     TRACEF("[interface_casting] input_kind=%s", type_kind_str[rtype->kind]);
-
-    if (method_count > 0) {
-        out->method_count = method_count;
-        if (is_x) {
-            // x mode has no gc to hold a copy, the caller's method table is referenced directly.
-            // its contents are compile time fn addresses, so only the table's lifetime matters.
-            out->methods = methods;
-        } else {
-            out->methods = (int64_t *) rti_array_new(&uint64_rtype, method_count); // TODO
-            // 进行数据 copy TODO write barrier
-            memmove(out->methods, methods, method_count * POINTER_SIZE);
-        }
-    } else {
-        out->method_count = 0;
-        out->methods = NULL;
-    }
 
     DEBUGF(
         "[interface_casting] union_base: %p, memmove value_ref(%p) -> any->value(%p), size=%lu, fetch_value_8byte=%p",
         out, value_ref,
         &out->value, rtype->storage_size, (void *) fetch_addr_value((addr_t) value_ref));
 
-    out->rtype = rtype;
+    out->vtable = vtable;
     uint64_t stack_size = rtype->storage_size;
     out->value.i64_value = 0;
 
@@ -369,7 +350,7 @@ void interface_casting(n_interface_t *out, uint64_t input_rtype_hash, void *valu
 
     DEBUGF("[interface_casting] success, union_base: %p, union_rtype: %p, union_i64_value: %ld, union_ptr_value: %p",
            out,
-           out->rtype,
+           out->vtable->rtype,
            out->value.i64_value, out->value.ptr_value);
 }
 

@@ -2053,17 +2053,17 @@ static lir_operand_t *linear_call_impl(module_t *m, ast_expr_t expr, lir_operand
             /**
              * typedef struct {
              *   value_casting value;
-             *   int64_t *methods;
-             *   rtype_t *rtype;
-             *   int64_t method_count;
+             *   n_vtable_t *vtable; // { rtype_t *rtype; void *methods[]; }
              * } n_interface_t;
              */
-            lir_operand_t *methods_target = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
-            lir_operand_t *src = indirect_addr_operand(m, type_kind_new(TYPE_ANYPTR), interface_target, POINTER_SIZE);
-            OP_PUSH(lir_op_move(methods_target, src));
+            lir_operand_t *vtable_target = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
+            lir_operand_t *src = indirect_addr_operand(m, type_kind_new(TYPE_ANYPTR), interface_target,
+                                                       offsetof(n_interface_t, vtable));
+            OP_PUSH(lir_op_move(vtable_target, src));
 
             fn_target = temp_var_operand(m, *interface_fn_type); // fn target 可以直接调用
-            src = indirect_addr_operand(m, *interface_fn_type, methods_target, POINTER_SIZE * index);
+            src = indirect_addr_operand(m, *interface_fn_type, vtable_target,
+                                        offsetof(n_vtable_t, methods) + POINTER_SIZE * index);
             OP_PUSH(lir_op_move(fn_target, src));
             type_fn = interface_fn_type->fn;
 
@@ -3255,6 +3255,81 @@ static lir_operand_t *linear_is_expr(module_t *m, ast_expr_t expr, lir_operand_t
 }
 
 /**
+ * the vtable of a type as an interface: the rtype, then the method addresses in the order the
+ * interface declares them. it is a global symbol whose addresses the linker fills in, so every
+ * interface value can keep pointing at it. like a string literal, conversions with the same content
+ * share one per module.
+ */
+static char *linear_interface_vtable(module_t *m, ast_typedef_stmt_t *typedef_stmt, char *type_ident,
+                                     uint64_t rtype_hash, type_interface_t *interface_type) {
+    slice_t *fn_idents = slice_new();
+    char *key = str_connect("v:", itoa(rtype_hash));
+    for (int i = 0; i < interface_type->elements->length; ++i) {
+        type_t *temp = ct_list_value(interface_type->elements, i);
+        assert(temp->kind == TYPE_FN);
+        type_fn_t *interface_fn_type = temp->fn;
+        assert(interface_fn_type->fn_name);
+
+        // 按照 union type 中的定义顺序写入
+        char *fn_ident = str_connect_by(type_ident, interface_fn_type->fn_name, IMPL_CONNECT_IDENT);
+
+        ast_fndef_t *ast_fndef = sc_map_get_sv(&typedef_stmt->method_table, fn_ident);
+        assert(ast_fndef);
+        symbol_t *fn_symbol = symbol_table_get(fn_ident);
+        assert(fn_symbol);
+
+        if (ast_fndef->receiver_wrapper_ident) {
+            symbol_t *wrapper_fn_symbol = symbol_table_get(ast_fndef->receiver_wrapper_ident);
+            assert(wrapper_fn_symbol);
+
+            ast_fndef = wrapper_fn_symbol->ast_value;
+            fn_ident = ast_fndef->symbol_name;
+        }
+
+        // string self is string, self is ptr,not need receiver_wrapper
+        // assert(ast_fndef->self_kind != PARAM_SELF_T);
+
+        if (ast_fndef->linkid) {
+            fn_ident = ast_fndef->linkid;
+        }
+
+        slice_push(fn_idents, fn_ident);
+        key = str_connect_by(key, fn_ident, ",");
+    }
+
+    asm_global_symbol_t *vtable = table_get(m->global_symbol_table, key);
+    if (vtable) {
+        return vtable->name;
+    }
+
+    vtable = NEW(asm_global_symbol_t);
+    vtable->name = label_ident_with_prefix(m, "vtable");
+    vtable->size = sizeof(n_vtable_t) + fn_idents->count * POINTER_SIZE;
+    vtable->alignment = POINTER_SIZE;
+    vtable->value = mallocz(vtable->size);
+    vtable->relocs = slice_new();
+
+    // rt_rtype_data holds the rtypes in registration order
+    asm_global_reloc_t *rtype_reloc = NEW(asm_global_reloc_t);
+    rtype_reloc->offset = offsetof(n_vtable_t, rtype);
+    rtype_reloc->name = SYMBOL_RTYPE_DATA;
+    rtype_reloc->addend = ct_rtype_index(rtype_hash) * (int64_t) sizeof(rtype_t);
+    slice_push(vtable->relocs, rtype_reloc);
+
+    for (int i = 0; i < fn_idents->count; ++i) {
+        asm_global_reloc_t *fn_reloc = NEW(asm_global_reloc_t);
+        fn_reloc->offset = offsetof(n_vtable_t, methods) + i * POINTER_SIZE;
+        fn_reloc->name = fn_idents->take[i];
+        fn_reloc->is_fn = true;
+        slice_push(vtable->relocs, fn_reloc);
+    }
+
+    slice_push(m->current_closure->asm_symbols, vtable);
+    table_set(m->global_symbol_table, key, vtable);
+    return vtable->name;
+}
+
+/**
  * @param m
  * @param expr
  * @return
@@ -3508,7 +3583,7 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
     }
 
     if (as_expr->target_type.kind == TYPE_INTERFACE) {
-        // x mode has no gc, interface_casting aliases the method table and the boxed value instead
+        // x mode has no gc, interface_casting aliases the boxed value instead
         bool is_x = m->is_x;
         lir_operand_t *interface_value;
         if (as_expr->src.type.storage_kind == STORAGE_KIND_IND) {
@@ -3539,60 +3614,15 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
         ast_typedef_stmt_t *typedef_stmt = s->ast_value;
         assert(!typedef_stmt->is_interface);
 
-        if (interface_type->elements->length > 0) {
-            // alloc stack
-            type_t methods_type_arr = type_array_new(TYPE_ANYPTR, interface_type->elements->length);
-            lir_operand_t *methods_target = temp_var_operand_with_alloc(m, methods_type_arr);
+        // an interface with no methods still needs the rtype, so every conversion has a vtable
+        lir_symbol_var_t *vtable_symbol = NEW(lir_symbol_var_t);
+        vtable_symbol->ident = linear_interface_vtable(m, typedef_stmt, src_type.ident, src_rtype_hash,
+                                                       interface_type);
+        vtable_symbol->t = type_kind_new(TYPE_ANYPTR);
+        lir_operand_t *vtable_ref = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
+        OP_PUSH(lir_op_lea(vtable_ref, operand_new(LIR_OPERAND_SYMBOL_VAR, vtable_symbol)));
 
-            // fn label to stack by interface fn sequence
-            for (int i = 0; i < interface_type->elements->length; ++i) {
-                type_t *temp = ct_list_value(interface_type->elements, i);
-                assert(temp->kind == TYPE_FN);
-                type_fn_t *interface_fn_type = temp->fn;
-                assert(interface_fn_type->fn_name);
-
-                // 按照 union type 中的定义顺序写入
-                char *fn_ident = str_connect_by(src_type.ident, interface_fn_type->fn_name, IMPL_CONNECT_IDENT);
-
-                ast_fndef_t *ast_fndef = sc_map_get_sv(&typedef_stmt->method_table, fn_ident);
-                assert(ast_fndef);
-                symbol_t *fn_symbol = symbol_table_get(fn_ident);
-                assert(fn_symbol);
-
-                if (ast_fndef->receiver_wrapper_ident) {
-                    symbol_t *wrapper_fn_symbol = symbol_table_get(ast_fndef->receiver_wrapper_ident);
-                    assert(wrapper_fn_symbol);
-
-                    ast_fndef = wrapper_fn_symbol->ast_value;
-                    fn_ident = ast_fndef->symbol_name;
-                }
-
-                // string self is string, self is ptr,not need receiver_wrapper
-                // assert(ast_fndef->self_kind != PARAM_SELF_T);
-
-                if (ast_fndef->linkid) {
-                    fn_ident = ast_fndef->linkid;
-                }
-
-                // lea fn_label to stack
-                lir_operand_t *fn_label = lir_label_operand(fn_ident, false);
-                // methods 需要通过 c 传递，为了让其符合 c 的 abi, 这里需要将其转换位 anyptr 进行传递
-                lir_var_t *var = methods_target->value;
-                var->type = type_kind_new(TYPE_ANYPTR);
-                lir_operand_t *item_target = indirect_addr_operand(m, type_kind_new(TYPE_ANYPTR), methods_target,
-                                                                   i * POINTER_SIZE);
-                OP_PUSH(lir_op_lea(item_target, fn_label));
-            }
-
-            push_rt_call(m, RT_CALL_INTERFACE_CASTING, NULL, 6, out_ptr, int_operand(src_rtype_hash), interface_value,
-                         int_operand(interface_type->elements->length),
-                         methods_target, bool_operand(is_x));
-        } else {
-            push_rt_call(m, RT_CALL_INTERFACE_CASTING, NULL, 6, out_ptr, int_operand(src_rtype_hash), interface_value,
-                         int_operand(0),
-                         int_operand(0), bool_operand(is_x));
-        }
-
+        push_rt_call(m, RT_CALL_INTERFACE_CASTING, NULL, 4, out_ptr, vtable_ref, interface_value, bool_operand(is_x));
         return target;
     }
 

@@ -70,11 +70,20 @@ typedef enum {
     MODULE_TYPE_BUILTIN = 4,
 } module_type_t;
 
+// an 8 byte address the linker writes into a global symbol
+typedef struct {
+    uint64_t offset; // where in the symbol the address goes
+    char *name; // the symbol the address points to
+    int64_t addend; // bytes past that symbol
+    bool is_fn;
+} asm_global_reloc_t;
+
 typedef struct {
     char *name; // 符号名称
     size_t size; // 符号大小，单位 byte, 生成符号表的时候需要使用
     uint32_t alignment; // 符号的自然对齐，单位 byte；0 等同于 1
     uint8_t *value; // 符号值
+    slice_t *relocs; // asm_global_reloc_t, the addresses in value, NULL when it has none
 } asm_global_symbol_t;
 
 typedef struct {

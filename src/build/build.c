@@ -526,11 +526,13 @@ static void elf_assembler_module(module_t *m) {
     elf_context_t *ctx = elf_context_new(output, OUTPUT_OBJ);
 
     // 将全局变量写入到数据段或者符号表 (这里应该叫 global var)
+    uint64_t *data_offsets = mallocz(sizeof(uint64_t) * (m->asm_global_symbols->count + 1));
     for (int i = 0; i < m->asm_global_symbols->count; ++i) {
         asm_global_symbol_t *symbol = m->asm_global_symbols->take[i];
         // 写入到数据段
         uint64_t offset =
                 elf_put_data_aligned(ctx->data_section, symbol->value, symbol->size, symbol->alignment);
+        data_offsets[i] = offset;
 
         // 写入符号表
         Elf64_Sym sym = {
@@ -551,6 +553,20 @@ static void elf_assembler_module(module_t *m) {
         elf_riscv64_operation_encodings(ctx, m);
     } else {
         assert(false);
+    }
+
+    // the addresses in global symbols, such as a vtable's. the fns of the module are defined by now
+    for (int i = 0; i < m->asm_global_symbols->count; ++i) {
+        asm_global_symbol_t *symbol = m->asm_global_symbols->take[i];
+        if (!symbol->relocs) {
+            continue;
+        }
+
+        for (int j = 0; j < symbol->relocs->count; ++j) {
+            asm_global_reloc_t *reloc = symbol->relocs->take[j];
+            elf_put_rel_addr(ctx, ctx->data_section, data_offsets[i] + reloc->offset, reloc->name,
+                             reloc->is_fn ? STT_FUNC : STT_OBJECT, reloc->addend);
+        }
     }
 
 
@@ -587,6 +603,17 @@ static void mach_assembler_module(module_t *m) {
                                                   .n_value = offset, // in section data offset
                                           },
                      symbol->name);
+
+        // the addresses in the symbol, such as a vtable's. mach-o keeps the addend in the data itself
+        if (symbol->relocs) {
+            for (int j = 0; j < symbol->relocs->count; ++j) {
+                asm_global_reloc_t *reloc = symbol->relocs->take[j];
+                int64_t *slot = (int64_t *) (ctx->data_section->data + offset + reloc->offset);
+                *slot = reloc->addend;
+                mach_put_rel_data(ctx, ctx->data_section, (int32_t) (offset + reloc->offset), reloc->name,
+                                  N_UNDF | N_EXT);
+            }
+        }
     }
 
     if (BUILD_ARCH == ARCH_AMD64) {

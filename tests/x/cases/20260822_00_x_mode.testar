@@ -36,3 +36,37 @@ pub fn fib(int n):int {
 }
 --- output.txt
 55
+
+=== test_x_interface
+--- main.x
+import allocator as ac
+
+type shape = interface{
+    fn area():int
+}
+
+type square:shape = struct{
+    int side
+}
+
+fn square.area(*self):int {
+    return self.side * self.side
+}
+
+// the square is converted to shape here, the interface value outlives this frame
+fn make(ptr<square> p):shape {
+    return p
+}
+
+fn main() {
+    ptr<square> p = ac.new(square{side: 3})
+    var s = make(p)
+    // a call in between reuses the stack make() ran on
+    println('made')
+    println(s.area(), s is ptr<square>)
+    ac.free(p)
+}
+
+--- output.txt
+made
+9 true
