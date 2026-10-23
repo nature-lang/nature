@@ -24,7 +24,7 @@ static void rti_vec_grow(n_vec_t *vec, rtype_t *element_rtype, int custom_capaci
            vec->element_size);
 
     if (vec->length > 0) {
-        memmove(new_data, vec->data, vec->length * vec->element_size);
+        rti_write_barrier_array(new_data, vec->data, element_rtype, vec->length);
     }
 
     // vec->data = new_data; new_data 是 gc_malloc 新申请的已经进行了 write_barrier 处理
@@ -107,7 +107,7 @@ n_vec_t rt_vec_new(int64_t hash, int64_t element_hash, int64_t length, void *val
 
                 for (int64_t i = 0; i < length; i++) {
                     void *dst = vec.data + (i * element_size);
-                    memmove(dst, value_ref, element_size);
+                    rti_write_barrier_rtype(dst, value_ref, element_rtype);
                 }
             }
         }
@@ -204,24 +204,7 @@ void rti_vec_assign(n_vec_t *l, uint64_t index, void *ref, rtype_t *element_rtyp
     uint64_t offset = l->element_size * index; // (size unit byte) * index
     void *p = l->data + offset;
 
-    memmove(p, ref, l->element_size);
-
-    if (!gc_barrier_get() || element_rtype->last_ptr == 0) {
-        return;
-    }
-
-    uint8_t *gc_bits = RTDATA(element_rtype->malloc_gc_bits_offset);
-    if (element_rtype->malloc_gc_bits_offset == -1) {
-        gc_bits = (uint8_t *) &element_rtype->gc_bits;
-    }
-    uint64_t slot_count = align_up(element_rtype->storage_size, POINTER_SIZE) / POINTER_SIZE;
-    for (uint64_t i = 0; i < slot_count; ++i) {
-        if (!bitmap_test(gc_bits, i)) {
-            continue;
-        }
-        void **slot = (void **) ((uint8_t *) p + (i * POINTER_SIZE));
-        rti_write_barrier_ptr(slot, *slot, false);
-    }
+    rti_write_barrier_rtype(p, ref, element_rtype);
 }
 
 uint64_t rt_vec_length(n_vec_t *l) {
@@ -344,7 +327,7 @@ void rt_vec_append(n_vec_t *dst, n_vec_t *src, int64_t element_hash) {
         rti_vec_grow(dst, element_rtype, dst->length + src->length + 1);
     }
 
-    memmove(dst->data + dst->length * dst->element_size, src->data, src->length * src->element_size);
+    rti_write_barrier_array(dst->data + dst->length * dst->element_size, src->data, element_rtype, src->length);
     dst->length += src->length;
 }
 
@@ -366,11 +349,12 @@ n_vec_t rt_vec_concat(n_vec_t *a, n_vec_t *b, int64_t element_hash) {
 
     // 合并 a
     void *dst = merged.data;
-    memmove(dst, a->data, a->length * a->element_size);
+    rtype_t *element_rtype = rt_find_rtype(element_hash);
+    rti_write_barrier_array(dst, a->data, element_rtype, a->length);
 
     // 合并 b
     dst = merged.data + (a->length * a->element_size);
-    memmove(dst, b->data, b->length * a->element_size);
+    rti_write_barrier_array(dst, b->data, element_rtype, b->length);
 
     return merged;
 }
@@ -445,11 +429,17 @@ n_vec_t rti_vec_new(rtype_t *element_rtype, int64_t length, int64_t capacity) {
  * @param src 源 vec
  * @return 实际复制的元素数量（取 dst 剩余空间和src长度的最小值）
  */
-uint64_t rt_vec_copy(n_vec_t *dst, n_vec_t src) {
-    uint64_t copy_len = src.length < dst->length ? src.length : dst->length;
+uint64_t rt_vec_copy(n_vec_t *dst, n_vec_t *src, int64_t element_hash) {
+    uint64_t copy_len = src->length < dst->length ? src->length : dst->length;
 
     if (copy_len > 0) {
-        memmove(dst->data, src.data, copy_len * src.element_size);
+        if (gc_barrier_get()) {
+            rtype_t *element_rtype = rt_find_rtype(element_hash);
+            assert(element_rtype);
+            rti_write_barrier_array(dst->data, src->data, element_rtype, copy_len);
+        } else {
+            memmove(dst->data, src->data, copy_len * src->element_size);
+        }
     }
 
     DEBUGF("[rt_vec_copy] copied %lu elements from %p to %p", copy_len, src, dst);

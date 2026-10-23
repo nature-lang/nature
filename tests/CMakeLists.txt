@@ -12,6 +12,28 @@ endif ()
 
 message("LIBC_STATIC: ${LIBC_STATIC}")
 
+if (CMAKE_SYSTEM_NAME STREQUAL "darwin" OR CMAKE_SYSTEM_NAME STREQUAL "linux")
+    add_executable(test_gc_write_barrier test_gc_write_barrier.c)
+    target_compile_definitions(test_gc_write_barrier PRIVATE RUNTIME)
+    target_include_directories(test_gc_write_barrier PRIVATE ${CMAKE_SOURCE_DIR})
+    set(GC_BARRIER_LIB_DIR "${CMAKE_SOURCE_DIR}/lib/${CMAKE_SYSTEM_NAME}_${CMAKE_SYSTEM_PROCESSOR}")
+    if (CMAKE_SYSTEM_NAME STREQUAL "linux")
+        target_link_options(test_gc_write_barrier PRIVATE -static -nostdlib -no-pie)
+        target_link_libraries(test_gc_write_barrier PRIVATE "${GC_BARRIER_LIB_DIR}/crt1.o")
+    endif ()
+    target_link_libraries(test_gc_write_barrier PRIVATE
+            "${GC_BARRIER_LIB_DIR}/libruntime.a" "${GC_BARRIER_LIB_DIR}/libuv.a")
+    if (CMAKE_SYSTEM_NAME STREQUAL "linux")
+        target_link_libraries(test_gc_write_barrier PRIVATE
+                -Wl,--start-group "${GC_BARRIER_LIB_DIR}/libc.a"
+                "${GC_BARRIER_LIB_DIR}/libgcc.a" -Wl,--end-group)
+    else ()
+        target_link_libraries(test_gc_write_barrier PRIVATE m pthread dl)
+    endif ()
+    add_test(NAME test_gc_write_barrier COMMAND test_gc_write_barrier)
+    set_tests_properties(test_gc_write_barrier PROPERTIES TIMEOUT 20)
+endif ()
+
 # 创建静态库，避免重复编译
 add_library(nature_common_test STATIC ${SRC} ${CMD} ${UTILS})
 target_include_directories(nature_common_test PUBLIC ${CMAKE_SOURCE_DIR}/include ${CMAKE_SOURCE_DIR})

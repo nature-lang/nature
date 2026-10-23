@@ -19,6 +19,8 @@ static lir_operand_t *linear_expr(module_t *m, ast_expr_t expr, lir_operand_t *t
 
 static void linear_assign(module_t *m, ast_assign_stmt_t *stmt);
 
+static void linear_store(module_t *module, type_t type, lir_operand_t *dst, lir_operand_t *src);
+
 static lir_operand_t *linear_array_access(module_t *m, ast_expr_t expr, lir_operand_t *target);
 
 static lir_operand_t *linear_default_operand(module_t *m, type_t t, lir_operand_t *target);

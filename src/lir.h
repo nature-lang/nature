@@ -61,6 +61,7 @@
 #define RT_CALL_UNSAFE_VEC_NEW "rt_unsafe_vec_new"
 
 #define RT_CALL_WRITE_BARRIER "write_barrier"
+#define RT_CALL_WRITE_BARRIER_RTYPE "write_barrier_rtype"
 
 #define RT_CALL_PTR_VALID "ptr_valid"
 
@@ -245,7 +246,7 @@ static inline bool is_rtcall(string target) {
     return str_equal(target, RT_CALL_SET_ADD) || str_equal(target, RT_CALL_SET_DELETE) ||
            str_equal(target, RT_CALL_SET_CONTAINS) || str_equal(target, RT_CALL_SET_NEW) ||
            str_equal(target, RT_CALL_VEC_CAP) || str_equal(target, RT_CALL_ARRAY_NEW) ||
-           str_equal(target, RT_CALL_WRITE_BARRIER) ||
+           str_equal(target, RT_CALL_WRITE_BARRIER) || str_equal(target, RT_CALL_WRITE_BARRIER_RTYPE) ||
            str_equal(target, RT_CALL_PTR_VALID) ||
            str_equal(target, RT_CALL_MAP_NEW) || str_equal(target, RT_CALL_MAP_ACCESS) ||
            str_equal(target, RT_CALL_MAP_ASSIGN) || str_equal(target, RT_CALL_MAP_LENGTH) ||

@@ -60,6 +60,43 @@ void shade_obj_grey(void *obj) {
     }
 }
 
+/**
+ * Shade a referent for either half of the hybrid barrier without clearing an existing mark.
+ */
+void shade_ptr_grey(void *ptr) {
+    addr_t addr = (addr_t) ptr;
+    if (!in_heap(addr)) {
+        return;
+    }
+
+    mspan_t *span = span_of(addr);
+    if (!span) {
+        return;
+    }
+
+    // a word that only looks like a pointer can sit past the last object of the span, or in a freed one, and the
+    // mark bits end with obj_count, so check the index before reading them
+    uint64_t obj_index = (addr - span->base) / span->obj_size;
+    if (!span_object_is_allocated(span, obj_index)) {
+        return;
+    }
+
+    // marked already, a store in a loop would otherwise queue the same object again and again
+    mutex_lock(&span->gcmark_locker);
+    bool marked = bitmap_test(span->gcmark_bits, obj_index);
+    mutex_unlock(&span->gcmark_locker);
+    if (marked) {
+        return;
+    }
+
+    n_processor_t *p = processor_get();
+    if (p && p->gc_work_finished < memory->gc_count) {
+        insert_gc_worklist(&p->gc_worklist, ptr);
+    } else {
+        insert_gc_worklist(&global_gc_worklist, ptr);
+    }
+}
+
 void rt_shade_obj_with_barrier(void *new_obj) {
     //    n_processor_t *p = processor_get();
     // 独享线程进行 write barrier 之前需要尝试获取线程锁, 避免与 gc_work 冲突

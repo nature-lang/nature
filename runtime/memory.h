@@ -267,6 +267,8 @@ arena_hint_t *arena_hints_init();
 
 void shade_obj_grey(void *obj);
 
+void shade_ptr_grey(void *ptr);
+
 void rt_shade_obj_with_barrier(void *obj);
 
 void mark_ptr_black(void *value);

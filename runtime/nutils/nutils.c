@@ -333,7 +333,7 @@ void interface_casting(n_interface_t *out, n_vtable_t *vtable, void *value_ref) 
         // union 进行了数据的额外缓存，并进行值 copy，不需要担心 arr/struct 这样的大数据的丢失问题
         // only .n gets here, .x converts only a pointer to an interface
         void *new_value = rti_gc_malloc(rtype->gc_heap_size, rtype);
-        memmove(new_value, value_ref, stack_size);
+        rti_write_barrier_rtype(new_value, value_ref, rtype);
         out->value.ptr_value = new_value;
     } else {
         // 特殊类型参数处理，为了兼容 fn method 中的 self 自动化参数, self 如果是 int/struct 等类型，会自动转换为 ref<int>
@@ -414,7 +414,7 @@ void any_casting(n_any_t *out, int64_t input_rtype_hash, void *value_ref, n_bool
             out->value.ptr_value = value_ref;
         } else {
             void *new_value = rti_gc_malloc(rtype->gc_heap_size, rtype);
-            memmove(new_value, value_ref, storage_size);
+            rti_write_barrier_rtype(new_value, value_ref, rtype);
             out->value.ptr_value = new_value;
         }
     } else {
@@ -768,7 +768,31 @@ char *rtype_value_to_str(rtype_t *rtype, void *data_ref) {
     return NULL;
 }
 
-// mark_black_new_obj 如果 new_obj 不是从 allocator(gc_malloc) 获取的新对象，则有必要主动 mark black 避免其被 sweep
+// Shade a value's pointer slots before copying or clearing it.
+void rti_shade_rtype(void *p, rtype_t *rtype) {
+    if (!gc_barrier_get() || rtype->last_ptr == 0) {
+        return;
+    }
+
+    uint8_t *gc_bits = rtype_gc_bits_data(rtype);
+    uint64_t slot_count = align_up(rtype->storage_size, POINTER_SIZE) / POINTER_SIZE;
+    for (uint64_t i = 0; i < slot_count; ++i) {
+        if (bitmap_test(gc_bits, i)) {
+            shade_ptr_grey(*(void **) ((uint8_t *) p + i * POINTER_SIZE));
+        }
+    }
+}
+
+static bool rti_write_barrier_needs_insert(void) {
+    coroutine_t *co = coroutine_get();
+    return !co || co->gc_black < memory->gc_count;
+}
+
+/**
+ * The hybrid barrier shades the overwritten pointer and, while the current stack is grey, the new pointer.
+ * Both happen before publishing the store. Runtime callbacks without a coroutine also shade the new pointer.
+ * mark_black_new_obj 如果 new_obj 不是从 allocator(gc_malloc) 获取的新对象，则有必要主动 mark black 避免其被 sweep
+ */
 void rti_write_barrier_ptr(void *slot, void *new_obj, bool mark_black_new_obj) {
     DEBUGF("[rt_write_barrier_ptr] slot=%p, new_obj=%p, barrier_ptr?=%d", slot, new_obj, gc_barrier_get());
     if (!gc_barrier_get()) {
@@ -776,14 +800,7 @@ void rti_write_barrier_ptr(void *slot, void *new_obj, bool mark_black_new_obj) {
         return;
     }
 
-    // yuasa 删除写屏障 shade slot
-    shade_obj_grey(slot);
-
-    // stack 扫描完成后退化成黑色写屏障, 否则是是灰色写屏障
-    coroutine_t *co = coroutine_get();
-    bool is_grey = co->gc_black < memory->gc_count;
-    DEBUGF("[runtime_gc.rt_write_barrier_ptr] slot: %p, new_obj: %p, gc_barrier is true, gc_black %d", slot, new_obj,
-           is_grey);
+    shade_ptr_grey(*(void **) slot);
 
     // 直接 mark 为黑色，当前 new_obj 的 field 不会被处理，并且该 obj 本轮 gc 不会被清理
     // 例如 global linkco cache 中的获取的新的 obj, 不是从 allocator 中申请，所以需要主动进行 mark
@@ -791,11 +808,8 @@ void rti_write_barrier_ptr(void *slot, void *new_obj, bool mark_black_new_obj) {
         mark_ptr_black(new_obj);
     }
 
-    // Dijkstra 写屏障
-    // new_obj 可能为 null
-    if (is_grey && new_obj) {
-        // shade new_obj
-        shade_obj_grey(new_obj);
+    if (rti_write_barrier_needs_insert()) {
+        shade_ptr_grey(new_obj);
     }
 
     *(void **) slot = new_obj;
@@ -805,26 +819,38 @@ void write_barrier(void *slot, void *new_obj) {
     rti_write_barrier_ptr(slot, new_obj, false);
 }
 
-void rti_write_barrier_rtype(void *dst, void *src, rtype_t *rtype) {
-    memmove(dst, src, rtype->storage_size);
-
-    if (!gc_barrier_get() || rtype->last_ptr == 0) {
+// compiled code stores a value with pointers, such as a string or a struct, through here. the copy and the
+// barrier happen in one call, so no preemption can fall between them
+void write_barrier_rtype(void *dst, void *src, int64_t size, int64_t rtype_hash) {
+    if (!gc_barrier_get()) {
+        memmove(dst, src, size);
         return;
     }
 
-    uint8_t *gc_bits = RTDATA(rtype->malloc_gc_bits_offset);
-    if (rtype->malloc_gc_bits_offset == -1) {
-        gc_bits = (uint8_t *) &rtype->gc_bits;
+    rti_write_barrier_rtype(dst, src, rt_find_rtype(rtype_hash));
+}
+
+void rti_write_barrier_rtype(void *dst, void *src, rtype_t *rtype) {
+    rti_write_barrier_array(dst, src, rtype, 1);
+}
+
+void rti_write_barrier_array(void *dst, void *src, rtype_t *rtype, uint64_t count) {
+    if (dst == src || count == 0) {
+        return;
     }
 
-    uint64_t slot_count = align_up(rtype->storage_size, POINTER_SIZE) / POINTER_SIZE;
-    for (uint64_t i = 0; i < slot_count; ++i) {
-        if (!bitmap_test(gc_bits, i)) {
-            continue;
+    if (gc_barrier_get() && rtype->last_ptr > 0) {
+        bool shade_new = rti_write_barrier_needs_insert();
+        for (uint64_t index = 0; index < count; ++index) {
+            uint64_t offset = index * rtype->storage_size;
+            rti_shade_rtype((uint8_t *) dst + offset, rtype);
+            if (shade_new) {
+                rti_shade_rtype((uint8_t *) src + offset, rtype);
+            }
         }
-        void **slot = (void **) ((uint8_t *) dst + (i * POINTER_SIZE));
-        rti_write_barrier_ptr(slot, *slot, false);
     }
+
+    memmove(dst, src, count * rtype->storage_size);
 }
 
 void ptr_valid(void *ptr) {

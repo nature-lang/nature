@@ -1010,7 +1010,7 @@ static void linear_escape_rewrite(module_t *m, ast_var_decl_t *var_decl, bool fo
         dst = indirect_addr_operand(m, var_decl->type, heap_operand, 0);
     }
 
-    linear_super_move(m, var_decl->type, dst, src);
+    linear_store(m, var_decl->type, dst, src);
 }
 
 /**
@@ -1139,6 +1139,40 @@ static lir_operand_t *linear_ident(module_t *m, ast_expr_t expr, lir_operand_t *
     exit(1);
 }
 
+// a value with pointers, such as a string or a struct, copied as a block where the gc may have scanned already
+static bool linear_need_barrier_rtype(type_t t) {
+    return t.storage_kind == STORAGE_KIND_IND && ct_rtype_has_ptr(t);
+}
+
+static lir_operand_t *linear_value_ref(module_t *module, lir_operand_t *operand) {
+    if (operand->assert_type == LIR_OPERAND_VAR && lir_operand_type(operand).storage_kind != STORAGE_KIND_IND) {
+        return operand;
+    }
+    return lea_operand_pointer(module, operand);
+}
+
+/**
+ * write_barrier_rtype applies the hybrid barrier before copying a value with pointers.
+ * @param dst_ref the address the value goes to
+ * @param src the value
+ */
+static void linear_write_barrier_rtype(module_t *m, type_t t, lir_operand_t *dst_ref, lir_operand_t *src) {
+    lir_operand_t *src_ref = linear_value_ref(m, src);
+    push_rt_call(m, RT_CALL_WRITE_BARRIER_RTYPE, NULL, 4, dst_ref, src_ref, int_operand(t.storage_size),
+                 int_operand(type_hash(t)));
+}
+
+static void linear_store(module_t *module, type_t type, lir_operand_t *dst, lir_operand_t *src) {
+    if (!module->is_x && is_gc_alloc(type.kind)) {
+        push_rt_call(module, RT_CALL_WRITE_BARRIER, NULL, 2, lea_operand_pointer(module, dst), src);
+    } else if (!module->is_x && linear_need_barrier_rtype(type)) {
+        lir_operand_t *dst_ref = linear_value_ref(module, dst);
+        linear_write_barrier_rtype(module, type, dst_ref, src);
+    } else {
+        linear_super_move(module, type, dst, src);
+    }
+}
+
 /**
  * - 一旦将 addr 地址暴露出来，如果在 linear_expr 中存在 list push 操作就会造成 list.data 整体迁移，导致 addr 地址失效
  * - 应该总是优先编译右值，然后将右值 move 到左值中，避免出现 addr grow 的问题
@@ -1158,6 +1192,8 @@ static void linear_vec_assign(module_t *m, ast_assign_stmt_t *stmt) {
     if (vec_element_type.storage_kind == STORAGE_KIND_PTR || vec_element_type.kind == TYPE_ANYPTR) {
         // target 已经是指针了，不需要再次计算 slot
         push_rt_call(m, RT_CALL_WRITE_BARRIER, NULL, 2, target, src);
+    } else if (linear_need_barrier_rtype(vec_element_type)) {
+        linear_write_barrier_rtype(m, vec_element_type, target, src);
     } else {
         if (vec_element_type.storage_kind == STORAGE_KIND_DIR) {
             target = indirect_addr_operand(m, vec_element_type, target, 0);
@@ -1175,6 +1211,10 @@ static void linear_array_assign(module_t *m, ast_assign_stmt_t *stmt) {
         lir_operand_t *dst_slot = lea_operand_pointer(m, target);
 
         push_rt_call(m, RT_CALL_WRITE_BARRIER, NULL, 2, dst_slot, new_obj);
+    } else if (linear_need_barrier_rtype(stmt->left.type)) {
+        lir_operand_t *src = linear_expr(m, stmt->right, NULL);
+        lir_operand_t *dst_ref = lea_operand_pointer(m, target);
+        linear_write_barrier_rtype(m, stmt->left.type, dst_ref, src);
     } else {
         linear_expr(m, stmt->right, target);
     }
@@ -1196,6 +1236,10 @@ static void linear_tuple_assign(module_t *m, ast_assign_stmt_t *stmt) {
         lir_operand_t *obj = linear_expr(m, stmt->right, NULL);
         lir_operand_t *dst_slot = lea_operand_pointer(m, dst);
         push_rt_call(m, RT_CALL_WRITE_BARRIER, NULL, 2, dst_slot, obj);
+    } else if (linear_need_barrier_rtype(stmt->left.type)) {
+        lir_operand_t *src = linear_expr(m, stmt->right, NULL);
+        lir_operand_t *dst_ref = lea_operand_pointer(m, dst);
+        linear_write_barrier_rtype(m, stmt->left.type, dst_ref, src);
     } else {
         if (stmt->left.type.storage_kind == STORAGE_KIND_IND) {
             dst = lea_operand_pointer(m, dst);
@@ -1244,7 +1288,9 @@ static void linear_env_assign(module_t *m, ast_assign_stmt_t *stmt) {
         lir_operand_t *dst_ptr = temp_var_operand(m, type_refof(stmt->right.type));
         OP_PUSH(lir_op_move(dst_ptr, env_offset_operand)); // mov env_values[0] -> dst_ptr
 
-        if (stmt->left.type.storage_kind == STORAGE_KIND_IND) {
+        if (linear_need_barrier_rtype(stmt->left.type)) {
+            linear_write_barrier_rtype(m, stmt->left.type, dst_ptr, src);
+        } else if (stmt->left.type.storage_kind == STORAGE_KIND_IND) {
             linked_concat(m->current_closure->operations, lir_memory_mov(m, size, dst_ptr, src));
         } else {
             lir_operand_t *dst = indirect_addr_operand(m, stmt->left.type, dst_ptr, 0);
@@ -1273,6 +1319,9 @@ static void linear_map_assign(module_t *m, ast_assign_stmt_t *stmt) {
         // 不包含 struct/array
         lir_operand_t *obj = linear_expr(m, stmt->right, NULL);
         push_rt_call(m, RT_CALL_WRITE_BARRIER, NULL, 2, dst, obj);
+    } else if (linear_need_barrier_rtype(stmt->left.type)) {
+        lir_operand_t *src = linear_expr(m, stmt->right, NULL);
+        linear_write_barrier_rtype(m, stmt->left.type, dst, src);
     } else {
         if (stmt->right.type.storage_kind != STORAGE_KIND_IND) {
             dst = indirect_addr_operand(m, stmt->right.type, dst, 0);
@@ -1316,6 +1365,10 @@ static void linear_struct_assign(module_t *m, ast_assign_stmt_t *stmt) {
         //        obj = lea_operand_pointer(m, obj);
 
         push_rt_call(m, RT_CALL_WRITE_BARRIER, NULL, 2, dst_slot, obj);
+    } else if (linear_need_barrier_rtype(stmt->left.type)) {
+        lir_operand_t *src = linear_expr(m, stmt->right, NULL);
+        lir_operand_t *dst_ref = lea_operand_pointer(m, dst_slot);
+        linear_write_barrier_rtype(m, stmt->left.type, dst_ref, src);
     } else {
         // lea [rax+16], rcx
         if (stmt->left.type.storage_kind == STORAGE_KIND_IND) {
@@ -1334,6 +1387,17 @@ static void linear_ia_ptr_assign(module_t *m, ast_assign_stmt_t *stmt) {
     lir_operand_t *src = linear_expr(m, stmt->right, NULL);
 
     lir_operand_t *ptr_operand = linear_expr(m, unary_expr->operand, NULL);
+
+    // the pointer can point into the heap, as a field or an element does
+    if (is_gc_alloc(stmt->left.type.kind)) {
+        push_rt_call(m, RT_CALL_WRITE_BARRIER, NULL, 2, ptr_operand, src);
+        return;
+    }
+
+    if (linear_need_barrier_rtype(stmt->left.type)) {
+        linear_write_barrier_rtype(m, stmt->left.type, ptr_operand, src);
+        return;
+    }
 
     // *ptr = [a, b, c]
     // *ptr = 12
@@ -1361,6 +1425,19 @@ static void linear_ident_assign(module_t *m, ast_assign_stmt_t *stmt) {
     lir_operand_t *dst = linear_ident(m, stmt->left, NULL); // ident
 
     assert(stmt->left.type.kind > 0 && stmt->left.type.kind != TYPE_UNKNOWN);
+
+    ast_ident *ident = stmt->left.value;
+    symbol_t *symbol = symbol_table_get_noref(ident->literal);
+    if (symbol && symbol->type == SYMBOL_VAR) {
+        ast_var_decl_t *var_decl = symbol->ast_value;
+        bool heap_value = var_decl->heap_ident ||
+                          (var_decl->type.storage_kind == STORAGE_KIND_IND && var_decl->type.in_heap);
+        if (!symbol->is_local || heap_value) {
+            linear_store(m, stmt->left.type, dst, src);
+            return;
+        }
+    }
+
     linear_super_move(m, stmt->left.type, dst, src);
 }
 
@@ -1452,7 +1529,11 @@ static void linear_var_tuple_destr(module_t *m, ast_tuple_destr_t *destr, lir_op
             ast_var_decl_t *var_decl = element->value;
             lir_operand_t *dst = linear_var_decl(m, var_decl);
 
-            linear_super_move(m, element->type, dst, element_src_operand);
+            if (var_decl->type.in_heap && var_decl->type.storage_kind == STORAGE_KIND_IND) {
+                linear_store(m, element->type, dst, element_src_operand);
+            } else {
+                linear_super_move(m, element->type, dst, element_src_operand);
+            }
 
             // var *t1 = 12
             linear_escape_rewrite(m, var_decl, false);
@@ -1503,7 +1584,11 @@ static void linear_vardef(module_t *m, ast_vardef_stmt_t *stmt) {
         linear_expr(m, *stmt->right, dst);
     } else {
         lir_operand_t *src = linear_expr(m, *stmt->right, NULL);
-        linear_super_move(m, stmt->var_decl.type, dst, src);
+        if (stmt->var_decl.type.in_heap && stmt->var_decl.type.storage_kind == STORAGE_KIND_IND) {
+            linear_store(m, stmt->var_decl.type, dst, src);
+        } else {
+            linear_super_move(m, stmt->var_decl.type, dst, src);
+        }
     }
 
     // 将 dst 值 copy 出来进行重新分配改写
@@ -2138,8 +2223,7 @@ static lir_operand_t *linear_call_impl(module_t *m, ast_expr_t expr, lir_operand
                         arg_dst_target = indirect_addr_operand(m, vec_element_type, arg_dst_target, 0);
                     }
 
-                    // 直接进行 mov
-                    linear_super_move(m, vec_element_type, arg_dst_target, rest_src_target);
+                    linear_store(m, vec_element_type, arg_dst_target, rest_src_target);
                 }
 
                 index += 1;
@@ -2589,8 +2673,7 @@ static lir_operand_t *linear_vec_new(module_t *m, ast_expr_t expr, lir_operand_t
                     item_dst_target = indirect_addr_operand(m, vec_element_type, item_dst_target, 0);
                 }
 
-                // 直接进行 mov
-                linear_super_move(m, vec_element_type, item_dst_target, item_src_target);
+                linear_store(m, vec_element_type, item_dst_target, item_src_target);
             }
         }
     }
@@ -2687,7 +2770,12 @@ static lir_operand_t *linear_array_new(module_t *m, ast_expr_t expr, lir_operand
 
         if (i < ast->elements->length) {
             ast_expr_t *item_expr = ct_list_value(ast->elements, i);
-            linear_expr(m, *item_expr, item_target);
+            if (arr_in_heap) {
+                lir_operand_t *item_src = linear_expr(m, *item_expr, NULL);
+                linear_store(m, type_array.array->element_type, item_target, item_src);
+            } else {
+                linear_expr(m, *item_expr, item_target);
+            }
         } else {
             linear_default_operand(m, type_array.array->element_type, item_target);
         }
@@ -2721,7 +2809,11 @@ static lir_operand_t *linear_array_repeat_new(module_t *m, ast_expr_t expr, lir_
             item_target = indirect_addr_operand(m, type_array.array->element_type, item_target, 0);
         }
 
-        linear_super_move(m, type_array.array->element_type, item_target, default_element_target);
+        if (type_array.in_heap) {
+            linear_store(m, type_array.array->element_type, item_target, default_element_target);
+        } else {
+            linear_super_move(m, type_array.array->element_type, item_target, default_element_target);
+        }
     }
 
     return target;
@@ -2859,7 +2951,8 @@ static lir_operand_t *linear_map_new(module_t *m, ast_expr_t expr, lir_operand_t
             value_ptr_target = indirect_addr_operand(m, map_type.map->value_type, value_ptr_target, 0);
         }
 
-        linear_expr(m, element->value, value_ptr_target);
+        lir_operand_t *value_src = linear_expr(m, element->value, NULL);
+        linear_store(m, map_type.map->value_type, value_ptr_target, value_src);
     }
 
     return target;
@@ -2993,7 +3086,12 @@ static lir_operand_t *linear_struct_new(module_t *m, ast_expr_t expr, lir_operan
             dst = lea_operand_pointer(m, dst);
         }
 
-        linear_expr(m, *property_expr, dst);
+        if (t.in_heap) {
+            lir_operand_t *src = linear_expr(m, *property_expr, NULL);
+            linear_store(m, p->type, dst, src);
+        } else {
+            linear_expr(m, *property_expr, dst);
+        }
     }
 
     linear_struct_fill_default(m, t, target, exists);
@@ -3031,7 +3129,12 @@ static lir_operand_t *linear_tuple_new(module_t *m, ast_expr_t expr, lir_operand
             dst = lea_operand_pointer(m, dst);
         }
 
-        linear_expr(m, *element, dst);
+        if (expr.type.in_heap) {
+            lir_operand_t *src = linear_expr(m, *element, NULL);
+            linear_store(m, element->type, dst, src);
+        } else {
+            linear_expr(m, *element, dst);
+        }
 
         offset += element_size;
     }
@@ -3112,7 +3215,8 @@ static lir_operand_t *linear_new_expr(module_t *m, ast_expr_t expr, lir_operand_
                 dst = lea_operand_pointer(m, dst);
             }
 
-            linear_expr(m, *property_expr, dst);
+            lir_operand_t *src = linear_expr(m, *property_expr, NULL);
+            linear_store(m, p->type, dst, src);
         }
         linear_struct_fill_default(m, new_expr->type, target, exists);
     } else {
@@ -3127,7 +3231,7 @@ static lir_operand_t *linear_new_expr(module_t *m, ast_expr_t expr, lir_operand_
                 dst = indirect_addr_operand(m, new_expr->type, target, 0);
             }
 
-            linear_super_move(m, new_expr->type, dst, src);
+            linear_store(m, new_expr->type, dst, src);
         }
     }
 
