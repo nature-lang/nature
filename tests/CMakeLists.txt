@@ -16,15 +16,20 @@ if (CMAKE_SYSTEM_NAME STREQUAL "darwin" OR CMAKE_SYSTEM_NAME STREQUAL "linux")
     add_executable(test_gc_write_barrier test_gc_write_barrier.c)
     target_compile_definitions(test_gc_write_barrier PRIVATE RUNTIME)
     target_include_directories(test_gc_write_barrier PRIVATE ${CMAKE_SOURCE_DIR})
-    if (CMAKE_SYSTEM_NAME STREQUAL "linux" AND CMAKE_SYSTEM_PROCESSOR STREQUAL "arm64")
-        set(GC_BARRIER_LIBUV "${CMAKE_SOURCE_DIR}/lib/${CMAKE_SYSTEM_NAME}_${CMAKE_SYSTEM_PROCESSOR}/libuv_gcc.a")
-        target_compile_options(test_gc_write_barrier PRIVATE -mno-outline-atomics)
-    else ()
-        set(GC_BARRIER_LIBUV "${CMAKE_SOURCE_DIR}/lib/${CMAKE_SYSTEM_NAME}_${CMAKE_SYSTEM_PROCESSOR}/libuv.a")
+    set(GC_BARRIER_LIB_DIR "${CMAKE_SOURCE_DIR}/lib/${CMAKE_SYSTEM_NAME}_${CMAKE_SYSTEM_PROCESSOR}")
+    if (CMAKE_SYSTEM_NAME STREQUAL "linux")
+        target_link_options(test_gc_write_barrier PRIVATE -static -nostdlib -no-pie)
+        target_link_libraries(test_gc_write_barrier PRIVATE "${GC_BARRIER_LIB_DIR}/crt1.o")
     endif ()
-    target_link_libraries(test_gc_write_barrier
-            "${CMAKE_SOURCE_DIR}/lib/${CMAKE_SYSTEM_NAME}_${CMAKE_SYSTEM_PROCESSOR}/libruntime.a"
-            ${GC_BARRIER_LIBUV} m pthread dl)
+    target_link_libraries(test_gc_write_barrier PRIVATE
+            "${GC_BARRIER_LIB_DIR}/libruntime.a" "${GC_BARRIER_LIB_DIR}/libuv.a")
+    if (CMAKE_SYSTEM_NAME STREQUAL "linux")
+        target_link_libraries(test_gc_write_barrier PRIVATE
+                -Wl,--start-group "${GC_BARRIER_LIB_DIR}/libc.a"
+                "${GC_BARRIER_LIB_DIR}/libgcc.a" -Wl,--end-group)
+    else ()
+        target_link_libraries(test_gc_write_barrier PRIVATE m pthread dl)
+    endif ()
     add_test(NAME test_gc_write_barrier COMMAND test_gc_write_barrier)
     set_tests_properties(test_gc_write_barrier PROPERTIES TIMEOUT 20)
 endif ()
