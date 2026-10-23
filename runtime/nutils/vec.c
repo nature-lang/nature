@@ -24,7 +24,7 @@ static void rti_vec_grow(n_vec_t *vec, rtype_t *element_rtype, int custom_capaci
            vec->element_size);
 
     if (vec->length > 0) {
-        memmove(new_data, vec->data, vec->length * vec->element_size);
+        rti_write_barrier_array(new_data, vec->data, element_rtype, vec->length);
     }
 
     // vec->data = new_data; new_data 是 gc_malloc 新申请的已经进行了 write_barrier 处理
@@ -107,7 +107,7 @@ n_vec_t rt_vec_new(int64_t hash, int64_t element_hash, int64_t length, void *val
 
                 for (int64_t i = 0; i < length; i++) {
                     void *dst = vec.data + (i * element_size);
-                    memmove(dst, value_ref, element_size);
+                    rti_write_barrier_rtype(dst, value_ref, element_rtype);
                 }
             }
         }
@@ -327,7 +327,7 @@ void rt_vec_append(n_vec_t *dst, n_vec_t *src, int64_t element_hash) {
         rti_vec_grow(dst, element_rtype, dst->length + src->length + 1);
     }
 
-    memmove(dst->data + dst->length * dst->element_size, src->data, src->length * src->element_size);
+    rti_write_barrier_array(dst->data + dst->length * dst->element_size, src->data, element_rtype, src->length);
     dst->length += src->length;
 }
 
@@ -349,11 +349,12 @@ n_vec_t rt_vec_concat(n_vec_t *a, n_vec_t *b, int64_t element_hash) {
 
     // 合并 a
     void *dst = merged.data;
-    memmove(dst, a->data, a->length * a->element_size);
+    rtype_t *element_rtype = rt_find_rtype(element_hash);
+    rti_write_barrier_array(dst, a->data, element_rtype, a->length);
 
     // 合并 b
     dst = merged.data + (a->length * a->element_size);
-    memmove(dst, b->data, b->length * a->element_size);
+    rti_write_barrier_array(dst, b->data, element_rtype, b->length);
 
     return merged;
 }
@@ -432,17 +433,13 @@ uint64_t rt_vec_copy(n_vec_t *dst, n_vec_t *src, int64_t element_hash) {
     uint64_t copy_len = src->length < dst->length ? src->length : dst->length;
 
     if (copy_len > 0) {
-        // the elements the copy overwrites can live on in a stack the gc has scanned
         if (gc_barrier_get()) {
             rtype_t *element_rtype = rt_find_rtype(element_hash);
             assert(element_rtype);
-            if (element_rtype->last_ptr > 0) {
-                for (uint64_t index = 0; index < copy_len; ++index) {
-                    rti_shade_rtype(dst->data + index * dst->element_size, element_rtype);
-                }
-            }
+            rti_write_barrier_array(dst->data, src->data, element_rtype, copy_len);
+        } else {
+            memmove(dst->data, src->data, copy_len * src->element_size);
         }
-        memmove(dst->data, src->data, copy_len * src->element_size);
     }
 
     DEBUGF("[rt_vec_copy] copied %lu elements from %p to %p", copy_len, src, dst);

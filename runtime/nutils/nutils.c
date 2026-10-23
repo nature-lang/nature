@@ -333,7 +333,7 @@ void interface_casting(n_interface_t *out, n_vtable_t *vtable, void *value_ref) 
         // union 进行了数据的额外缓存，并进行值 copy，不需要担心 arr/struct 这样的大数据的丢失问题
         // only .n gets here, .x converts only a pointer to an interface
         void *new_value = rti_gc_malloc(rtype->gc_heap_size, rtype);
-        memmove(new_value, value_ref, stack_size);
+        rti_write_barrier_rtype(new_value, value_ref, rtype);
         out->value.ptr_value = new_value;
     } else {
         // 特殊类型参数处理，为了兼容 fn method 中的 self 自动化参数, self 如果是 int/struct 等类型，会自动转换为 ref<int>
@@ -414,7 +414,7 @@ void any_casting(n_any_t *out, int64_t input_rtype_hash, void *value_ref, n_bool
             out->value.ptr_value = value_ref;
         } else {
             void *new_value = rti_gc_malloc(rtype->gc_heap_size, rtype);
-            memmove(new_value, value_ref, storage_size);
+            rti_write_barrier_rtype(new_value, value_ref, rtype);
             out->value.ptr_value = new_value;
         }
     } else {
@@ -768,7 +768,7 @@ char *rtype_value_to_str(rtype_t *rtype, void *data_ref) {
     return NULL;
 }
 
-// the deletion barrier for a value about to be overwritten: its pointers can live on in a stack the gc has scanned
+// Shade a value's pointer slots before copying or clearing it.
 void rti_shade_rtype(void *p, rtype_t *rtype) {
     if (!gc_barrier_get() || rtype->last_ptr == 0) {
         return;
@@ -783,10 +783,14 @@ void rti_shade_rtype(void *p, rtype_t *rtype) {
     }
 }
 
+static bool rti_write_barrier_needs_insert(void) {
+    coroutine_t *co = coroutine_get();
+    return !co || co->gc_black < memory->gc_count;
+}
+
 /**
- * a cycle keeps everything reachable when it starts: each processor scans its stacks before their coroutines run
- * again, objects allocated during the cycle are black, and a store shades the pointer it drops, which a scanned
- * stack can still hold. the pointer it stores was reachable at the start or is new, so it needs nothing.
+ * The hybrid barrier shades the overwritten pointer and, while the current stack is grey, the new pointer.
+ * Both happen before publishing the store. Runtime callbacks without a coroutine also shade the new pointer.
  * mark_black_new_obj 如果 new_obj 不是从 allocator(gc_malloc) 获取的新对象，则有必要主动 mark black 避免其被 sweep
  */
 void rti_write_barrier_ptr(void *slot, void *new_obj, bool mark_black_new_obj) {
@@ -802,6 +806,10 @@ void rti_write_barrier_ptr(void *slot, void *new_obj, bool mark_black_new_obj) {
     // 例如 global linkco cache 中的获取的新的 obj, 不是从 allocator 中申请，所以需要主动进行 mark
     if (mark_black_new_obj && new_obj) {
         mark_ptr_black(new_obj);
+    }
+
+    if (rti_write_barrier_needs_insert()) {
+        shade_ptr_grey(new_obj);
     }
 
     *(void **) slot = new_obj;
@@ -822,10 +830,27 @@ void write_barrier_rtype(void *dst, void *src, int64_t size, int64_t rtype_hash)
     rti_write_barrier_rtype(dst, src, rt_find_rtype(rtype_hash));
 }
 
-// the pointers the copy overwrites are shaded first, as rti_write_barrier_ptr does for one
 void rti_write_barrier_rtype(void *dst, void *src, rtype_t *rtype) {
-    rti_shade_rtype(dst, rtype);
-    memmove(dst, src, rtype->storage_size);
+    rti_write_barrier_array(dst, src, rtype, 1);
+}
+
+void rti_write_barrier_array(void *dst, void *src, rtype_t *rtype, uint64_t count) {
+    if (dst == src || count == 0) {
+        return;
+    }
+
+    if (gc_barrier_get() && rtype->last_ptr > 0) {
+        bool shade_new = rti_write_barrier_needs_insert();
+        for (uint64_t index = 0; index < count; ++index) {
+            uint64_t offset = index * rtype->storage_size;
+            rti_shade_rtype((uint8_t *) dst + offset, rtype);
+            if (shade_new) {
+                rti_shade_rtype((uint8_t *) src + offset, rtype);
+            }
+        }
+    }
+
+    memmove(dst, src, count * rtype->storage_size);
 }
 
 void ptr_valid(void *ptr) {

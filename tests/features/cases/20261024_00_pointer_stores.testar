@@ -1,0 +1,50 @@
+=== test_global_and_new_object_stores
+--- main.n
+type record_t = struct {
+    string text
+    [string] items
+}
+
+ptr<int> global_pointer = null
+string global_text = ''
+record_t global_record = record_t{}
+
+fn store(ptr<int> pointer, string text, [string] items) {
+    global_pointer = pointer
+    global_text = text
+    global_record = record_t{text: text, items: items}
+}
+
+fn check_records(...[record_t] records) {
+    assert(records.len() == 2)
+    assert(records[0].text == 'new' && records[1].items[1] == 'keep')
+}
+
+fn main() {
+    int value = 42
+    string text = 'new'
+    var items = [text, 'keep']
+    store(&value, text, items)
+    assert(*global_pointer == 42)
+    assert(global_text == text && global_record.text == text)
+    assert(global_record.items[1] == 'keep')
+
+    var record = new record_t(text = text, items = items)
+    assert(record.text == text && record.items[0] == text)
+    var records = [record_t{text: text, items: items}]
+    assert(records[0].text == text && records[0].items[1] == 'keep')
+    var mapping = {'entry': record_t{text: text, items: items}}
+    assert(mapping['entry'].text == text && mapping['entry'].items[0] == text)
+    check_records(records[0], mapping['entry'])
+    any boxed = record_t{text: text, items: items}
+    var restored = boxed as record_t
+    assert(restored.text == text && restored.items[1] == 'keep')
+
+    var initialized = vec<string>.new(text, 3)
+    initialized.append(items)
+    var combined = initialized.concat(items)
+    assert(combined.len() == 7 && combined[0] == text && combined[6] == 'keep')
+    println('pointer stores ok')
+}
+--- output.txt
+pointer stores ok

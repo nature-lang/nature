@@ -1010,7 +1010,7 @@ static void linear_escape_rewrite(module_t *m, ast_var_decl_t *var_decl, bool fo
         dst = indirect_addr_operand(m, var_decl->type, heap_operand, 0);
     }
 
-    linear_super_move(m, var_decl->type, dst, src);
+    linear_store(m, var_decl->type, dst, src);
 }
 
 /**
@@ -1144,16 +1144,33 @@ static bool linear_need_barrier_rtype(type_t t) {
     return t.storage_kind == STORAGE_KIND_IND && ct_rtype_has_ptr(t);
 }
 
+static lir_operand_t *linear_value_ref(module_t *module, lir_operand_t *operand) {
+    if (operand->assert_type == LIR_OPERAND_VAR && lir_operand_type(operand).storage_kind != STORAGE_KIND_IND) {
+        return operand;
+    }
+    return lea_operand_pointer(module, operand);
+}
+
 /**
- * write_barrier_rtype copies the value and has the gc scan the object it lands in again, as write_barrier does
- * for a single pointer
+ * write_barrier_rtype applies the hybrid barrier before copying a value with pointers.
  * @param dst_ref the address the value goes to
  * @param src the value
  */
 static void linear_write_barrier_rtype(module_t *m, type_t t, lir_operand_t *dst_ref, lir_operand_t *src) {
-    lir_operand_t *src_ref = lea_operand_pointer(m, src);
+    lir_operand_t *src_ref = linear_value_ref(m, src);
     push_rt_call(m, RT_CALL_WRITE_BARRIER_RTYPE, NULL, 4, dst_ref, src_ref, int_operand(t.storage_size),
                  int_operand(type_hash(t)));
+}
+
+static void linear_store(module_t *module, type_t type, lir_operand_t *dst, lir_operand_t *src) {
+    if (!module->is_x && is_gc_alloc(type.kind)) {
+        push_rt_call(module, RT_CALL_WRITE_BARRIER, NULL, 2, lea_operand_pointer(module, dst), src);
+    } else if (!module->is_x && linear_need_barrier_rtype(type)) {
+        lir_operand_t *dst_ref = linear_value_ref(module, dst);
+        linear_write_barrier_rtype(module, type, dst_ref, src);
+    } else {
+        linear_super_move(module, type, dst, src);
+    }
 }
 
 /**
@@ -1409,17 +1426,15 @@ static void linear_ident_assign(module_t *m, ast_assign_stmt_t *stmt) {
 
     assert(stmt->left.type.kind > 0 && stmt->left.type.kind != TYPE_UNKNOWN);
 
-    // a local the heap holds, a captured one, a large array or a param moved to the heap, takes the barrier a
-    // field does
-    if (linear_need_barrier_rtype(stmt->left.type)) {
-        ast_ident *ident = stmt->left.value;
-        symbol_t *s = symbol_table_get_noref(ident->literal);
-        if (s && s->type == SYMBOL_VAR && s->is_local) {
-            ast_var_decl_t *var_decl = s->ast_value;
-            if (var_decl->type.in_heap || var_decl->heap_ident) {
-                linear_write_barrier_rtype(m, stmt->left.type, lea_operand_pointer(m, dst), src);
-                return;
-            }
+    ast_ident *ident = stmt->left.value;
+    symbol_t *symbol = symbol_table_get_noref(ident->literal);
+    if (symbol && symbol->type == SYMBOL_VAR) {
+        ast_var_decl_t *var_decl = symbol->ast_value;
+        bool heap_value = var_decl->heap_ident ||
+                          (var_decl->type.storage_kind == STORAGE_KIND_IND && var_decl->type.in_heap);
+        if (!symbol->is_local || heap_value) {
+            linear_store(m, stmt->left.type, dst, src);
+            return;
         }
     }
 
@@ -1514,7 +1529,11 @@ static void linear_var_tuple_destr(module_t *m, ast_tuple_destr_t *destr, lir_op
             ast_var_decl_t *var_decl = element->value;
             lir_operand_t *dst = linear_var_decl(m, var_decl);
 
-            linear_super_move(m, element->type, dst, element_src_operand);
+            if (var_decl->type.in_heap && var_decl->type.storage_kind == STORAGE_KIND_IND) {
+                linear_store(m, element->type, dst, element_src_operand);
+            } else {
+                linear_super_move(m, element->type, dst, element_src_operand);
+            }
 
             // var *t1 = 12
             linear_escape_rewrite(m, var_decl, false);
@@ -1565,7 +1584,11 @@ static void linear_vardef(module_t *m, ast_vardef_stmt_t *stmt) {
         linear_expr(m, *stmt->right, dst);
     } else {
         lir_operand_t *src = linear_expr(m, *stmt->right, NULL);
-        linear_super_move(m, stmt->var_decl.type, dst, src);
+        if (stmt->var_decl.type.in_heap && stmt->var_decl.type.storage_kind == STORAGE_KIND_IND) {
+            linear_store(m, stmt->var_decl.type, dst, src);
+        } else {
+            linear_super_move(m, stmt->var_decl.type, dst, src);
+        }
     }
 
     // 将 dst 值 copy 出来进行重新分配改写
@@ -2200,8 +2223,7 @@ static lir_operand_t *linear_call_impl(module_t *m, ast_expr_t expr, lir_operand
                         arg_dst_target = indirect_addr_operand(m, vec_element_type, arg_dst_target, 0);
                     }
 
-                    // 直接进行 mov
-                    linear_super_move(m, vec_element_type, arg_dst_target, rest_src_target);
+                    linear_store(m, vec_element_type, arg_dst_target, rest_src_target);
                 }
 
                 index += 1;
@@ -2651,8 +2673,7 @@ static lir_operand_t *linear_vec_new(module_t *m, ast_expr_t expr, lir_operand_t
                     item_dst_target = indirect_addr_operand(m, vec_element_type, item_dst_target, 0);
                 }
 
-                // 直接进行 mov
-                linear_super_move(m, vec_element_type, item_dst_target, item_src_target);
+                linear_store(m, vec_element_type, item_dst_target, item_src_target);
             }
         }
     }
@@ -2749,7 +2770,12 @@ static lir_operand_t *linear_array_new(module_t *m, ast_expr_t expr, lir_operand
 
         if (i < ast->elements->length) {
             ast_expr_t *item_expr = ct_list_value(ast->elements, i);
-            linear_expr(m, *item_expr, item_target);
+            if (arr_in_heap) {
+                lir_operand_t *item_src = linear_expr(m, *item_expr, NULL);
+                linear_store(m, type_array.array->element_type, item_target, item_src);
+            } else {
+                linear_expr(m, *item_expr, item_target);
+            }
         } else {
             linear_default_operand(m, type_array.array->element_type, item_target);
         }
@@ -2783,7 +2809,11 @@ static lir_operand_t *linear_array_repeat_new(module_t *m, ast_expr_t expr, lir_
             item_target = indirect_addr_operand(m, type_array.array->element_type, item_target, 0);
         }
 
-        linear_super_move(m, type_array.array->element_type, item_target, default_element_target);
+        if (type_array.in_heap) {
+            linear_store(m, type_array.array->element_type, item_target, default_element_target);
+        } else {
+            linear_super_move(m, type_array.array->element_type, item_target, default_element_target);
+        }
     }
 
     return target;
@@ -2921,7 +2951,8 @@ static lir_operand_t *linear_map_new(module_t *m, ast_expr_t expr, lir_operand_t
             value_ptr_target = indirect_addr_operand(m, map_type.map->value_type, value_ptr_target, 0);
         }
 
-        linear_expr(m, element->value, value_ptr_target);
+        lir_operand_t *value_src = linear_expr(m, element->value, NULL);
+        linear_store(m, map_type.map->value_type, value_ptr_target, value_src);
     }
 
     return target;
@@ -3055,7 +3086,12 @@ static lir_operand_t *linear_struct_new(module_t *m, ast_expr_t expr, lir_operan
             dst = lea_operand_pointer(m, dst);
         }
 
-        linear_expr(m, *property_expr, dst);
+        if (t.in_heap) {
+            lir_operand_t *src = linear_expr(m, *property_expr, NULL);
+            linear_store(m, p->type, dst, src);
+        } else {
+            linear_expr(m, *property_expr, dst);
+        }
     }
 
     linear_struct_fill_default(m, t, target, exists);
@@ -3093,7 +3129,12 @@ static lir_operand_t *linear_tuple_new(module_t *m, ast_expr_t expr, lir_operand
             dst = lea_operand_pointer(m, dst);
         }
 
-        linear_expr(m, *element, dst);
+        if (expr.type.in_heap) {
+            lir_operand_t *src = linear_expr(m, *element, NULL);
+            linear_store(m, element->type, dst, src);
+        } else {
+            linear_expr(m, *element, dst);
+        }
 
         offset += element_size;
     }
@@ -3174,7 +3215,8 @@ static lir_operand_t *linear_new_expr(module_t *m, ast_expr_t expr, lir_operand_
                 dst = lea_operand_pointer(m, dst);
             }
 
-            linear_expr(m, *property_expr, dst);
+            lir_operand_t *src = linear_expr(m, *property_expr, NULL);
+            linear_store(m, p->type, dst, src);
         }
         linear_struct_fill_default(m, new_expr->type, target, exists);
     } else {
@@ -3189,7 +3231,7 @@ static lir_operand_t *linear_new_expr(module_t *m, ast_expr_t expr, lir_operand_
                 dst = indirect_addr_operand(m, new_expr->type, target, 0);
             }
 
-            linear_super_move(m, new_expr->type, dst, src);
+            linear_store(m, new_expr->type, dst, src);
         }
     }
 

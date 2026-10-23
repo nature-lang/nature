@@ -61,8 +61,7 @@ void shade_obj_grey(void *obj) {
 }
 
 /**
- * the deletion barrier: a store drops ptr from the heap while a stack the gc has scanned can still hold it. the
- * object joins the worklist unless the gc has marked it, so it lives through this cycle
+ * Shade a referent for either half of the hybrid barrier without clearing an existing mark.
  */
 void shade_ptr_grey(void *ptr) {
     addr_t addr = (addr_t) ptr;
@@ -904,9 +903,7 @@ static void inject_gc_work_coroutine() {
         coroutine_t *gc_co = rt_coroutine_new((void *) gc_work, FLAG(CO_FLAG_RTFN) | FLAG(CO_FLAG_DIRECT), 0, NULL);
 
         rt_linked_fixalloc_push(&p->co_list, gc_co);
-        // first in line, so the processor scans its stacks before any of them runs again: with the deletion barrier
-        // the cycle then keeps everything that was reachable when it started
-        rt_linked_fixalloc_push_heap(&p->runnable_list, gc_co);
+        rt_linked_fixalloc_push(&p->runnable_list, gc_co);
     }
 
     RDEBUGF("[runtime_gc.inject_gc_work_coroutine] inject gc work coroutine completed");
