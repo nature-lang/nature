@@ -428,15 +428,21 @@ n_vec_t rti_vec_new(rtype_t *element_rtype, int64_t length, int64_t capacity) {
  * @param src 源 vec
  * @return 实际复制的元素数量（取 dst 剩余空间和src长度的最小值）
  */
-uint64_t rt_vec_copy(n_vec_t *dst, n_vec_t src) {
-    uint64_t copy_len = src.length < dst->length ? src.length : dst->length;
+uint64_t rt_vec_copy(n_vec_t *dst, n_vec_t *src, int64_t element_hash) {
+    uint64_t copy_len = src->length < dst->length ? src->length : dst->length;
 
     if (copy_len > 0) {
         // the elements the copy overwrites can live on in a stack the gc has scanned
         if (gc_barrier_get()) {
-            shade_range_grey(dst->data, copy_len * src.element_size);
+            rtype_t *element_rtype = rt_find_rtype(element_hash);
+            assert(element_rtype);
+            if (element_rtype->last_ptr > 0) {
+                for (uint64_t index = 0; index < copy_len; ++index) {
+                    rti_shade_rtype(dst->data + index * dst->element_size, element_rtype);
+                }
+            }
         }
-        memmove(dst->data, src.data, copy_len * src.element_size);
+        memmove(dst->data, src->data, copy_len * src->element_size);
     }
 
     DEBUGF("[rt_vec_copy] copied %lu elements from %p to %p", copy_len, src, dst);

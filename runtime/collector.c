@@ -98,13 +98,6 @@ void shade_ptr_grey(void *ptr) {
     }
 }
 
-// the deletion barrier for memory whose pointer slots are unknown, every word that points into the heap is kept
-void shade_range_grey(void *start, uint64_t size) {
-    for (uint64_t offset = 0; offset + POINTER_SIZE <= size; offset += POINTER_SIZE) {
-        shade_ptr_grey((void *) fetch_addr_value((addr_t) start + offset));
-    }
-}
-
 void rt_shade_obj_with_barrier(void *new_obj) {
     //    n_processor_t *p = processor_get();
     // 独享线程进行 write barrier 之前需要尝试获取线程锁, 避免与 gc_work 冲突

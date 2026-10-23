@@ -27,6 +27,9 @@ pub fn vec_append(anyptr list1, anyptr list2, int element_hash)
 #linkid rt_vec_concat
 pub fn vec_concat<T>(anyptr list1, anyptr list2, int element_hash):vec<T>
 
+#linkid rt_vec_copy
+pub fn vec_copy(anyptr dst, anyptr src, int element_hash):int
+
 #linkid rt_set_new
 pub fn set_new<T>(int hash, int key_hash):set<T>
 

@@ -1,0 +1,92 @@
+=== test_scalar_copy
+--- main.n
+fn main() {
+    [u8] bytes = [1, 2, 3, 4]
+    [u8] short = [0, 0]
+    assert(short.copy(bytes) == 2)
+    assert(short[0] == 1 && short[1] == 2)
+
+    var values = [10, 20, 30, 40]
+    var src = [50, 60]
+    assert(values.copy(src) == 2)
+    assert(values[0] == 50 && values[1] == 60)
+    assert(values[2] == 30 && values[3] == 40)
+    assert(values.copy(values) == 4)
+
+    [int] empty = []
+    assert(values.copy(empty) == 0)
+    assert(empty.copy(values) == 0)
+    assert(empty.copy(empty) == 0)
+    println('scalar copy ok')
+}
+--- output.txt
+scalar copy ok
+
+=== test_overlapping_copy
+--- main.n
+fn main() {
+    var values = [1, 2, 3, 4, 5]
+    var dst = values[1..5]
+    var src = values[0..4]
+    assert(dst.copy(src) == 4)
+    assert(values[0] == 1 && values[1] == 1 && values[2] == 2)
+    assert(values[3] == 3 && values[4] == 4)
+
+    dst = values[0..4]
+    src = values[1..5]
+    assert(dst.copy(src) == 4)
+    assert(values[0] == 1 && values[1] == 2 && values[2] == 3)
+    assert(values[3] == 4 && values[4] == 4)
+
+    var strings = ['one', 'two', 'three', 'four']
+    var tail = strings[1..4]
+    var head = strings[0..3]
+    assert(tail.copy(head) == 3)
+    assert(strings[0] == 'one' && strings[1] == 'one')
+    assert(strings[2] == 'two' && strings[3] == 'three')
+    println('overlapping copy ok')
+}
+--- output.txt
+overlapping copy ok
+
+=== test_pointer_copy
+--- main.n
+type record_t = struct {
+    int marker
+    string text
+}
+
+fn main() {
+    var dst = [new record_t(marker = 1, text = 'old')]
+    var src = [new record_t(marker = 2, text = 'new')]
+    assert(dst.copy(src) == 1)
+    assert(dst[0] == src[0])
+    assert(dst[0].marker == 2 && dst[0].text == 'new')
+
+    var values = [record_t{marker: 1, text: 'old'}, record_t{marker: 3, text: 'keep'}]
+    var replacements = [record_t{marker: 2, text: 'new'}]
+    assert(values.copy(replacements) == 1)
+    assert(values[0].marker == 2 && values[0].text == 'new')
+    assert(values[1].marker == 3 && values[1].text == 'keep')
+    println('pointer copy ok')
+}
+--- output.txt
+pointer copy ok
+
+=== test_large_bitmap_copy
+--- main.n
+type wide_t = struct {
+    [int;65] padding
+    string text
+}
+
+fn main() {
+    var dst = [wide_t{padding: [1;65], text: 'old'}]
+    var src = [wide_t{padding: [2;65], text: 'new'}]
+    assert(dst.copy(src) == 1)
+    assert(dst[0].padding[0] == 2 && dst[0].padding[64] == 2)
+    assert(dst[0].text == 'new')
+    println('large bitmap copy ok')
+}
+--- output.txt
+large bitmap copy ok

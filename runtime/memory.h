@@ -269,8 +269,6 @@ void shade_obj_grey(void *obj);
 
 void shade_ptr_grey(void *ptr);
 
-void shade_range_grey(void *start, uint64_t size);
-
 void rt_shade_obj_with_barrier(void *obj);
 
 void mark_ptr_black(void *value);

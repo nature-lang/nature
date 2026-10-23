@@ -768,21 +768,13 @@ char *rtype_value_to_str(rtype_t *rtype, void *data_ref) {
     return NULL;
 }
 
-static uint8_t *rtype_ptr_bits(rtype_t *rtype) {
-    if (rtype->malloc_gc_bits_offset == -1) {
-        return (uint8_t *) &rtype->gc_bits;
-    }
-
-    return RTDATA(rtype->malloc_gc_bits_offset);
-}
-
 // the deletion barrier for a value about to be overwritten: its pointers can live on in a stack the gc has scanned
 void rti_shade_rtype(void *p, rtype_t *rtype) {
     if (!gc_barrier_get() || rtype->last_ptr == 0) {
         return;
     }
 
-    uint8_t *gc_bits = rtype_ptr_bits(rtype);
+    uint8_t *gc_bits = rtype_gc_bits_data(rtype);
     uint64_t slot_count = align_up(rtype->storage_size, POINTER_SIZE) / POINTER_SIZE;
     for (uint64_t i = 0; i < slot_count; ++i) {
         if (bitmap_test(gc_bits, i)) {
