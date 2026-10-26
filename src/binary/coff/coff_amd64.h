@@ -1,8 +1,8 @@
-#ifndef NATURE_BINARY_COFF_AMD64_H
-#define NATURE_BINARY_COFF_AMD64_H
+#ifndef NAX_BINARY_COFF_AMD64_H
+#define NAX_BINARY_COFF_AMD64_H
 
 /*
- * Nature AMD64 instruction-to-COFF adapter.
+ * Nax AMD64 instruction-to-COFF adapter.
  *
  * The relocation choices follow LLVM's AMD64 COFF object writer semantics.
  *
@@ -24,12 +24,12 @@ extern "C" {
 typedef struct module_t module_t;
 
 /*
- * Encodes one Nature module into an existing AMD64 COFF object. Global data
+ * Encodes one Nax module into an existing AMD64 COFF object. Global data
  * is appended to .data and instructions to .text. Symbolic control transfers
  * use IMAGE_REL_AMD64_REL32; RIP-relative operands use REL32 or REL32_1..5
  * according to the bytes following the displacement field.
  *
- * Compiler-private globals named `__nature_unwind_plan$<function>` are
+ * Compiler-private globals named `__nax_unwind_plan$<function>` are
  * consumed rather than copied to .data. Each plan produces version-1 AMD64
  * UNWIND_INFO in `.xdata$<function>` and a three-field RUNTIME_FUNCTION in
  * `.pdata$<function>`. The three fields use IMAGE_REL_AMD64_ADDR32NB; xdata is

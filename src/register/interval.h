@@ -1,5 +1,5 @@
-#ifndef NATURE_SRC_REGISTER_INTERVAL_H_
-#define NATURE_SRC_REGISTER_INTERVAL_H_
+#ifndef NAX_SRC_REGISTER_INTERVAL_H_
+#define NAX_SRC_REGISTER_INTERVAL_H_
 
 #include "src/lir.h"
 #include "utils/linked.h"

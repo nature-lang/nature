@@ -61,14 +61,14 @@ static int build_path_compare(const void *left, const void *right) {
 }
 
 /**
- * base on ${NATURE_ROOT}/lib/${BUILD_OS}_${BUILD_ARCH} + file
+ * base on ${NAX_ROOT}/lib/${BUILD_OS}_${BUILD_ARCH} + file
  * @return
  */
 static char *lib_file_path(char *file) {
     char *_os_arch = str_connect(os_to_string(BUILD_OS), "_");
     _os_arch = str_connect(_os_arch, arch_to_string(BUILD_ARCH));
 
-    char *dir = path_join(NATURE_ROOT, "lib");
+    char *dir = path_join(NAX_ROOT, "lib");
     dir = path_join(dir, _os_arch);
     return path_join(dir, file);
 }
@@ -422,7 +422,7 @@ static void coff_custom_links() {
     coff_object_t *object = coff_object_create_amd64("custom_links.n");
     assertf(object, "cannot create Windows COFF metadata object");
 
-    /* `$` suffixes preserve the Nature table grouping/order while allowing
+    /* `$` suffixes preserve the Nax table grouping/order while allowing
        the PE writer to merge the contributions into ordinary .data/.rdata. */
     coff_section_t *rtype =
             coff_metadata_section(object, ".data$rtype", false);
@@ -693,13 +693,13 @@ static void ld_elf_exe(slice_t *modules, char *ldflags) {
 
     char library_dir[PATH_MAX];
     int library_dir_length = snprintf(
-            library_dir, sizeof(library_dir), "%s/lib/%s_%s", NATURE_ROOT,
+            library_dir, sizeof(library_dir), "%s/lib/%s_%s", NAX_ROOT,
             os_to_string(BUILD_OS), arch_to_string(BUILD_ARCH));
     assertf(library_dir_length > 0 &&
                     (size_t) library_dir_length < sizeof(library_dir),
-            "Nature library directory path is too long");
+            "Nax library directory path is too long");
     assertf(ld_add_library_path(&options, library_dir) == LD_OK,
-            "cannot add Nature Linux library search path");
+            "cannot add Nax Linux library search path");
 
     int parse_result = ld_parse_flags(&options, ldflags ? ldflags : "");
     assertf(parse_result == LD_OK,
@@ -746,7 +746,7 @@ static void ld_windows_exe(slice_t *modules, char *ldflags) {
     options.output_path = BUILD_OUTPUT;
     options.entry_symbol = "mainCRTStartup";
     options.pie = true;
-    /* The COFF backend can retain DWARF from external objects, but Nature's
+    /* The COFF backend can retain DWARF from external objects, but Nax's
        compiler does not emit it yet.  Ordinary release builds therefore do
        not carry sysroot debug sections. */
     options.debug_mode = LD_DEBUG_NONE;
@@ -771,10 +771,10 @@ static void ld_windows_exe(slice_t *modules, char *ldflags) {
     char library_dir[PATH_MAX];
     int library_dir_length = snprintf(
             library_dir, sizeof(library_dir), "%s/lib/windows_amd64",
-            NATURE_ROOT);
+            NAX_ROOT);
     assertf(library_dir_length > 0 &&
                     (size_t) library_dir_length < sizeof(library_dir),
-            "Nature windows_amd64 sysroot path is too long");
+            "Nax windows_amd64 sysroot path is too long");
     options.sysroot = library_dir;
     int add_result = ld_add_library_path(&options, library_dir);
     if (add_result != LD_OK) {
@@ -802,7 +802,7 @@ static void ld_windows_exe(slice_t *modules, char *ldflags) {
     add_result = ld_add_input(&options, custom_link_object_path());
     if (add_result != LD_OK) {
         dump_global_errorf(BUILD_ENTRY, 1, 1,
-                           "cannot add Windows Nature metadata object "
+                           "cannot add Windows Nax metadata object "
                            "(error %d)",
                            add_result);
     }
@@ -1170,7 +1170,7 @@ static void custom_ld_windows_exe(slice_t *modules, const char *use_ld,
     fprintf(response,
             "/nologo\n/subsystem:console\n/entry:mainCRTStartup\n"
             "/out:\"%s\"\n/libpath:\"%s/lib/windows_amd64\"\n",
-            BUILD_OUTPUT, NATURE_ROOT);
+            BUILD_OUTPUT, NAX_ROOT);
     if (ldflags && *ldflags) fprintf(response, "%s\n", ldflags);
     fprintf(response, "\"%s\"\n", lib_file_path("crt2.obj"));
     for (int i = 0; i < modules->count; i++) {
@@ -1183,9 +1183,9 @@ static void custom_ld_windows_exe(slice_t *modules, const char *use_ld,
         fprintf(response, "\"%s\"\n", (char *) linker_libs->take[i]);
     char sysroot[PATH_MAX];
     int sysroot_length = snprintf(sysroot, sizeof(sysroot),
-                                  "%s/lib/windows_amd64", NATURE_ROOT);
+                                  "%s/lib/windows_amd64", NAX_ROOT);
     assertf(sysroot_length > 0 && (size_t) sysroot_length < sizeof(sysroot),
-            "Nature windows_amd64 sysroot path is too long");
+            "Nax windows_amd64 sysroot path is too long");
     assertf(windows_linker_write_default_libraries(response, sysroot),
             "cannot write Windows linker response file '%s'", response_path);
     assertf(fclose(response) == 0,
@@ -1227,13 +1227,13 @@ static void ld_mach_exe(slice_t *modules, char *ldflags) {
     char *sysroot = find_syslibroot();
     char *sdk_version = get_macos_sdk_version();
     options.sysroot = sysroot;
-    char nature_library_path[PATH_MAX];
-    int nature_library_length = snprintf(nature_library_path, sizeof(nature_library_path), "%s/lib/%s_%s",
-                                         NATURE_ROOT, os_to_string(BUILD_OS), arch_to_string(BUILD_ARCH));
-    assertf(nature_library_length >= 0 && (size_t) nature_library_length < sizeof(nature_library_path),
-            "Nature library search path is too long");
-    assertf(ld_add_library_path(&options, nature_library_path) == LD_OK,
-            "cannot add Nature library search path '%s'", nature_library_path);
+    char nax_library_path[PATH_MAX];
+    int nax_library_length = snprintf(nax_library_path, sizeof(nax_library_path), "%s/lib/%s_%s",
+                                         NAX_ROOT, os_to_string(BUILD_OS), arch_to_string(BUILD_ARCH));
+    assertf(nax_library_length >= 0 && (size_t) nax_library_length < sizeof(nax_library_path),
+            "Nax library search path is too long");
+    assertf(ld_add_library_path(&options, nax_library_path) == LD_OK,
+            "cannot add Nax library search path '%s'", nax_library_path);
     if (sdk_version) {
         unsigned major = 0, minor = 0, patch = 0;
         sscanf(sdk_version, "%u.%u.%u", &major, &minor, &patch);
@@ -1311,7 +1311,7 @@ static void build_init(char *build_entry) {
 }
 
 static void config_print() {
-    log_debug("NATURE_ROOT: %s", NATURE_ROOT);
+    log_debug("NAX_ROOT: %s", NAX_ROOT);
     log_debug("BUILD_OS: %s", os_to_string(BUILD_OS));
     log_debug("BUILD_ARCH: %s", arch_to_string(BUILD_ARCH));
     log_debug("BUILD_OUTPUT_NAME: %s", BUILD_OUTPUT_NAME);
@@ -1387,7 +1387,7 @@ static slice_t *build_modules(toml_table_t *package_conf) {
     slice_t *builtin_modules = slice_new();
 
     // builtin modules
-    char *builtin_dir = path_join(NATURE_ROOT, "std/builtin");
+    char *builtin_dir = path_join(NAX_ROOT, "std/builtin");
     // scan all builtin package, module build
     DIR *dir = opendir(builtin_dir);
     assertf(dir, "cannot found builtin dir %s", builtin_dir);
@@ -1617,7 +1617,7 @@ static void cleanup_temp_dir() {
     }
 
     // Additional safety check: ensure TEMP_DIR looks like a temporary directory
-    if (!strstr(TEMP_DIR, "/tmp/") && !strstr(TEMP_DIR, "nature-build")) {
+    if (!strstr(TEMP_DIR, "/tmp/") && !strstr(TEMP_DIR, "nax-build")) {
         log_warn("TEMP_DIR path looks suspicious, skipping cleanup: %s", TEMP_DIR);
         return;
     }
@@ -1769,8 +1769,8 @@ static void build_archive(slice_t *modules) {
 }
 
 /**
- * nature build main.n, build_entry = "main.n"
- * nature build client/main.n build_entry = "client/main.n"
+ * nax build main.n, build_entry = "main.n"
+ * nax build client/main.n build_entry = "client/main.n"
  * @param build_entry
  */
 void build(char *build_entry, bool is_archive) {

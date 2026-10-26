@@ -10,7 +10,7 @@
 
 static char *space = " ";
 
-// type_any_t 是 nature 中的类型，在 c 中是认不出来的
+// type_any_t 是 nax 中的类型，在 c 中是认不出来的
 // 这里按理来说应该填写 void*, 写 type_any_t 就是为了语义明确
 static void print_arg(n_any_t *arg) {
     char sprint_buf[1024];

@@ -48,12 +48,12 @@ async function exists(uri: Uri): Promise<boolean> {
 }
 
 export async function activate(context: ExtensionContext) {
-    const traceOutputChannel = window.createOutputChannel("Nature Language Server");
+    const traceOutputChannel = window.createOutputChannel("Nax Language Server");
     traceOutputChannel.show(); // 强制显示输出通道
 
     // 按优先级检查服务器路径
     let serverPath: string;
-    const defaultPath = "/usr/local/nature/bin/nls";
+    const defaultPath = "/usr/local/nax/bin/nls";
 
     if (process.env.SERVER_PATH) {
         // 1. 首先检查环境变量
@@ -104,7 +104,7 @@ export async function activate(context: ExtensionContext) {
 
     try {
         // Create the language client and start the client.
-        client = new LanguageClient("nature-language-server", "Nature Language Server", serverOptions, clientOptions);
+        client = new LanguageClient("nax-language-server", "Nax Language Server", serverOptions, clientOptions);
         // activateInlayHints(context);
          // 启用详细日志
         client.setTrace(Trace.Verbose);

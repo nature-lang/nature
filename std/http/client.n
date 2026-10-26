@@ -229,7 +229,7 @@ fn request_t.fill_port(&self) {
 
 fn request_t.fill_headers(&self) {
     self.headers['Host'] = self.u.authority
-    self.headers['User-Agent'] = 'Nature-HTTP-Client/1.0'
+    self.headers['User-Agent'] = 'Nax-HTTP-Client/1.0'
     self.headers['Content-Length'] = fmt.sprintf('%d', self.body.len())
 }
 

@@ -1,5 +1,5 @@
-#ifndef NATURE_LD_SHA256_H
-#define NATURE_LD_SHA256_H
+#ifndef NAX_LD_SHA256_H
+#define NAX_LD_SHA256_H
 
 #include <stddef.h>
 #include <stdint.h>

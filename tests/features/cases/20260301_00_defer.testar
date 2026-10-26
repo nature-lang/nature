@@ -171,7 +171,7 @@ fn main() {
 }
 
 --- output.txt
-nature-test/main.n:3:14: return/break/continue/throw/ret are not allowed inside defer block
+nax-test/main.n:3:14: return/break/continue/throw/ret are not allowed inside defer block
 
 === test_defer_errable_call_in_throwing_fn
 --- main.n

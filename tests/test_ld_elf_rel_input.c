@@ -271,7 +271,7 @@ static test_elf_rel_fixture_t test_elf_make_rel_fixture(
 static void test_elf_rel_parse_fixture(test_elf_rel_fixture_t *fixture,
                                        uint16_t machine,
                                        int64_t expected_addend) {
-    char input_path[] = "/tmp/nature-ld-rel-parse-XXXXXX";
+    char input_path[] = "/tmp/nax-ld-rel-parse-XXXXXX";
     write_fixture(input_path, fixture->bytes, fixture->size);
 
     ld_options_t options;
@@ -299,8 +299,8 @@ static void test_elf_rel_parse_fixture(test_elf_rel_fixture_t *fixture,
 static void test_elf_rel_link_fixture(test_elf_rel_fixture_t *fixture,
                                       uint16_t machine,
                                       uint32_t expected_entry_word) {
-    char input_path[] = "/tmp/nature-ld-rel-link-XXXXXX";
-    char output_path[] = "/tmp/nature-ld-rel-output-XXXXXX";
+    char input_path[] = "/tmp/nax-ld-rel-link-XXXXXX";
+    char output_path[] = "/tmp/nax-ld-rel-output-XXXXXX";
     write_fixture(input_path, fixture->bytes, fixture->size);
     int output_fd = mkstemp(output_path);
     assert(output_fd >= 0);
@@ -330,8 +330,8 @@ static void test_elf_rel_link_fixture(test_elf_rel_fixture_t *fixture,
 static void test_elf_expect_rel_failure(test_elf_rel_fixture_t *fixture,
                                         uint16_t machine, int expected,
                                         const char *fragment) {
-    char input_path[] = "/tmp/nature-ld-rel-invalid-XXXXXX";
-    char output_path[] = "/tmp/nature-ld-rel-invalid-output-XXXXXX";
+    char input_path[] = "/tmp/nax-ld-rel-invalid-XXXXXX";
+    char output_path[] = "/tmp/nax-ld-rel-invalid-output-XXXXXX";
     write_fixture(input_path, fixture->bytes, fixture->size);
     int output_fd = mkstemp(output_path);
     assert(output_fd >= 0);

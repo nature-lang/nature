@@ -50,7 +50,7 @@ void test_ld_write_named_fixture(const char *path, const void *bytes,
 
 void test_ld_expect_invalid_input(const char *path, int expected,
                                   const char *message_fragment) {
-    static const char *output = "/tmp/nature-ld-invalid-output";
+    static const char *output = "/tmp/nax-ld-invalid-output";
     unlink(output);
     test_ld_diagnostic_capture_t capture = {0};
     ld_options_t options;

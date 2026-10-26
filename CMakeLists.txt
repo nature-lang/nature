@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(nature C)
+project(nax C)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -8,20 +8,20 @@ set(CMAKE_VERBOSE_MAKEFILE OFF)
 
 include(cmake/cross.cmake)
 
-file(READ "VERSION" NATURE_SOURCE_VERSION)
-string(STRIP "${NATURE_SOURCE_VERSION}" NATURE_SOURCE_VERSION)
-set(NATURE_VERSION_OVERRIDE "" CACHE STRING "Override the Nature version embedded in release artifacts")
-if(NATURE_VERSION_OVERRIDE)
-    set(PROJECT_VERSION "${NATURE_VERSION_OVERRIDE}")
-    set(NATURE_VERSION_FILE "${PROJECT_BINARY_DIR}/VERSION")
-    file(WRITE "${NATURE_VERSION_FILE}" "${PROJECT_VERSION}")
+file(READ "VERSION" NAX_SOURCE_VERSION)
+string(STRIP "${NAX_SOURCE_VERSION}" NAX_SOURCE_VERSION)
+set(NAX_VERSION_OVERRIDE "" CACHE STRING "Override the Nax version embedded in release artifacts")
+if(NAX_VERSION_OVERRIDE)
+    set(PROJECT_VERSION "${NAX_VERSION_OVERRIDE}")
+    set(NAX_VERSION_FILE "${PROJECT_BINARY_DIR}/VERSION")
+    file(WRITE "${NAX_VERSION_FILE}" "${PROJECT_VERSION}")
 else()
-    set(PROJECT_VERSION "${NATURE_SOURCE_VERSION}")
-    set(NATURE_VERSION_FILE "${PROJECT_SOURCE_DIR}/VERSION")
+    set(PROJECT_VERSION "${NAX_SOURCE_VERSION}")
+    set(NAX_VERSION_FILE "${PROJECT_SOURCE_DIR}/VERSION")
 endif()
 
 # 打印当前的项目版本
-message("nature version: ${PROJECT_VERSION}")
+message("nax version: ${PROJECT_VERSION}")
 message("cmake workdir: ${CMAKE_CURRENT_BINARY_DIR}")
 
 string(TIMESTAMP BUILD_TIME "%Y-%m-%d")
@@ -97,16 +97,16 @@ include_directories(BEFORE ${PROJECT_BINARY_DIR})
 include_directories(./include)
 include_directories(.)
 
-add_executable(nature main.c ${SRC} ${CMD} ${UTILS})
-target_link_libraries(nature m) # 链接数学计算库
+add_executable(nax main.c ${SRC} ${CMD} ${UTILS})
+target_link_libraries(nax m) # 链接数学计算库
 
 # custom golang build package npkg (optional)
 set(PACKAGE_TARGET_NAME npkg)
 set(PACKAGE_BINARY_NAME "npkg${CMAKE_EXECUTABLE_SUFFIX}")
 set(PACKAGE_BINARY_PATH ${CMAKE_CURRENT_BINARY_DIR}/${PACKAGE_BINARY_NAME})
-option(NATURE_BUILD_NPKG "Build the npkg package manager" ON)
+option(NAX_BUILD_NPKG "Build the npkg package manager" ON)
 
-if(NATURE_BUILD_NPKG)
+if(NAX_BUILD_NPKG)
     find_program(GOBIN go
             PATHS /usr/local/go/bin /opt/go/bin
             DOC "Go compiler"
@@ -135,8 +135,8 @@ endif()
 # custom rust build package nls (optional)
 #CARGO_TARGET_DIR=/custom/path cargo build --release
 # 查找 cargo 命令，类似 gobin 的方式
-option(NATURE_BUILD_NLS "Build the nls language server" ON)
-if(NATURE_BUILD_NLS)
+option(NAX_BUILD_NLS "Build the nls language server" ON)
+if(NAX_BUILD_NLS)
     find_program(CARGOBIN cargo
             PATHS $ENV{HOME}/.cargo/bin /usr/local/bin /opt/cargo/bin
             DOC "Cargo compiler"
@@ -157,7 +157,7 @@ if(CARGOBIN AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/nls")
                         CARGO_TARGET_DIR=${CMAKE_CURRENT_BINARY_DIR}
                         ${CARGOBIN} build --release --target ${RUST_TARGET}
                 WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/nls
-                COMMENT "nature language server nls"
+                COMMENT "nax language server nls"
         )
 
         set(LSP_BINARY_PATH ${CMAKE_CURRENT_BINARY_DIR}/${RUST_TARGET}/release/${LSP_BINARY_NAME})
@@ -167,7 +167,7 @@ if(CARGOBIN AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/nls")
                         CARGO_TARGET_DIR=${CMAKE_CURRENT_BINARY_DIR}
                         ${CARGOBIN} build --release
                 WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/nls
-                COMMENT "nature language server nls"
+                COMMENT "nax language server nls"
         )
 
         set(LSP_BINARY_PATH ${CMAKE_CURRENT_BINARY_DIR}/release/${LSP_BINARY_NAME})
@@ -187,18 +187,18 @@ add_subdirectory(runtime EXCLUDE_FROM_ALL)
 
 
 #--------------------------------- install ---------------------------------
-install(TARGETS nature DESTINATION nature/bin)
+install(TARGETS nax DESTINATION nax/bin)
 if(BUILD_NPKG)
-    install(PROGRAMS ${CMAKE_CURRENT_BINARY_DIR}/${PACKAGE_BINARY_NAME} DESTINATION nature/bin)
+    install(PROGRAMS ${CMAKE_CURRENT_BINARY_DIR}/${PACKAGE_BINARY_NAME} DESTINATION nax/bin)
 endif()
 if(BUILD_NLS)
-    install(PROGRAMS ${LSP_BINARY_PATH} DESTINATION nature/bin)
+    install(PROGRAMS ${LSP_BINARY_PATH} DESTINATION nax/bin)
 endif()
-install(DIRECTORY lib/ DESTINATION nature/lib)
-install(DIRECTORY std/ DESTINATION nature/std)
-install(FILES LICENSE-MIT DESTINATION nature/)
-install(FILES LICENSE-APACHE DESTINATION nature/)
-install(FILES "${NATURE_VERSION_FILE}" DESTINATION nature/ RENAME VERSION)
+install(DIRECTORY lib/ DESTINATION nax/lib)
+install(DIRECTORY std/ DESTINATION nax/std)
+install(FILES LICENSE-MIT DESTINATION nax/)
+install(FILES LICENSE-APACHE DESTINATION nax/)
+install(FILES "${NAX_VERSION_FILE}" DESTINATION nax/ RENAME VERSION)
 
 
 include(cmake/cpack.cmake)

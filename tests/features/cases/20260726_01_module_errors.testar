@@ -23,7 +23,7 @@ mod mods
 fn b() {}
 
 --- output.txt
-nature-test/mods/a.n:1:1: 'mod wrong' does not match directory 'mods', use 'mod mods'
+nax-test/mods/a.n:1:1: 'mod wrong' does not match directory 'mods', use 'mod mods'
 
 === test_mod_name_mismatch_root
 --- package.toml
@@ -46,7 +46,7 @@ mod mods
 fn b() {}
 
 --- output.txt
-nature-test/main.n:1:1: 'mod wrong' does not match package name 'modtest', use 'mod modtest'
+nax-test/main.n:1:1: 'mod wrong' does not match package name 'modtest', use 'mod modtest'
 
 === test_mod_invalid_ident
 --- package.toml
@@ -69,7 +69,7 @@ mod mods
 fn b() {}
 
 --- output.txt
-nature-test/mods/a.n:1:1: 'mod 1bad' is not a valid identifier
+nax-test/mods/a.n:1:1: 'mod 1bad' is not a valid identifier
 
 === test_mod_without_package_name_match_is_case_sensitive
 --- package.toml
@@ -92,7 +92,7 @@ mod mods
 fn b() {}
 
 --- output.txt
-nature-test/mods/a.n:1:1: 'mod Mods' does not match directory 'mods', use 'mod mods'
+nax-test/mods/a.n:1:1: 'mod Mods' does not match directory 'mods', use 'mod mods'
 
 === test_import_source_part
 --- package.toml
@@ -122,7 +122,7 @@ fn b():int {
 }
 
 --- output.txt
-nature-test/main.n:1:7: 'modtest.mods.a' is not a module, it is part of modtest.mods, use 'import modtest.mods'
+nax-test/main.n:1:7: 'modtest.mods.a' is not a module, it is part of modtest.mods, use 'import modtest.mods'
 
 === test_import_module_not_found
 --- package.toml
@@ -145,7 +145,7 @@ mod mods
 fn b() {}
 
 --- output.txt
-nature-test/main.n:1:7: cannot import 'modtest.nope': module not found
+nax-test/main.n:1:7: cannot import 'modtest.nope': module not found
 
 === test_import_root_module_missing
 --- package.toml
@@ -168,7 +168,7 @@ mod mods
 fn b() {}
 
 --- output.txt
-nature-test/main.n:1:7: cannot import 'modtest': module not found
+nax-test/main.n:1:7: cannot import 'modtest': module not found
 
 === test_import_intermediate_dir_is_not_a_module
 --- package.toml
@@ -197,7 +197,7 @@ fn a() {}
 fn b() {}
 
 --- output.txt
-nature-test/main.n:1:7: cannot import 'modtest.plain': module not found
+nax-test/main.n:1:7: cannot import 'modtest.plain': module not found
 
 === test_source_part_self_import
 --- package.toml
@@ -229,7 +229,7 @@ fn b():int {
 }
 
 --- output.txt
-nature-test/mods/a.n:3:6: module modtest.mods cannot import itself
+nax-test/mods/a.n:3:6: module modtest.mods cannot import itself
 
 === test_quoted_import_source_part
 --- package.toml
@@ -259,7 +259,7 @@ fn b():int {
 }
 
 --- output.txt
-nature-test/main.n:1:7: cannot import 'mods/a.n': it is part of module modtest.mods, use 'import modtest.mods'
+nax-test/main.n:1:7: cannot import 'mods/a.n': it is part of module modtest.mods, use 'import modtest.mods'
 
 === test_cross_part_redeclare
 --- package.toml
@@ -289,7 +289,7 @@ fn dup():int {
 }
 
 --- output.txt
-nature-test/mods/mods.n:3:2: ident 'modtest.mods.dup' redeclared
+nax-test/mods/mods.n:3:2: ident 'modtest.mods.dup' redeclared
 
 === test_mod_not_at_head
 --- package.toml
@@ -318,7 +318,7 @@ mod mods
 fn b() {}
 
 --- output.txt
-nature-test/mods/a.n:2:3: 'mod' declaration must be the first statement of the file
+nax-test/mods/a.n:2:3: 'mod' declaration must be the first statement of the file
 
 === test_error_path_points_at_declaring_part
 --- package.toml
@@ -349,7 +349,7 @@ fn b():int {
 }
 
 --- output.txt
-nature-test/mods/a.n:5:12: type inconsistency, expect=int(i64), actual=string
+nax-test/mods/a.n:5:12: type inconsistency, expect=int(i64), actual=string
 
 === test_global_error_path_points_at_declaring_part
 --- package.toml
@@ -376,7 +376,7 @@ fn later():int {
 }
 
 --- output.txt
-nature-test/mods/a.n:3:13: global vec initializer must be empty
+nax-test/mods/a.n:3:13: global vec initializer must be empty
 
 === test_pre_infer_error_path_points_at_declaring_part
 --- package.toml
@@ -408,7 +408,7 @@ fn later():int {
 }
 
 --- output.txt
-nature-test/mods/a.n:7:2: recycle use type 'modtest.mods.node_t'
+nax-test/mods/a.n:7:2: recycle use type 'modtest.mods.node_t'
 
 === test_target_variant_membership_mismatch
 --- package.toml
@@ -447,7 +447,7 @@ mod mods
 fn c() {}
 
 --- output.txt
-nature-test/mods/c.n:1:1: target variants of 'c' must belong to the same module, but nature-test/mods/c.darwin.n declares 'mod mods' and nature-test/mods/c.n declares no mod
+nax-test/mods/c.n:1:1: target variants of 'c' must belong to the same module, but nax-test/mods/c.darwin.n declares 'mod mods' and nax-test/mods/c.n declares no mod
 
 === test_file_and_directory_module_collision
 --- package.toml
@@ -487,7 +487,7 @@ fn c_linux() {}
 fn c_windows() {}
 
 --- output.txt
-nature-test/mods/a.n:1:1: module modtest.mods is defined by two layouts: nature-test/mods.n (standalone file module) and nature-test/mods/a.n (part of directory module)
+nax-test/mods/a.n:1:1: module modtest.mods is defined by two layouts: nax-test/mods.n (standalone file module) and nax-test/mods/a.n (part of directory module)
 
 === test_directory_module_requires_same_named_entry
 --- package.toml
@@ -521,7 +521,7 @@ mod layout
 fn part() {}
 
 --- output.txt
-nature-test/layout/part.n:1:1: directory module modtest.layout must have entry 'layout.n' declaring 'mod layout'
+nax-test/layout/part.n:1:1: directory module modtest.layout must have entry 'layout.n' declaring 'mod layout'
 
 === test_only_single_file_module_may_omit_mod
 --- package.toml
@@ -558,7 +558,7 @@ fn part() {}
 fn layout() {}
 
 --- output.txt
-nature-test/layout/layout.n:1:1: module modtest.layout requires 'mod layout' in 'layout.n'
+nax-test/layout/layout.n:1:1: module modtest.layout requires 'mod layout' in 'layout.n'
 
 === test_package_module_entry_requires_mod
 --- package.toml
@@ -597,4 +597,4 @@ mod layout
 fn layout() {}
 
 --- output.txt
-nature-test/modtest.n:1:1: module modtest requires 'mod modtest' in 'modtest.n'
+nax-test/modtest.n:1:1: module modtest requires 'mod modtest' in 'modtest.n'

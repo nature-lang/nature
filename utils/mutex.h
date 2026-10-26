@@ -1,5 +1,5 @@
-#ifndef NATURE_MUTEX_H
-#define NATURE_MUTEX_H
+#ifndef NAX_MUTEX_H
+#define NAX_MUTEX_H
 
 #include <pthread.h>
 
@@ -26,4 +26,4 @@ int mutex_unlock(mutex_t *mutex);
 
 int mutex_destroy(mutex_t *mutex);
 
-#endif // NATURE_MUTEX_H
+#endif // NAX_MUTEX_H

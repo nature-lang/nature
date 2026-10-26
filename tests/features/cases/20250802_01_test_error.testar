@@ -394,7 +394,7 @@ fn main() {
 }
 
 --- output.txt
-nature-test/main.n:2:39: fn with both named and unnamed formal parameters
+nax-test/main.n:2:39: fn with both named and unnamed formal parameters
 
 === test_c_variadic_target[exclude_os=windows]
 --- main.n
@@ -406,7 +406,7 @@ fn main() {
 }
 
 --- output.txt
-nature-test/main.n:2:30: C variadic calls are currently supported only for windows_amd64
+nax-test/main.n:2:30: C variadic calls are currently supported only for windows_amd64
 
 === test_union_failed
 --- main.n
@@ -419,7 +419,7 @@ fn main() {
 }
 
 --- output.txt
-nature-test/main.n:6:16: type inconsistency, expect=main.uniona(union), actual=main.unionb(union)
+nax-test/main.n:6:16: type inconsistency, expect=main.uniona(union), actual=main.unionb(union)
 
 === test_union
 --- main.n
@@ -475,4 +475,4 @@ fn main() {
 }
 
 --- output.txt
-nature-test/main.n:4:17: cannot casting to 'main.handle_fn(fn(...):void!)'
+nax-test/main.n:4:17: cannot casting to 'main.handle_fn(fn(...):void!)'

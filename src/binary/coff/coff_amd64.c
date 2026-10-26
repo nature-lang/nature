@@ -1,8 +1,8 @@
 /*
- * Nature AMD64 instruction-to-COFF adapter.
+ * Nax AMD64 instruction-to-COFF adapter.
  *
  * COFF relocation selection is a semantic C port of LLVM's AMD64 Windows
- * object-writer behavior. Nature's instruction rewriting mirrors the existing
+ * object-writer behavior. Nax's instruction rewriting mirrors the existing
  * ELF/Mach-O AMD64 assembler paths.
  *
  * Sources:
@@ -27,7 +27,7 @@
 #include <string.h>
 
 #define COFF_AMD64_MAX_INSTRUCTION_SIZE 30U
-#define COFF_AMD64_UNWIND_PLAN_PREFIX "__nature_unwind_plan$"
+#define COFF_AMD64_UNWIND_PLAN_PREFIX "__nax_unwind_plan$"
 #define COFF_AMD64_UNWIND_PLAN_PREFIX_SIZE \
     (sizeof(COFF_AMD64_UNWIND_PLAN_PREFIX) - 1U)
 
@@ -1193,11 +1193,11 @@ static coff_writer_status_t coff_amd64_emit_unwind_sections(
     char *pdata_name = coff_amd64_join_name(".pdata$", plan->function_name);
     char *xdata_name = coff_amd64_join_name(".xdata$", plan->function_name);
     char *end_name =
-            coff_amd64_join_name("__nature_unwind_end$", plan->function_name);
+            coff_amd64_join_name("__nax_unwind_end$", plan->function_name);
     char *xdata_symbol = coff_amd64_join_name(
-            "__nature_unwind_info$", plan->function_name);
+            "__nax_unwind_info$", plan->function_name);
     char *pdata_leader =
-            coff_amd64_join_name("__nature_pdata$", plan->function_name);
+            coff_amd64_join_name("__nax_pdata$", plan->function_name);
     if (!pdata_name || !xdata_name || !end_name || !xdata_symbol ||
         !pdata_leader) {
         status = coff_amd64_fail(

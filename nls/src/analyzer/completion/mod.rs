@@ -47,7 +47,7 @@ pub enum CompletionItemKind {
 pub struct CompletionProvider<'a> {
     pub(crate) symbol_table: &'a mut SymbolTable,
     pub(crate) module: &'a mut Module,
-    pub(crate) nature_root: String,
+    pub(crate) nax_root: String,
     pub(crate) project_root: String,
     pub(crate) package_config: Option<crate::analyzer::common::PackageConfig>,
     pub(crate) workspace_index: Option<&'a WorkspaceIndex>,
@@ -57,14 +57,14 @@ impl<'a> CompletionProvider<'a> {
     pub fn new(
         symbol_table: &'a mut SymbolTable,
         module: &'a mut Module,
-        nature_root: String,
+        nax_root: String,
         project_root: String,
         package_config: Option<crate::analyzer::common::PackageConfig>,
     ) -> Self {
         Self {
             symbol_table,
             module,
-            nature_root,
+            nax_root,
             project_root,
             package_config,
             workspace_index: None,

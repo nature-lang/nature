@@ -1,4 +1,4 @@
-# import [strings](https://github.com/nature-lang/nature/blob/master/std/strings/strings.n)
+# import [strings](https://github.com/naxlang/nax/blob/master/std/strings/strings.n)
 
 String manipulation utilities for common string operations
 
@@ -8,7 +8,7 @@ String manipulation utilities for common string operations
 fn from(anyptr p):string!
 ```
 
-Create a nature string from a C string pointer
+Create a nax string from a C string pointer
 
 ## fn join
 

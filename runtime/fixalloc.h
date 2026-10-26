@@ -1,5 +1,5 @@
-#ifndef NATURE_FIXALLOC_H
-#define NATURE_FIXALLOC_H
+#ifndef NAX_FIXALLOC_H
+#define NAX_FIXALLOC_H
 
 #include <stdint.h>
 #include <stdlib.h>
@@ -28,4 +28,4 @@ void fixalloc_free(fixalloc_t *f, void *p);
 
 void fixalloc_destroy(fixalloc_t *f);
 
-#endif// NATURE_FIXALLOC_H
+#endif// NAX_FIXALLOC_H

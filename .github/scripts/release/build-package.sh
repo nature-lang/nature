@@ -95,16 +95,16 @@ cmake -S . -B "${project_build_dir}" \
     -DBUILD_TESTING=OFF \
     -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_C_COMPILER="${project_compiler}" \
-    -DNATURE_VERSION_OVERRIDE="${release_tag}" \
+    -DNAX_VERSION_OVERRIDE="${release_tag}" \
     -DCPACK_OUTPUT_FILE_PREFIX="${PWD}/${release_dir}"
 cmake --build "${project_build_dir}" --parallel "${jobs}"
 
-test -x "${project_build_dir}/nature"
+test -x "${project_build_dir}/nax"
 test -x "${project_build_dir}/npkg"
 test -x "${project_build_dir}/release/nls"
 test -s "lib/${lib_target}/libruntime.a"
 
-version_output="$("${project_build_dir}/nature" -v)"
+version_output="$("${project_build_dir}/nax" -v)"
 reported_version="$(printf '%s\n' "${version_output}" | awk '{print $2}')"
 if [[ "${reported_version}" != "${release_tag}" ]]; then
     echo "Binary version (${reported_version}) does not match release tag (${release_tag})" >&2
@@ -113,7 +113,7 @@ fi
 
 cmake --build "${project_build_dir}" --target package
 
-archive="${release_dir}/nature-${reported_version}-${target}.tar.gz"
+archive="${release_dir}/nax-${reported_version}-${target}.tar.gz"
 if [[ ! -s "${archive}" ]]; then
     echo "Release archive was not produced: ${archive}" >&2
     exit 1
@@ -122,16 +122,16 @@ fi
 smoke_dir="$(mktemp -d)"
 tar -xzf "${archive}" -C "${smoke_dir}"
 
-package_root="${smoke_dir}/nature"
-test -x "${package_root}/bin/nature"
+package_root="${smoke_dir}/nax"
+test -x "${package_root}/bin/nax"
 test -x "${package_root}/bin/npkg"
 test -x "${package_root}/bin/nls"
 test -d "${package_root}/std/builtin"
 test -s "${package_root}/lib/${lib_target}/libruntime.a"
 test "$(tr -d '\r\n' < "${package_root}/VERSION")" = "${release_tag}"
 
-packaged_version_output="$("${package_root}/bin/nature" -v)"
-if [[ "${packaged_version_output}" != *"nature ${release_tag} - release build"* ]]; then
+packaged_version_output="$("${package_root}/bin/nax" -v)"
+if [[ "${packaged_version_output}" != *"nax ${release_tag} - release build"* ]]; then
     echo "Unexpected packaged version output: ${packaged_version_output}" >&2
     exit 1
 fi
@@ -140,7 +140,7 @@ mkdir "${smoke_dir}/compile-test"
 printf "fn main() { println('release smoke test') }\n" > "${smoke_dir}/compile-test/main.n"
 (
     cd "${smoke_dir}/compile-test"
-    NATURE_ROOT="${package_root}" "${package_root}/bin/nature" build main.n
+    NAX_ROOT="${package_root}" "${package_root}/bin/nax" build main.n
     test "$(./main)" = "release smoke test"
 )
 

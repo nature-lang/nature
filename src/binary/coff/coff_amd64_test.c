@@ -1,5 +1,5 @@
 /*
- * Byte-level tests for Nature's AMD64 COFF adapter and Windows unwind data.
+ * Byte-level tests for Nax's AMD64 COFF adapter and Windows unwind data.
  *
  * Sources:
  *   llvm/lib/Target/X86/MCTargetDesc/X86WinCOFFObjectWriter.cpp
@@ -194,7 +194,7 @@ static amd64_opcode_inst_t coff_amd64_test_matched_instruction;
 /*
  * The adapter test deliberately supplies a tiny deterministic encoder. This
  * isolates object/unwind behavior from opcode-table initialization while
- * preserving the exact lengths and valid x86-64 bytes of Nature's prologue.
+ * preserving the exact lengths and valid x86-64 bytes of Nax's prologue.
  */
 amd64_opcode_inst_t *amd64_asm_inst_encoding(amd64_asm_inst_t instruction,
                                              uint8_t *data, uint8_t *count,
@@ -326,7 +326,7 @@ static bool coff_amd64_test_unwind_object(void) {
 
     uint8_t regular_data[] = {0xde, 0xad, 0xbe, 0xef};
     asm_global_symbol_t private_plan = {
-            .name = "__nature_unwind_plan$entry",
+            .name = "__nax_unwind_plan$entry",
             .size = sizeof(plan),
             .value = plan,
     };
@@ -556,7 +556,7 @@ static bool coff_amd64_test_unwind_object(void) {
                                   "ExitProcess") == 0);
     COFF_AMD64_TEST_CHECK(coff_section_size(coff_object_data(object)) == 4U);
     COFF_AMD64_TEST_CHECK(!coff_object_find_symbol(
-            object, "__nature_unwind_plan$entry", NULL));
+            object, "__nax_unwind_plan$entry", NULL));
 
     uint8_t *image_bytes = NULL;
     size_t image_size = 0U;
@@ -660,7 +660,7 @@ static bool coff_amd64_test_unwind_object(void) {
                                   image_bytes + function_symbol.offset + 12U) ==
                           1U);
     COFF_AMD64_TEST_CHECK(coff_amd64_test_find_symbol(
-            &image, "__nature_unwind_end$entry", &end_symbol));
+            &image, "__nax_unwind_end$entry", &end_symbol));
     COFF_AMD64_TEST_CHECK(coff_amd64_test_u32(image_bytes + end_symbol.offset +
                                               8U) == 50U);
     COFF_AMD64_TEST_CHECK(coff_amd64_test_find_symbol(
@@ -684,7 +684,7 @@ static bool coff_amd64_test_unwind_object(void) {
 
     COFF_AMD64_TEST_CHECK(coff_object_write_file(
                                   object,
-                                  "/tmp/nature-coff-amd64-unwind.obj") ==
+                                  "/tmp/nax-coff-amd64-unwind.obj") ==
                           COFF_WRITER_OK);
     free(image_bytes);
     coff_object_destroy(object);
@@ -708,7 +708,7 @@ static bool coff_amd64_test_tls_object(void) {
     coff_amd64_test_plan_action(plan + 52U, 5U, 15U, 0U, 48U);
 
     asm_global_symbol_t private_plan = {
-            .name = "__nature_unwind_plan$tls_entry",
+            .name = "__nax_unwind_plan$tls_entry",
             .size = sizeof(plan),
             .value = plan,
     };

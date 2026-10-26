@@ -1,5 +1,5 @@
-#ifndef NATURE_RUNTIME_NUTILS_DNS_H_
-#define NATURE_RUNTIME_NUTILS_DNS_H_
+#ifndef NAX_RUNTIME_NUTILS_DNS_H_
+#define NAX_RUNTIME_NUTILS_DNS_H_
 #include "runtime/processor.h"
 #include "runtime/uv_compat.h"
 
@@ -85,4 +85,4 @@ n_errable_vec_t rt_uv_dns_lookup(n_string_t host) {
     return rti_errable_vec(result);
 }
 
-#endif //NATURE_RUNTIME_NUTILS_DNS_H_
+#endif //NAX_RUNTIME_NUTILS_DNS_H_

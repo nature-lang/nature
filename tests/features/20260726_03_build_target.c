@@ -1,7 +1,7 @@
 #include "tests/test.h"
 
 /**
- * nature build <path.n> first maps the source path to a logical source slot, then to its owning
+ * nax build <path.n> first maps the source path to a logical source slot, then to its owning
  * module, builds that whole module plus its transitive dependencies, and looks for the single
  * valid main in the target module only
  */
@@ -55,8 +55,8 @@ static void assert_entry_error(char *entry, char *output_name, char *expect) {
 }
 
 int main(void) {
-    char *nature_root = getenv("NATURE_ROOT");
-    assert_true(nature_root != NULL);
+    char *nax_root = getenv("NAX_ROOT");
+    assert_true(nax_root != NULL);
 
     // the package-root target is named after package.toml and carries mod
     assert_entry_output("buildtarget.n", "target_main", "entry:buildtarget\n");

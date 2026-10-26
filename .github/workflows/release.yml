@@ -274,7 +274,7 @@ jobs:
           compression-level: 0
           if-no-files-found: error
           name: release-${{ matrix.target }}
-          path: release/nature-${{ needs.resolve.outputs.tag }}-${{ matrix.target }}.tar.gz
+          path: release/nax-${{ needs.resolve.outputs.tag }}-${{ matrix.target }}.tar.gz
           retention-days: 1
 
   publish:
@@ -313,16 +313,16 @@ jobs:
 
           targets=(linux-amd64 linux-arm64 darwin-amd64 darwin-arm64)
           for target in "${targets[@]}"; do
-            test -s "dist/nature-${RELEASE_TAG}-${target}.tar.gz"
+            test -s "dist/nax-${RELEASE_TAG}-${target}.tar.gz"
           done
 
-          mapfile -t archives < <(find dist -maxdepth 1 -type f -name 'nature-*.tar.gz' | sort)
+          mapfile -t archives < <(find dist -maxdepth 1 -type f -name 'nax-*.tar.gz' | sort)
           if [[ "${#archives[@]}" -ne "${#targets[@]}" ]]; then
             echo "Expected ${#targets[@]} release archives, found ${#archives[@]}" >&2
             exit 1
           fi
 
-          (cd dist && sha256sum nature-*.tar.gz > SHA256SUMS)
+          (cd dist && sha256sum nax-*.tar.gz > SHA256SUMS)
 
       - name: Create tag and GitHub Release
         env:

@@ -1,5 +1,5 @@
-#ifndef NATURE_LD_COFF_INTERNAL_H
-#define NATURE_LD_COFF_INTERNAL_H
+#ifndef NAX_LD_COFF_INTERNAL_H
+#define NAX_LD_COFF_INTERNAL_H
 
 #include "coff_format.h"
 #include "ld.h"

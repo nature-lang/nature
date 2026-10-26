@@ -17,21 +17,21 @@ mod document_store {
     fn incremental_edits_compose_correctly() {
         let store = DocumentStore::new();
         let uri = file_url("test.n");
-        store.open(&uri, "hello world", 1, "nature".into());
+        store.open(&uri, "hello world", 1, "nax".into());
 
-        // Replace "world" → "nature"
+        // Replace "world" → "nax"
         store.apply_changes(
             &uri,
             2,
             &[TextDocumentContentChangeEvent {
                 range: Some(Range::new(Position::new(0, 6), Position::new(0, 11))),
                 range_length: None,
-                text: "nature".into(),
+                text: "nax".into(),
             }],
         );
 
         let doc = store.get(&uri).unwrap();
-        assert_eq!(doc.rope.to_string(), "hello nature");
+        assert_eq!(doc.rope.to_string(), "hello nax");
         assert_eq!(doc.version, 2);
     }
 
@@ -40,7 +40,7 @@ mod document_store {
         let store = DocumentStore::new();
         let uri = file_url("multi.n");
         // "ab\ncd\nef"
-        store.open(&uri, "ab\ncd\nef", 1, "nature".into());
+        store.open(&uri, "ab\ncd\nef", 1, "nax".into());
 
         // Two edits in the same batch:
         // 1) Replace 'a' with 'A' (line 0, col 0-1)
@@ -71,7 +71,7 @@ mod document_store {
     fn full_sync_replaces_entire_content() {
         let store = DocumentStore::new();
         let uri = file_url("full.n");
-        store.open(&uri, "original content", 1, "nature".into());
+        store.open(&uri, "original content", 1, "nax".into());
 
         // Full sync: no range means replace everything.
         store.apply_changes(
@@ -92,8 +92,8 @@ mod document_store {
     fn open_same_file_twice_updates() {
         let store = DocumentStore::new();
         let uri = file_url("dup.n");
-        store.open(&uri, "version one", 1, "nature".into());
-        store.open(&uri, "version two", 2, "nature".into());
+        store.open(&uri, "version one", 1, "nax".into());
+        store.open(&uri, "version two", 2, "nax".into());
 
         let doc = store.get(&uri).unwrap();
         assert_eq!(doc.rope.to_string(), "version two");
@@ -104,11 +104,11 @@ mod document_store {
     fn close_and_reopen() {
         let store = DocumentStore::new();
         let uri = file_url("cycle.n");
-        store.open(&uri, "first open", 1, "nature".into());
+        store.open(&uri, "first open", 1, "nax".into());
         store.close(&uri);
         assert!(store.get(&uri).is_none());
 
-        store.open(&uri, "reopened", 2, "nature".into());
+        store.open(&uri, "reopened", 2, "nax".into());
         let doc = store.get(&uri).unwrap();
         assert_eq!(doc.rope.to_string(), "reopened");
     }
@@ -117,7 +117,7 @@ mod document_store {
     fn insert_at_beginning() {
         let store = DocumentStore::new();
         let uri = file_url("ins.n");
-        store.open(&uri, "world", 1, "nature".into());
+        store.open(&uri, "world", 1, "nax".into());
 
         store.apply_changes(
             &uri,
@@ -137,7 +137,7 @@ mod document_store {
     fn delete_entire_line() {
         let store = DocumentStore::new();
         let uri = file_url("del.n");
-        store.open(&uri, "line1\nline2\nline3", 1, "nature".into());
+        store.open(&uri, "line1\nline2\nline3", 1, "nax".into());
 
         // Delete line2 including its newline.
         store.apply_changes(
@@ -159,7 +159,7 @@ mod document_store {
         let store = DocumentStore::new();
         let uri = file_url("unicode.n");
         let content = "fn main() {\n    string s = '日本語'\n}";
-        store.open(&uri, content, 1, "nature".into());
+        store.open(&uri, content, 1, "nax".into());
 
         let doc = store.get(&uri).unwrap();
         assert!(doc.rope.to_string().contains("日本語"));
@@ -169,7 +169,7 @@ mod document_store {
     fn empty_document() {
         let store = DocumentStore::new();
         let uri = file_url("empty.n");
-        store.open(&uri, "", 1, "nature".into());
+        store.open(&uri, "", 1, "nax".into());
 
         let doc = store.get(&uri).unwrap();
         assert_eq!(doc.rope.to_string(), "");

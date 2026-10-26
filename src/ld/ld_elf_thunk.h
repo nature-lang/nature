@@ -1,5 +1,5 @@
-#ifndef NATURE_LD_ELF_THUNK_H
-#define NATURE_LD_ELF_THUNK_H
+#ifndef NAX_LD_ELF_THUNK_H
+#define NAX_LD_ELF_THUNK_H
 
 #include "ld_elf_internal.h"
 

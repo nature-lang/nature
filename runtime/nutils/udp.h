@@ -1,5 +1,5 @@
-#ifndef NATURE_RUNTIME_NUTILS_UDP_H_
-#define NATURE_RUNTIME_NUTILS_UDP_H_
+#ifndef NAX_RUNTIME_NUTILS_UDP_H_
+#define NAX_RUNTIME_NUTILS_UDP_H_
 
 #include <stddef.h>
 
@@ -236,4 +236,4 @@ n_errable_t rt_uv_udp_bind(n_udp_socket_t *s) {
     return rti_errable(0);
 }
 
-#endif //NATURE_RUNTIME_NUTILS_UDP_H_
+#endif //NAX_RUNTIME_NUTILS_UDP_H_

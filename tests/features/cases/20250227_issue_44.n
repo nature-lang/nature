@@ -1,4 +1,4 @@
-// The naturelang code is a modified version of the original Odin code from
+// The naxlang code is a modified version of the original Odin code from
 // https://github.com/odin-lang/Odin/blob/m_aster/core/unicode/utf8/utf8.odin
 // 0000_0000 0000_0000 0000_0000 0000_0000
 

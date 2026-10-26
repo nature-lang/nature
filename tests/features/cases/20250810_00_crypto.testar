@@ -58,7 +58,7 @@ fn main():void! {
 }
 
 --- output.txt
-nature-test/main.n:2:17: invalid hex escape sequence \x4m
+nax-test/main.n:2:17: invalid hex escape sequence \x4m
 
 === test_hmac
 --- main.n
@@ -105,13 +105,13 @@ fn main() {
     println('Test 1: Generate RSA key pair and test basic encryption/decryption')
     var (public_key, private_key) = rsa.generate_key(2048)
 
-    var plaintext = 'hello nature' as [u8]
+    var plaintext = 'hello nax' as [u8]
     var ciphertext = public_key.encrypt_pkcs_v15(plaintext)
     println('ciphertext hex:', utils.to_hex(ciphertext))
 
     var decrypted = private_key.decrypt_pkcs_v15(ciphertext)
     println('decrypted:', decrypted as string)
-    assert(decrypted as string == 'hello nature')
+    assert(decrypted as string == 'hello nax')
 
     // Test 2: Export keys to PEM format
     println('\nTest 2: Export keys to PEM format')
@@ -181,14 +181,14 @@ fn main() {
     println('Test 1: Generate RSA key pair and test OAEP encryption/decryption')
     var (public_key, private_key) = rsa.generate_key(2048)
 
-    var plaintext = 'hello nature with OAEP' as [u8]
+    var plaintext = 'hello nax with OAEP' as [u8]
     var label = 'test label' as [u8]
     var ciphertext = public_key.encrypt_oaep(rsa.SHA256, plaintext, label)
     println('OAEP ciphertext hex:', utils.to_hex(ciphertext))
 
     var decrypted = private_key.decrypt_oaep(rsa.SHA256, ciphertext, label)
     println('decrypted:', decrypted as string)
-    assert(decrypted as string == 'hello nature with OAEP')
+    assert(decrypted as string == 'hello nax with OAEP')
     println(public_key.to_pem() as string)
 
     // Test 2: OAEP encryption/decryption with empty label

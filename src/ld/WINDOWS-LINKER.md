@@ -1,6 +1,6 @@
-# Nature Windows AMD64 linker
+# Nax Windows AMD64 linker
 
-Nature's Windows backend is a native, pure-C COFF/PE linker. It is a third
+Nax's Windows backend is a native, pure-C COFF/PE linker. It is a third
 backend next to the existing ELF and Mach-O linkers; it does not link against
 LLVM, LLD, the Windows SDK, or a host linker.
 
@@ -21,14 +21,14 @@ PE32+ console executable with these fixed defaults:
 - ASLR, high-entropy VA, NX, large-address-aware, and terminal-server-aware
   flags enabled
 
-`nature build --target windows_amd64 main.n` uses the built-in linker by
+`nax build --target windows_amd64 main.n` uses the built-in linker by
 default and writes `main.exe` unless `-o` is provided. The final-user build
 path must not execute Clang, LLD, `link.exe`, MinGW `ld`, Zig, or `ar`.
 
 ## Ordinary-link scope
 
 The backend accepts AMD64 COFF objects, BigObj objects, GNU/BSD/MS archives,
-short import objects, and the controlled Nature Windows sysroot. It implements
+short import objects, and the controlled Nax Windows sysroot. It implements
 lazy archive extraction, strong/weak/common/import symbols, COMDAT and
 associative COMDAT selection, `$` subsection ordering, AMD64 relocations,
 imports/IAT/thunks, TLS, `.pdata`/`.xdata`, base relocations, DWARF section
@@ -64,7 +64,7 @@ The selectively translated semantic areas are:
 
 `LTO.*`, PDB/CodeView/MSF code, the full driver/options layer, ICF and
 call-graph sorting, DLL export/resource paths, and non-AMD64 targets are not
-translated. LLVM containers and class hierarchies are replaced with Nature's
+translated. LLVM containers and class hierarchies are replaced with Nax's
 C containers, arenas, tagged unions, and explicit dispatch. Input parsing is
 performed through checked little-endian readers rather than casting untrusted
 buffers.
@@ -77,12 +77,12 @@ SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 ```
 
 LLVM and Zig source trees under `temps/` are development references and are
-not installed or shipped as part of Nature.
+not installed or shipped as part of Nax.
 
 ## Sysroot contract
 
 `lib/windows_amd64` is a versioned, prebuilt sysroot. Release production may
-use the locked Zig/Clang toolchain, but ordinary Nature builds only read the
+use the locked Zig/Clang toolchain, but ordinary Nax builds only read the
 resulting `.obj`, `.a`, and `.lib` files. Every sysroot object is built for
 `x86_64-w64-windows-gnu` with LTO and sanitizers disabled and with unwind
 tables enabled.
@@ -92,6 +92,6 @@ build: CRT/startup objects, static archives, and Windows/UCRT import libraries.
 The build does not require a generated capability manifest or a source-lock
 metadata file.
 
-Third-party runtimes are linked statically. A Nature executable may import
-Windows system DLLs and UCRT API-set DLLs, but it must not depend on Nature,
+Third-party runtimes are linked statically. A Nax executable may import
+Windows system DLLs and UCRT API-set DLLs, but it must not depend on Nax,
 libuv, mbedTLS, `libwinpthread-1.dll`, `libgcc_s*.dll`, or `libstdc++*.dll`.

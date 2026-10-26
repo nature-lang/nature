@@ -46,7 +46,7 @@ int b = a
 fn main() {}
 
 --- output.txt
-nature-test/main.n:1:10: global initializer cannot reference global var 'main.b'
+nax-test/main.n:1:10: global initializer cannot reference global var 'main.b'
 
 === test_global_vec_with_values_failed
 --- main.n
@@ -55,7 +55,7 @@ vec<int> bad = [1]
 fn main() {}
 
 --- output.txt
-nature-test/main.n:1:17: global vec initializer must be empty
+nax-test/main.n:1:17: global vec initializer must be empty
 
 === test_global_cycle_three_files_failed
 --- main.n
@@ -79,7 +79,7 @@ import 'a.n'.{a}
 pub int c = a
 
 --- output.txt
-nature-test/c.n:3:13: global initializer cannot reference global var 'nature-test.a.a'
+nax-test/c.n:3:13: global initializer cannot reference global var 'nax-test.a.a'
 
 === test_global_auto_infer
 --- main.n

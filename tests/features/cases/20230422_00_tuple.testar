@@ -5,7 +5,7 @@ fn main() {
 
     var first = tuple[0]
 
-    tuple[1] = 'nature'
+    tuple[1] = 'nax'
 
     print(first, tuple[1], tuple[2], '\n')
 
@@ -27,7 +27,7 @@ fn main() {
 }
 
 --- output.txt
-1naturetrue
+1naxtrue
 1hellotrue
 1hellotrue
 2worldfalse

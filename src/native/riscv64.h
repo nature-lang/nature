@@ -1,5 +1,5 @@
-#ifndef NATURE_RISCV64_H
-#define NATURE_RISCV64_H
+#ifndef NAX_RISCV64_H
+#define NAX_RISCV64_H
 
 #include "src/binary/encoding/riscv64/asm.h"
 #include "src/lir.h"
@@ -14,4 +14,4 @@
  */
 void riscv64_native(closure_t *c);
 
-#endif //NATURE_RISCV64_H
+#endif //NAX_RISCV64_H

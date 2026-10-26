@@ -1,4 +1,4 @@
-# import [io](https://github.com/nature-lang/nature/tree/master/std/io/io.n)
+# import [io](https://github.com/naxlang/nax/tree/master/std/io/io.n)
 
 输入/输出接口和缓冲区实现，用于读取和写入数据。
 
@@ -140,7 +140,7 @@ fn buffer.read_all():[u8]!
 
 读取缓冲区中的所有剩余数据。
 
-# import [io.buf](https://github.com/nature-lang/nature/tree/master/std/io/buf.n)
+# import [io.buf](https://github.com/naxlang/nax/tree/master/std/io/buf.n)
 
 缓冲 I/O 操作，用于高效的读写操作。
 

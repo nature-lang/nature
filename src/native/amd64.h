@@ -1,5 +1,5 @@
-#ifndef NATURE_SRC_LIR_NATIVE_AMD64_H_
-#define NATURE_SRC_LIR_NATIVE_AMD64_H_
+#ifndef NAX_SRC_LIR_NATIVE_AMD64_H_
+#define NAX_SRC_LIR_NATIVE_AMD64_H_
 
 #include "src/binary/encoding/amd64/asm.h"
 #include "src/lir.h"
@@ -13,13 +13,13 @@
  * Compiler-private Windows AMD64 unwind-plan wire contract.
  *
  * Native lowering publishes one symbol named
- *     __nature_unwind_plan$<function-link-ident>
+ *     __nax_unwind_plan$<function-link-ident>
  * for every generated function. The COFF object writer consumes that symbol
  * and translates the abstract actions below into PE .xdata/.pdata records.
  * Multi-byte fields are little-endian byte arrays so the on-wire layout does
  * not depend on host structure padding or host byte order.
  */
-#define AMD64_WINDOWS_UNWIND_PLAN_PREFIX "__nature_unwind_plan$"
+#define AMD64_WINDOWS_UNWIND_PLAN_PREFIX "__nax_unwind_plan$"
 #define AMD64_WINDOWS_UNWIND_PLAN_MAGIC "NWU1"
 
 enum {
@@ -70,4 +70,4 @@ _Static_assert(sizeof(amd64_windows_unwind_plan_action_t) ==
 
 void amd64_native(closure_t *c);
 
-#endif //NATURE_SRC_LIR_NATIVE_AMD64_H_
+#endif //NAX_SRC_LIR_NATIVE_AMD64_H_

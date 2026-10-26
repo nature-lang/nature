@@ -58,7 +58,7 @@ impl Backend {
         let items = CompletionProvider::new(
             &mut symbol_table,
             module,
-            project.nature_root.clone(),
+            project.nax_root.clone(),
             project.root.clone(),
             package_config,
         )

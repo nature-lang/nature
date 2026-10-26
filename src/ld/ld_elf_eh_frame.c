@@ -8,7 +8,7 @@
  * The encoding and search-table construction are translated from Zig commit
  * 738d2be9d6b6ef3ff3559130c05159ef53336224,
  * src/link/Elf/eh_frame.zig:writeEhFrameHdr. Zig is MIT licensed; see
- * ZIG-LICENSE.txt. Nature additionally checks every conversion and uses the
+ * ZIG-LICENSE.txt. Nax additionally checks every conversion and uses the
  * original input index to make equal-key ordering deterministic.
  */
 

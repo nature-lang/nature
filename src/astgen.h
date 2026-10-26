@@ -1,5 +1,5 @@
-#ifndef NATURE_SRC_ASTGEN_H_
-#define NATURE_SRC_ASTGEN_H_
+#ifndef NAX_SRC_ASTGEN_H_
+#define NAX_SRC_ASTGEN_H_
 
 #include "ast.h"
 
@@ -61,4 +61,4 @@ static inline ast_for_tradition_stmt_t *astgen_for_range_rewrite(ast_for_iterato
     return rewrite;
 }
 
-#endif // NATURE_SRC_ASTGEN_H_
+#endif // NAX_SRC_ASTGEN_H_

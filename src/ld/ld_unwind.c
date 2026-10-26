@@ -7,7 +7,7 @@
 #include <string.h>
 
 /* The record normalization and two-level page layout follow Zig's Mach-O
-   UnwindInfo implementation at commit 738d2be9.  Nature currently emits the
+   UnwindInfo implementation at commit 738d2be9.  Nax currently emits the
    official regular second-level representation; compressed pages are an
    equivalent size optimization and can be added without changing this API. */
 #define LD_UNWIND_PAGE_SIZE 0x1000U
@@ -116,7 +116,7 @@ static bool ld_unwind_ref_at_input_address(ld_context_t *ctx,
     /* Zig's local compact-unwind personality path looks up the nlist whose
        input value equals the raw personality field.  Prefer an external
        candidate (which preserves coalescing/import semantics), then accept a
-       true local definition through Nature's shared Mach-O reference model. */
+       true local definition through Nax's shared Mach-O reference model. */
     for (unsigned pass = 0; pass < 2U; pass++) {
         for (size_t index = 0; index < object->symbol_count; index++) {
             ld_input_symbol_t *input = &object->symbols[index];

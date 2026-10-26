@@ -1,5 +1,5 @@
-#ifndef NATURE_STRING_H
-#define NATURE_STRING_H
+#ifndef NAX_STRING_H
+#define NAX_STRING_H
 
 #include "utils/type.h"
 
@@ -29,4 +29,4 @@ n_bool_t string_ge(n_string_t *a, n_string_t *b);
 
 n_int_t rt_string_length(n_string_t *a);
 
-#endif //NATURE_STRING_H
+#endif //NAX_STRING_H

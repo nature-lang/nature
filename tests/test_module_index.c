@@ -13,8 +13,8 @@
 #include "utils/helper.h"
 
 static void test_package_instance_key(void) {
-    char *left = module_key_join("/tmp/nature-package-left", "codec");
-    char *right = module_key_join("/tmp/nature-package-right", "codec");
+    char *left = module_key_join("/tmp/nax-package-left", "codec");
+    char *right = module_key_join("/tmp/nax-package-right", "codec");
 
     assert(!str_equal(left, right));
     assert(str_equal(module_ident_join("shared", "codec"), "shared.codec"));
@@ -29,7 +29,7 @@ static void write_file(char *path, char *content) {
 }
 
 static void test_symlink_cycle(void) {
-    char temp[] = "/tmp/nature-module-index-XXXXXX";
+    char temp[] = "/tmp/nax-module-index-XXXXXX";
     char *root = mkdtemp(temp);
     assert(root);
 

@@ -241,7 +241,7 @@ fn main() {
     {string} s = {
         'hello',
         'world',
-        'nature',
+        'nax',
     }
 
     var t = reflect.typeof(s)

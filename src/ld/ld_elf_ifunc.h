@@ -1,5 +1,5 @@
-#ifndef NATURE_LD_ELF_IFUNC_H
-#define NATURE_LD_ELF_IFUNC_H
+#ifndef NAX_LD_ELF_IFUNC_H
+#define NAX_LD_ELF_IFUNC_H
 
 #include "ld.h"
 

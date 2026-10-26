@@ -71,7 +71,7 @@ fn main() {
 }
 
 --- output.txt
-nature-test/main.n:18:11: match expression lacks a default case '_' and tagged union element type lacks, for example 'is circle'
+nax-test/main.n:18:11: match expression lacks a default case '_' and tagged union element type lacks, for example 'is circle'
 
 === test_match_union
 --- main.n
@@ -169,7 +169,7 @@ fn main() {
 }
 
 --- output.txt
-nature-test/main.n:7:41: type inconsistency, expect=main.result<int>(tagged_union), actual=main.result<float>(tagged_union)
+nax-test/main.n:7:41: type inconsistency, expect=main.result<int>(tagged_union), actual=main.result<float>(tagged_union)
 
 === test_union_failed
 --- main.n
@@ -191,7 +191,7 @@ fn main() {
 }
 
 --- output.txt
-nature-test/main.n:13:8: type inconsistency, expect=main.result, actual=main.result2
+nax-test/main.n:13:8: type inconsistency, expect=main.result, actual=main.result2
 
 === test_union_failed2
 --- main.n
@@ -223,7 +223,7 @@ fn main() {
 }
 
 --- output.txt
-nature-test/main.n:17:29: type inconsistency, expect=main.result<int>(tagged_union), actual=main.result<bool>(tagged_union)
+nax-test/main.n:17:29: type inconsistency, expect=main.result<int>(tagged_union), actual=main.result<bool>(tagged_union)
 
 === test_gen_union
 --- main.n

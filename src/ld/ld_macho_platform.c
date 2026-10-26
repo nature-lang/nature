@@ -3,7 +3,7 @@
 #include <string.h>
 
 /* Platform matching follows Zig's MachO.Platform.fromLoadCommand/eqlTarget
-   behavior at 738d2be9d6b6ef3ff3559130c05159ef53336224.  Nature currently emits
+   behavior at 738d2be9d6b6ef3ff3559130c05159ef53336224.  Nax currently emits
    macOS executables only, so every other Apple platform/ABI is rejected even
    though it shares the arm64 CPU type. */
 

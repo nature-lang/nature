@@ -941,7 +941,7 @@ static void linear_rt_call_at(module_t *m, char *rt_call, lir_operand_t *result)
 /**
  * 当 local var 被 child fn 引用时, 需要将原本在栈中分配的 var 改成堆分配, 并对 ast_var_decl 中的 heap_ident 赋值
  * 避免可能的在 child fn 中产生的协程操作导致的 stack var 无法访问。当然这不是一个好的方式，并不是所有的 capture var 都会被协程
- * 引用并访问，更好的方式是分析 stack var 的使用点，判断其是否被协程引用。为了 nature 的快速完成，在当前版本中暂时不会进行此类分析。
+ * 引用并访问，更好的方式是分析 stack var 的使用点，判断其是否被协程引用。为了 nax 的快速完成，在当前版本中暂时不会进行此类分析。
  *
  * 原始 stmt: int a  = 12 如果 a  被闭包引用或者 impl call 使用，则 a 需要在堆上分配, 一般情况只需要改写 int a = 12 表达式为 ref<int> a = gc_malloc, 然后
  * 赋值为 12 即可，但是 lir fn begin 指令中引用的 fn param 是 local var 其在 lower 阶段需要通过复杂的系统 ABI 改写。直接改写 fn param 为 ref<int>

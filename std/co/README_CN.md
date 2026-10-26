@@ -1,4 +1,4 @@
-# import [co](https://github.com/nature-lang/nature/tree/master/std/co/co.n)
+# import [co](https://github.com/naxlang/nax/tree/master/std/co/co.n)
 
 协程库，用于并发编程和协作式多任务处理。
 
@@ -34,7 +34,7 @@ fn arg():anyptr
 
 获取传递给当前协程的参数。
 
-# import [co.mutex](https://github.com/nature-lang/nature/tree/master/std/co/mutex.n)
+# import [co.mutex](https://github.com/naxlang/nax/tree/master/std/co/mutex.n)
 
 用于协程同步的互斥锁实现。
 

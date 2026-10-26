@@ -1,4 +1,4 @@
-# import [http](https://github.com/nature-lang/nature/tree/master/std/http/http.n)
+# import [http](https://github.com/naxlang/nax/tree/master/std/http/http.n)
 
 HTTP server and client library for building web applications and making HTTP requests.
 
@@ -171,7 +171,7 @@ fn response_t.send(string msg)
 
 Send response with specified message.
 
-# import [http.client](https://github.com/nature-lang/nature/tree/master/std/http/client.n)
+# import [http.client](https://github.com/naxlang/nax/tree/master/std/http/client.n)
 
 HTTP client for making HTTP requests.
 

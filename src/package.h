@@ -1,5 +1,5 @@
-#ifndef NATURE_PACKAGE_H
-#define NATURE_PACKAGE_H
+#ifndef NAX_PACKAGE_H
+#define NAX_PACKAGE_H
 
 #include "utils/toml.h"
 #include "utils/assertf.h"
@@ -9,7 +9,7 @@
 #define PACKAGE_TOML "package.toml"
 #define TYPE_GIT "git"
 #define TYPE_LOCAL "local"
-#define PACKAGE_SOURCE_INFIX ".nature/package/sources"
+#define PACKAGE_SOURCE_INFIX ".nax/package/sources"
 
 bool is_std_package(char *package);
 
@@ -123,4 +123,4 @@ static inline char *package_dep_local_dir(toml_table_t *conf, char *package) {
 
 slice_t *package_links(char *package_dir, toml_table_t *package_conf);
 
-#endif //NATURE_PACKAGE_H
+#endif //NAX_PACKAGE_H

@@ -3888,7 +3888,7 @@ static bool ld_branch26_delta(uint64_t target, uint64_t place, int64_t *delta) {
 }
 
 /* Zig's MachO.zig createThunks and MachO/Thunk.zig place an ADRP/ADD/BR
-   trampoline within BRANCH26 reach of a callsite.  Nature currently emits a
+   trampoline within BRANCH26 reach of a callsite.  Nax currently emits a
    single compact island beside the other __TEXT stubs.  Both legs are
    checked below; very large text sections that require interleaved islands
    remain a diagnosed unsupported layout instead of being silently wrapped. */

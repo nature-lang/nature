@@ -123,9 +123,9 @@ static void test_imported_unsigned32_is_not_pointer_bind(void) {
             "  - targets: [ arm64-macos ]\n"
             "    symbols: [ _import32 ]\n"
             "...\n";
-    char object_path[] = "/tmp/nature-ld-import32-object-XXXXXX";
-    char tbd_path[] = "/tmp/nature-ld-import32-tbd-XXXXXX";
-    char output_path[] = "/tmp/nature-ld-import32-output-XXXXXX";
+    char object_path[] = "/tmp/nax-ld-import32-object-XXXXXX";
+    char tbd_path[] = "/tmp/nax-ld-import32-tbd-XXXXXX";
+    char output_path[] = "/tmp/nax-ld-import32-output-XXXXXX";
     test_make_import32_object(object_path);
     test_ld_write_fixture(tbd_path, tbd, sizeof(tbd) - 1U);
     int output_fd = mkstemp(output_path);
@@ -319,8 +319,8 @@ static void test_make_exported_weak_pointer_object(char path[]) {
 }
 
 static void test_exported_weak_pointer_keeps_local_initial_value(void) {
-    char object_path[] = "/tmp/nature-ld-weak-pointer-object-XXXXXX";
-    char output_path[] = "/tmp/nature-ld-weak-pointer-output-XXXXXX";
+    char object_path[] = "/tmp/nax-ld-weak-pointer-object-XXXXXX";
+    char output_path[] = "/tmp/nax-ld-weak-pointer-output-XXXXXX";
     test_make_exported_weak_pointer_object(object_path);
     int output_fd = mkstemp(output_path);
     assert(output_fd >= 0);

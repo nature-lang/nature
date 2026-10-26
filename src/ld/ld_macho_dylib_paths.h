@@ -1,5 +1,5 @@
-#ifndef NATURE_LD_MACHO_DYLIB_PATHS_H
-#define NATURE_LD_MACHO_DYLIB_PATHS_H
+#ifndef NAX_LD_MACHO_DYLIB_PATHS_H
+#define NAX_LD_MACHO_DYLIB_PATHS_H
 
 #include "ld_internal.h"
 

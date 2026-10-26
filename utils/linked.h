@@ -1,5 +1,5 @@
-#ifndef NATURE_UTILS_LINKED_H_
-#define NATURE_UTILS_LINKED_H_
+#ifndef NAX_UTILS_LINKED_H_
+#define NAX_UTILS_LINKED_H_
 
 #include <stdint.h>
 #include <stdlib.h>
@@ -59,4 +59,4 @@ bool linked_empty(linked_t *l);
 
 uint16_t linked_count(linked_t *l);
 
-#endif// NATURE_SRC_LIB_LIST_H_
+#endif// NAX_SRC_LIB_LIST_H_

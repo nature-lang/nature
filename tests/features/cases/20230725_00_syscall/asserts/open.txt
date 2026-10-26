@@ -1,2 +1,2 @@
 hello world
-nature is the best programming language
+nax is the best programming language

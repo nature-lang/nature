@@ -1,5 +1,5 @@
-#ifndef NATURE_SRC_PEEPHOLE_ARM64_H_
-#define NATURE_SRC_PEEPHOLE_ARM64_H_
+#ifndef NAX_SRC_PEEPHOLE_ARM64_H_
+#define NAX_SRC_PEEPHOLE_ARM64_H_
 
 #include "src/lir.h"
 
@@ -7,4 +7,4 @@
 
 void arm64_peephole_pre(closure_t *c);
 
-#endif //NATURE_SRC_PEEPHOLE_ARM64_H_
+#endif //NAX_SRC_PEEPHOLE_ARM64_H_

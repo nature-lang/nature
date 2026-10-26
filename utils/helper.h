@@ -1,5 +1,5 @@
-#ifndef NATURE_SRC_LIB_HELPER_H_
-#define NATURE_SRC_LIB_HELPER_H_
+#ifndef NAX_SRC_LIB_HELPER_H_
+#define NAX_SRC_LIB_HELPER_H_
 
 #include <assert.h>
 #include <errno.h>
@@ -21,22 +21,22 @@
 #define NOMINMAX
 #endif
 
-// Nature uses WORD and DWORD as instruction-width constants. A translation
+// Nax uses WORD and DWORD as instruction-width constants. A translation
 // unit can include utils/type.h before this header, so hide those macros while
 // the Windows SDK declares its WORD/DWORD typedefs. The SDK headers are loaded
 // here as a complete libuv dependency set; their include guards then make a
-// later uv/win.h include safe after the Nature constants are restored.
+// later uv/win.h include safe after the Nax constants are restored.
 #ifdef WORD
-#define NATURE_HELPER_RESTORE_WORD
+#define NAX_HELPER_RESTORE_WORD
 #undef WORD
 #endif
 #ifdef DWORD
-#define NATURE_HELPER_RESTORE_DWORD
+#define NAX_HELPER_RESTORE_DWORD
 #undef DWORD
 #endif
 
-// winnt.h declares TOKEN_TYPE, which collides with Nature's token enum.
-#define TOKEN_TYPE NATURE_WINDOWS_TOKEN_TYPE
+// winnt.h declares TOKEN_TYPE, which collides with Nax's token enum.
+#define TOKEN_TYPE NAX_WINDOWS_TOKEN_TYPE
 
 // Winsock must precede windows.h.
 #include <winsock2.h>
@@ -48,13 +48,13 @@
 
 #undef TOKEN_TYPE
 
-#ifdef NATURE_HELPER_RESTORE_WORD
+#ifdef NAX_HELPER_RESTORE_WORD
 #define WORD 2
-#undef NATURE_HELPER_RESTORE_WORD
+#undef NAX_HELPER_RESTORE_WORD
 #endif
-#ifdef NATURE_HELPER_RESTORE_DWORD
+#ifdef NAX_HELPER_RESTORE_DWORD
 #define DWORD 4
-#undef NATURE_HELPER_RESTORE_DWORD
+#undef NAX_HELPER_RESTORE_DWORD
 #endif
 #ifdef VOID
 #undef VOID
@@ -69,7 +69,7 @@
 #undef BTYPE
 #endif
 // rpc.h defines `interface` as a C preprocessor keyword compatibility shim,
-// which collides with Nature's type_t.interface field.
+// which collides with Nax's type_t.interface field.
 #ifdef interface
 #undef interface
 #endif
@@ -85,9 +85,9 @@
 #include "log.h"
 
 #ifdef __WINDOWS
-// MinGW declares the non-standard three-argument CRT itoa. Keep Nature's
+// MinGW declares the non-standard three-argument CRT itoa. Keep Nax's
 // allocation-returning helper source-compatible under a distinct C symbol.
-#define itoa nature_itoa
+#define itoa nax_itoa
 #endif
 
 #define LAMBDA(return_type, body) \
@@ -101,7 +101,7 @@
 #define STRING_EOF '\0'
 
 #ifdef __WINDOWS
-static inline char *nature_realpath(const char *path, char *resolved_path) {
+static inline char *nax_realpath(const char *path, char *resolved_path) {
     char *result = _fullpath(resolved_path, path, PATH_MAX);
     if (!result) {
         return NULL;
@@ -114,7 +114,7 @@ static inline char *nature_realpath(const char *path, char *resolved_path) {
     return result;
 }
 
-static inline char *nature_mkdtemp(char *path_template) {
+static inline char *nax_mkdtemp(char *path_template) {
     static volatile LONG sequence = 0;
     static const char alphabet[] = "abcdefghijklmnopqrstuvwxyz0123456789";
 
@@ -153,8 +153,8 @@ static inline char *nature_mkdtemp(char *path_template) {
     return NULL;
 }
 
-#define realpath nature_realpath
-#define mkdtemp nature_mkdtemp
+#define realpath nax_realpath
+#define mkdtemp nax_mkdtemp
 #endif
 
 #define VOID (void) !
@@ -962,4 +962,4 @@ static inline void str_rcpy(char *dest, const char *src, size_t n) {
     dest[copy_len] = '\0';
 }
 
-#endif // NATURE_SRC_LIB_HELPER_H_
+#endif // NAX_SRC_LIB_HELPER_H_

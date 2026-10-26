@@ -1,5 +1,5 @@
-#ifndef NATURE_TEST_LD_MACHO_COMMON_H
-#define NATURE_TEST_LD_MACHO_COMMON_H
+#ifndef NAX_TEST_LD_MACHO_COMMON_H
+#define NAX_TEST_LD_MACHO_COMMON_H
 
 #include "src/ld/ld.h"
 #include "src/ld/ld_internal.h"

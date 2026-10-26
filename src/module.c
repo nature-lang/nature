@@ -48,9 +48,9 @@ static char *module_source_rel(module_t *m, char *source_path) {
         return ltrim(rel_path, "/");
     }
 
-    if (strstr(source_path, NATURE_ROOT) != NULL) {
+    if (strstr(source_path, NAX_ROOT) != NULL) {
         // builtin
-        char *rel_path = str_replace(source_path, NATURE_ROOT, "");
+        char *rel_path = str_replace(source_path, NAX_ROOT, "");
         assert(rel_path);
         return ltrim(rel_path, "/");
     }

@@ -1,5 +1,5 @@
-#ifndef NATURE_PROCESSOR_H
-#define NATURE_PROCESSOR_H
+#ifndef NAX_PROCESSOR_H
+#define NAX_PROCESSOR_H
 
 #include "runtime/uv_compat.h"
 #include <stdint.h>
@@ -293,4 +293,4 @@ void global_async_send(void *fn, void *arg1, void *arg2, void *arg3);
 
 void global_waiting_send(void *fn, void *arg1, void *arg2, void *arg3);
 
-#endif // NATURE_PROCESSOR_H
+#endif // NAX_PROCESSOR_H

@@ -1,5 +1,5 @@
-#ifndef NATURE_RT_CHAN_H
-#define NATURE_RT_CHAN_H
+#ifndef NAX_RT_CHAN_H
+#define NAX_RT_CHAN_H
 
 #include "stdlib.h"
 #include "stdint.h"
@@ -18,4 +18,4 @@ bool rt_chan_is_closed(n_chan_t *chan);
 
 bool rt_chan_is_successful(n_chan_t *chan);
 
-#endif //NATURE_RT_CHAN_H
+#endif //NAX_RT_CHAN_H

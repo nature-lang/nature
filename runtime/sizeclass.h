@@ -1,5 +1,5 @@
-#ifndef NATURE_SIZECLASS_H
-#define NATURE_SIZECLASS_H
+#ifndef NAX_SIZECLASS_H
+#define NAX_SIZECLASS_H
 
 #include <stdlib.h>
 #include <stdint.h>
@@ -109,4 +109,4 @@ static uint8_t class_pages_count[SIZECLASS_COUNT] = {
 };
 
 
-#endif //NATURE_SIZECLASS_H
+#endif //NAX_SIZECLASS_H

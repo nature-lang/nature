@@ -1,5 +1,5 @@
-#ifndef NATURE_LD_ELF_DYNAMIC_H
-#define NATURE_LD_ELF_DYNAMIC_H
+#ifndef NAX_LD_ELF_DYNAMIC_H
+#define NAX_LD_ELF_DYNAMIC_H
 
 #include "ld.h"
 
@@ -10,7 +10,7 @@
 /*
  * Minimal static-PIE dynamic metadata.  The ordering and tag selection follow
  * Zig's ELF linker at commit 738d2be9d6b6ef3ff3559130c05159ef53336224.
- * Nature deliberately omits DSO imports, symbol versioning and PT_INTERP.
+ * Nax deliberately omits DSO imports, symbol versioning and PT_INTERP.
  */
 
 typedef enum {

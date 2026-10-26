@@ -79,7 +79,7 @@ fn main() {
 }
 
 --- output.txt
-nature-test/main.n:14:17: excepted ';' or '}' at end of statement
+nax-test/main.n:14:17: excepted ';' or '}' at end of statement
 
 === test_break_failed2
 --- main.n
@@ -103,5 +103,5 @@ fn main() {
 }
 
 --- output.txt
-nature-test/main.n:14:17: break must use in for stmt body
+nax-test/main.n:14:17: break must use in for stmt body
 

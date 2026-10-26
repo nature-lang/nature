@@ -6,7 +6,7 @@ fn main() {
 }
 
 --- output.txt
-nature-test/main.n:1:13: spaces are not allowed before '.' in import paths
+nax-test/main.n:1:13: spaces are not allowed before '.' in import paths
 
 === test_import_space_after_dot
 --- main.n
@@ -16,7 +16,7 @@ fn main() {
 }
 
 --- output.txt
-nature-test/main.n:1:18: spaces are not allowed after '.' in import paths
+nax-test/main.n:1:18: spaces are not allowed after '.' in import paths
 
 === test_import_spaces_both_sides
 --- main.n
@@ -26,7 +26,7 @@ fn main() {
 }
 
 --- output.txt
-nature-test/main.n:1:13: spaces are not allowed before '.' in import paths
+nax-test/main.n:1:13: spaces are not allowed before '.' in import paths
 
 === test_import_multiple_spaces_before
 --- main.n
@@ -36,7 +36,7 @@ fn main() {
 }
 
 --- output.txt
-nature-test/main.n:1:14: spaces are not allowed before '.' in import paths
+nax-test/main.n:1:14: spaces are not allowed before '.' in import paths
 
 === test_import_multiple_spaces_after
 --- main.n
@@ -46,7 +46,7 @@ fn main() {
 }
 
 --- output.txt
-nature-test/main.n:1:19: spaces are not allowed after '.' in import paths
+nax-test/main.n:1:19: spaces are not allowed after '.' in import paths
 
 === test_import_tab_before_dot
 --- main.n
@@ -56,7 +56,7 @@ fn main() {
 }
 
 --- output.txt
-nature-test/main.n:1:13: spaces are not allowed before '.' in import paths
+nax-test/main.n:1:13: spaces are not allowed before '.' in import paths
 
 === test_import_tab_after_dot
 --- main.n
@@ -66,7 +66,7 @@ fn main() {
 }
 
 --- output.txt
-nature-test/main.n:1:18: spaces are not allowed after '.' in import paths
+nax-test/main.n:1:18: spaces are not allowed after '.' in import paths
 
 === test_import_valid_no_spaces
 --- main.n
@@ -98,7 +98,7 @@ fn main() {
 }
 
 --- output.txt
-nature-test/main.n:1:13: spaces are not allowed before '.' in import paths
+nax-test/main.n:1:13: spaces are not allowed before '.' in import paths
 
 === test_import_valid_selective_no_spaces
 --- main.n

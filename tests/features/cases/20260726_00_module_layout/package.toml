@@ -2,7 +2,7 @@
 # `mod` in the root must match the name here, independent of the physical directory name
 name = "modtest"
 version = "1.0.0"
-authors = ["nature"]
+authors = ["nax"]
 description = "multi-file directory modules v1"
 license = "MIT"
 type = "bin"

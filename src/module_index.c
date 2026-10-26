@@ -99,7 +99,7 @@ char *module_source_rel_path(char *package_dir, char *source_path) {
 }
 
 /**
- * a nature source is either .n (normal mode) or .x (x mode), the extension is part of the
+ * a nax source is either .n (normal mode) or .x (x mode), the extension is part of the
  * module identity so foo.n and foo.x are distinct slots rather than variants of one module
  */
 char *module_source_ext(char *filename) {

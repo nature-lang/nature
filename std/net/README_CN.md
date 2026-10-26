@@ -1,4 +1,4 @@
-# import [net.dns](https://github.com/nature-lang/nature/blob/master/std/net/dns.n)
+# import [net.dns](https://github.com/naxlang/nax/blob/master/std/net/dns.n)
 
 DNS解析工具，用于主机名查找
 
@@ -18,7 +18,7 @@ fn lookup(string host):[string]!
 
 将主机名解析为IP地址并返回字符串数组
 
-# import [net.tcp](https://github.com/nature-lang/nature/blob/master/std/net/tcp.n)
+# import [net.tcp](https://github.com/naxlang/nax/blob/master/std/net/tcp.n)
 
 TCP网络，用于服务器和客户端连接
 
@@ -137,7 +137,7 @@ fn conn_t.close()
 
 关闭TCP连接
 
-# import [net.tls](https://github.com/nature-lang/nature/blob/master/std/net/tls.n)
+# import [net.tls](https://github.com/naxlang/nax/blob/master/std/net/tls.n)
 
 TLS/SSL安全网络，用于加密连接
 
@@ -200,7 +200,7 @@ fn conn_t.close()
 
 关闭TLS连接
 
-# import [net.udp](https://github.com/nature-lang/nature/blob/master/std/net/udp.n)
+# import [net.udp](https://github.com/naxlang/nax/blob/master/std/net/udp.n)
 
 UDP网络，用于无连接数据包通信
 
@@ -336,7 +336,7 @@ fn conn_t.close()
 
 关闭UDP连接
 
-# import [net.url](https://github.com/nature-lang/nature/blob/master/std/net/url.n)
+# import [net.url](https://github.com/naxlang/nax/blob/master/std/net/url.n)
 
 URL解析和操作工具
 
@@ -477,7 +477,7 @@ fn query_t.get(string key):string
 
 获取指定查询参数键的第一个值
 
-# import [net.utils](https://github.com/nature-lang/nature/blob/master/std/net/utils.n)
+# import [net.utils](https://github.com/naxlang/nax/blob/master/std/net/utils.n)
 
 网络工具函数，用于常见操作
 
@@ -489,7 +489,7 @@ fn split_host(string host):(string, int)!
 
 将主机字符串分割为IP地址和端口号
 
-# import [net.types](https://github.com/nature-lang/nature/blob/master/std/net/types.n)
+# import [net.types](https://github.com/naxlang/nax/blob/master/std/net/types.n)
 
 网络类型定义和接口
 

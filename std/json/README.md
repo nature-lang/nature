@@ -1,4 +1,4 @@
-# import [json](https://github.com/nature-lang/nature/tree/master/std/json/json.n)
+# import [json](https://github.com/naxlang/nax/tree/master/std/json/json.n)
 
 JSON serialization and deserialization library for converting between objects and JSON strings.
 

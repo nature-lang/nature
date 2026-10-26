@@ -1,5 +1,5 @@
-#ifndef NATURE_TYPE_H
-#define NATURE_TYPE_H
+#ifndef NAX_TYPE_H
+#define NAX_TYPE_H
 
 #include <float.h>
 #include <pthread.h>
@@ -231,7 +231,7 @@ typedef struct {
 } rtype_t;
 
 // 类型描述信息 start
-typedef int64_t type_int_t; // 左边是 nature 中的类型，右边是 c 中的类型
+typedef int64_t type_int_t; // 左边是 nax 中的类型，右边是 c 中的类型
 
 typedef double type_float_t;
 
@@ -376,7 +376,7 @@ struct type_alias_t {
 };
 
 // 假设已经知道了数组元素的类型，又如何计算其是否为指针呢
-// nature 反而比较简单，只要不是标量元素，其他元素其值一定是一个指针，包括 struct
+// nax 反而比较简单，只要不是标量元素，其他元素其值一定是一个指针，包括 struct
 // golang 中由于 struct 也是标量，所以其需要拆解 struct 才能填充元素是否为指针
 // 假如 type_array_t 是编译时的数据，那编译时根本就不知道 *data 的值是多少！
 // void* ptr =  malloc(sizeof(element_type) * count) // 数组初始化后最终会得到这样一份数据，这个数据将会存在的 var 中
@@ -660,8 +660,8 @@ bool type_can_size(type_t t);
 int64_t type_alignof(type_t t);
 
 /**
- * 基于当前 nature 中所有的栈中的数据都小于等于 8BYTE 的拖鞋之举
- * 后续 nature 一定会支持 symbol 或者 stack 中的一个 var 存储的对象大于 8byte
+ * 基于当前 nax 中所有的栈中的数据都小于等于 8BYTE 的拖鞋之举
+ * 后续 nax 一定会支持 symbol 或者 stack 中的一个 var 存储的对象大于 8byte
  *
  * stack 中存储的数据如果是一个指针，那么就需要 gc
  * 一些符合对象默认就是指针也是需要 gc 的
@@ -1140,4 +1140,4 @@ static inline type_t type_integer_t_new() {
 }
 
 
-#endif // NATURE_TYPE_H
+#endif // NAX_TYPE_H

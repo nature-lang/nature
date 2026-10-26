@@ -1,4 +1,4 @@
-# import [mem](https://github.com/nature-lang/nature/tree/master/std/mem/mem.n)
+# import [mem](https://github.com/naxlang/nax/tree/master/std/mem/mem.n)
 
 Memory operations and byte order conversion utilities
 

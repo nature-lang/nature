@@ -1,5 +1,5 @@
-#ifndef NATURE_LD_ELF_CIE_H
-#define NATURE_LD_ELF_CIE_H
+#ifndef NAX_LD_ELF_CIE_H
+#define NAX_LD_ELF_CIE_H
 
 #include <stddef.h>
 #include <stdint.h>

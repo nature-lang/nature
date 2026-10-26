@@ -1,5 +1,5 @@
-#ifndef NATURE_LD_ELF_SCRIPT_H
-#define NATURE_LD_ELF_SCRIPT_H
+#ifndef NAX_LD_ELF_SCRIPT_H
+#define NAX_LD_ELF_SCRIPT_H
 
 #include "ld.h"
 

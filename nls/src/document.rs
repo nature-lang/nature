@@ -17,7 +17,7 @@ pub struct Document {
     pub rope: Rope,
     /// Editor-assigned version (monotonically increasing per file).
     pub version: i32,
-    /// Language identifier (e.g. `"nature"` / `"n"`).
+    /// Language identifier (e.g. `"nax"` / `"n"`).
     pub language_id: String,
 }
 
@@ -179,19 +179,19 @@ mod tests {
     fn open_and_get() {
         let store = DocumentStore::new();
         let uri = test_uri("a");
-        store.open(&uri, "hello world", 1, "nature".into());
+        store.open(&uri, "hello world", 1, "nax".into());
 
         let doc = store.get(&uri).unwrap();
         assert_eq!(doc.text(), "hello world");
         assert_eq!(doc.version, 1);
-        assert_eq!(doc.language_id, "nature");
+        assert_eq!(doc.language_id, "nax");
     }
 
     #[test]
     fn close_removes_document() {
         let store = DocumentStore::new();
         let uri = test_uri("b");
-        store.open(&uri, "content", 1, "nature".into());
+        store.open(&uri, "content", 1, "nax".into());
         assert!(store.is_open(uri.path()));
 
         store.close(&uri);
@@ -203,7 +203,7 @@ mod tests {
     fn get_by_path() {
         let store = DocumentStore::new();
         let uri = test_uri("c");
-        store.open(&uri, "fn main() {}", 1, "nature".into());
+        store.open(&uri, "fn main() {}", 1, "nax".into());
 
         let doc = store.get_by_path(uri.path()).unwrap();
         assert_eq!(doc.text(), "fn main() {}");
@@ -232,7 +232,7 @@ mod tests {
     fn apply_full_replacement() {
         let store = DocumentStore::new();
         let uri = test_uri("full");
-        store.open(&uri, "old content", 1, "nature".into());
+        store.open(&uri, "old content", 1, "nax".into());
 
         let changes = vec![TextDocumentContentChangeEvent {
             range: None,
@@ -252,7 +252,7 @@ mod tests {
     fn apply_incremental_insert() {
         let store = DocumentStore::new();
         let uri = test_uri("inc_ins");
-        store.open(&uri, "helo world", 1, "nature".into());
+        store.open(&uri, "helo world", 1, "nax".into());
 
         // Insert 'l' at position (0, 3) → "hello world"
         let changes = vec![TextDocumentContentChangeEvent {
@@ -268,7 +268,7 @@ mod tests {
     fn apply_incremental_delete() {
         let store = DocumentStore::new();
         let uri = test_uri("inc_del");
-        store.open(&uri, "helllo world", 1, "nature".into());
+        store.open(&uri, "helllo world", 1, "nax".into());
 
         // Delete one 'l' at (0,3)..(0,4) → "hello world"
         let changes = vec![TextDocumentContentChangeEvent {
@@ -284,7 +284,7 @@ mod tests {
     fn apply_incremental_replace() {
         let store = DocumentStore::new();
         let uri = test_uri("inc_rep");
-        store.open(&uri, "fn foo() {}", 1, "nature".into());
+        store.open(&uri, "fn foo() {}", 1, "nax".into());
 
         // Replace "foo" (3..6) with "bar"
         let changes = vec![TextDocumentContentChangeEvent {
@@ -300,7 +300,7 @@ mod tests {
     fn apply_multiline_edit() {
         let store = DocumentStore::new();
         let uri = test_uri("multiline");
-        store.open(&uri, "line1\nline2\nline3", 1, "nature".into());
+        store.open(&uri, "line1\nline2\nline3", 1, "nax".into());
 
         // Replace "line2" (line 1, chars 0..5) with "replaced"
         let changes = vec![TextDocumentContentChangeEvent {
@@ -316,7 +316,7 @@ mod tests {
     fn apply_multiple_changes_in_batch() {
         let store = DocumentStore::new();
         let uri = test_uri("batch");
-        store.open(&uri, "aaa bbb ccc", 1, "nature".into());
+        store.open(&uri, "aaa bbb ccc", 1, "nax".into());
 
         // Two changes in one batch: replace "aaa" → "xxx", then after that
         // the text is "xxx bbb ccc"; replace "ccc" is now at (0,8..11)

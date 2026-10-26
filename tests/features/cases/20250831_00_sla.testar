@@ -18,7 +18,7 @@ fn main() {
 }
 
 --- output.txt
-nature-test/main.n:14:19: type mismatch: method requires `ref<main.person_t(struct)>` receiver, got `main.person_t(struct)`
+nax-test/main.n:14:19: type mismatch: method requires `ref<main.person_t(struct)>` receiver, got `main.person_t(struct)`
 
 === test_impl_failed_ptr_receiver
 --- main.n
@@ -40,7 +40,7 @@ fn main() {
 }
 
 --- output.txt
-nature-test/main.n:14:22: type mismatch: method requires `ref<main.person_t(struct)>` receiver, got `ptr<main.person_t(struct)>`
+nax-test/main.n:14:22: type mismatch: method requires `ref<main.person_t(struct)>` receiver, got `ptr<main.person_t(struct)>`
 
 === test_impl_ref_receiver
 --- main.n

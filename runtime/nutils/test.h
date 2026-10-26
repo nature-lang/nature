@@ -1,5 +1,5 @@
-#ifndef NATURE_RUNTIME_NUTILS_TEST_H_
-#define NATURE_RUNTIME_NUTILS_TEST_H_
+#ifndef NAX_RUNTIME_NUTILS_TEST_H_
+#define NAX_RUNTIME_NUTILS_TEST_H_
 
 #include <stdint.h>
 #include <stdlib.h>
@@ -39,4 +39,4 @@ typedef struct {
 
 void test_arm64_abi_draw_line_ex(vector2_t v1, vector2_t v2);
 
-#endif //NATURE_RUNTIME_NUTILS_TEST_H_
+#endif //NAX_RUNTIME_NUTILS_TEST_H_

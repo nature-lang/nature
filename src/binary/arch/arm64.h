@@ -1,5 +1,5 @@
-#ifndef NATURE_BINARY_ARCH_ARM64_H
-#define NATURE_BINARY_ARCH_ARM64_H
+#ifndef NAX_BINARY_ARCH_ARM64_H
+#define NAX_BINARY_ARCH_ARM64_H
 
 #include "src/binary/encoding/arm64/asm.h"
 #include "src/binary/encoding/arm64/opcode.h"
@@ -748,4 +748,4 @@ static void mach_arm64_operation_encodings(mach_context_t *ctx, slice_t *closure
     }
 }
 
-#endif // NATURE_BINARY_ARCH_ARM64_H
+#endif // NAX_BINARY_ARCH_ARM64_H

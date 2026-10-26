@@ -1,5 +1,5 @@
-#ifndef NATURE_SRC_SYNTAX_TOKEN_H_
-#define NATURE_SRC_SYNTAX_TOKEN_H_
+#ifndef NAX_SRC_SYNTAX_TOKEN_H_
+#define NAX_SRC_SYNTAX_TOKEN_H_
 
 #include <stdlib.h>
 
@@ -304,4 +304,4 @@ static inline token_t *token_new(uint8_t token, char *literal, int line, int col
     return t;
 }
 
-#endif// NATURE_SRC_SYNTAX_TOKEN_H_
+#endif// NAX_SRC_SYNTAX_TOKEN_H_

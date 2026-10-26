@@ -18,7 +18,7 @@ pub fn double(int v):int {
     return v * 2
 }
 --- output.txt
-nature-test/main.x:4:26: calling .n fn 'double' from .x fn 'main' is not allowed.
+nax-test/main.x:4:26: calling .n fn 'double' from .x fn 'main' is not allowed.
 
 === test_n_import_x
 --- main.n

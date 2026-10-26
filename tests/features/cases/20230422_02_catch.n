@@ -3,7 +3,7 @@ errdef WORLD_ERROR
 errdef WRAPPED_ERROR
 
 fn hello():void! {
-    println('hello nature')
+    println('hello nax')
     throw HELLO_ERROR
 }
 

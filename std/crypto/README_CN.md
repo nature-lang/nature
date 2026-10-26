@@ -1,4 +1,4 @@
-# import [crypto.hmac](https://github.com/nature-lang/nature/tree/master/std/crypto/hmac.n)
+# import [crypto.hmac](https://github.com/naxlang/nax/tree/master/std/crypto/hmac.n)
 
 使用 mbedTLS 的加密哈希函数和 HMAC 实现。
 
@@ -121,7 +121,7 @@ fn hmac_t.hex():string
 
 完成 HMAC 计算并返回十六进制字符串。
 
-# import [crypto.md5](https://github.com/nature-lang/nature/tree/master/std/crypto/md5.n)
+# import [crypto.md5](https://github.com/naxlang/nax/tree/master/std/crypto/md5.n)
 
 MD5 哈希函数实现。
 
@@ -175,7 +175,7 @@ fn md5_t.hex():string
 
 完成 MD5 计算并返回十六进制字符串。
 
-# import [crypto.sha256](https://github.com/nature-lang/nature/tree/master/std/crypto/sha256.n)
+# import [crypto.sha256](https://github.com/naxlang/nax/tree/master/std/crypto/sha256.n)
 
 SHA-256 哈希函数实现。
 
@@ -229,7 +229,7 @@ fn sha256_t.hex():string
 
 完成 SHA-256 计算并返回十六进制字符串。
 
-# import [crypto.bcrypt](https://github.com/nature-lang/nature/tree/master/std/crypto/bcrypt.n)
+# import [crypto.bcrypt](https://github.com/naxlang/nax/tree/master/std/crypto/bcrypt.n)
 
 使用 Blowfish 算法的 bcrypt 密码哈希实现。
 
@@ -268,7 +268,7 @@ fn verify([u8] hashed_password, [u8] password):void!
 验证密码是否与哈希值匹配。
 
 
-# import [crypto.rsa](https://github.com/nature-lang/nature/tree/master/std/crypto/rsa.n)
+# import [crypto.rsa](https://github.com/naxlang/nax/tree/master/std/crypto/rsa.n)
 
 使用 mbedTLS 的 RSA 非对称加密实现。
 
@@ -448,7 +448,7 @@ fn rsa_private_key_t.free():void
 
 
 
-# import [crypto.utils](https://github.com/nature-lang/nature/tree/master/std/crypto/utils.n)
+# import [crypto.utils](https://github.com/naxlang/nax/tree/master/std/crypto/utils.n)
 
 ## fn to_hex
 

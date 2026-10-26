@@ -1,5 +1,5 @@
-#ifndef NATURE_ERROR_H
-#define NATURE_ERROR_H
+#ifndef NAX_ERROR_H
+#define NAX_ERROR_H
 
 #include "types.h"
 #include <setjmp.h>
@@ -71,4 +71,4 @@ void dump_errorf(module_t *m, ct_stage stage, int line, int column, char *format
 void dump_errors_exit(module_t *m);
 
 
-#endif //NATURE_ERROR_H
+#endif //NAX_ERROR_H

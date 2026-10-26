@@ -29,8 +29,8 @@ use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
-/// Default path to the Nature standard library root.
-pub const DEFAULT_NATURE_ROOT: &str = "/usr/local/nature";
+/// Default path to the Nax standard library root.
+pub const DEFAULT_NAX_ROOT: &str = "/usr/local/nax";
 
 // ─── Module ─────────────────────────────────────────────────────────────────────
 
@@ -163,8 +163,8 @@ pub struct QueueItem {
 /// Owns the full analysis state for a workspace root.
 #[derive(Debug, Clone)]
 pub struct Project {
-    /// Path to the Nature standard library.
-    pub nature_root: String,
+    /// Path to the Nax standard library.
+    pub nax_root: String,
     /// Workspace root path.
     pub root: String,
     /// All compiled modules.
@@ -186,15 +186,15 @@ pub struct Project {
 impl Project {
     /// Create a new project for the given workspace root.
     ///
-    /// Loads builtin modules from `$NATURE_ROOT/std/builtin/` and parses
+    /// Loads builtin modules from `$NAX_ROOT/std/builtin/` and parses
     /// `package.toml` if present.
     pub async fn new(project_root: String) -> Self {
-        let nature_root =
-            std::env::var("NATURE_ROOT").unwrap_or_else(|_| DEFAULT_NATURE_ROOT.to_string());
+        let nax_root =
+            std::env::var("NAX_ROOT").unwrap_or_else(|_| DEFAULT_NAX_ROOT.to_string());
 
         // Collect builtin .n files.
         let mut builtin_list: Vec<String> = Vec::new();
-        let std_builtin_dir = Path::new(&nature_root).join("std").join("builtin");
+        let std_builtin_dir = Path::new(&nax_root).join("std").join("builtin");
         if let Ok(entries) = std::fs::read_dir(&std_builtin_dir) {
             for entry in entries.flatten() {
                 let p = entry.path();
@@ -217,7 +217,7 @@ impl Project {
         };
 
         let mut project = Self {
-            nature_root: nature_root.clone(),
+            nax_root: nax_root.clone(),
             root: project_root.clone(),
             module_db: Arc::new(Mutex::new(Vec::new())),
             module_handled: Arc::new(Mutex::new(HashMap::new())),
@@ -231,7 +231,7 @@ impl Project {
         // Initial workspace scan.
         {
             let mut index = project.workspace_index.lock().unwrap();
-            index.scan_workspace(&project_root, &nature_root);
+            index.scan_workspace(&project_root, &nax_root);
         }
 
         // Build builtins.

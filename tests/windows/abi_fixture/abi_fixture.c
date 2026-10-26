@@ -12,7 +12,7 @@ typedef struct {
     int64_t b;
 } pair64_t;
 
-typedef int64_t (*nature_mixed_callback_t)(int64_t, double, int64_t, double,
+typedef int64_t (*nax_mixed_callback_t)(int64_t, double, int64_t, double,
                                            int64_t, double, int64_t, double);
 
 int64_t c_mixed_slots(int64_t a, double b, int64_t c, double d, int64_t e,
@@ -48,11 +48,11 @@ pair64_t c_make_pair64(int64_t a, int64_t b) {
     return result;
 }
 
-int64_t c_call_nature(nature_mixed_callback_t callback) {
+int64_t c_call_nax(nax_mixed_callback_t callback) {
     return callback(1, 2.0, 3, 4.0, 5, 6.0, 7, 8.0);
 }
 
-int64_t c_check_xmm_nonvolatile(nature_mixed_callback_t callback) {
+int64_t c_check_xmm_nonvolatile(nax_mixed_callback_t callback) {
 #if defined(__x86_64__) && (defined(__GNUC__) || defined(__clang__))
     static const uint64_t expected[2] = {
             UINT64_C(0x0123456789abcdef),

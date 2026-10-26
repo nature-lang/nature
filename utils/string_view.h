@@ -1,5 +1,5 @@
-#ifndef NATURE_STRING_VIEW_H
-#define NATURE_STRING_VIEW_H
+#ifndef NAX_STRING_VIEW_H
+#define NAX_STRING_VIEW_H
 
 #include <stddef.h>
 #include <string.h>
@@ -30,4 +30,4 @@ static inline bool string_view_empty(string_view_t *sv) {
     return sv->size == 0;
 }
 
-#endif //NATURE_STRING_VIEW_H
+#endif //NAX_STRING_VIEW_H

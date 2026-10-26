@@ -102,19 +102,19 @@ cgroup。检查文件 `/sys/fs/cgroup/cgroup.controllers` 或 `/sys/fs/cgroup/fr
 
 ## 🛠️ 源码构建
 
-源代码由编程语言 [nature](https://github.com/nature-lang/nature) 开发，nature 编译器版本需要 >=
+源代码由编程语言 [nax](https://github.com/naxlang/nax) 开发，nax 编译器版本需要 >=
 0.4.0。安装完成后在源码目录执行 `make amd64 && make install` 即可安装到 /usr/local/parker 目录下。
 
-> nature 目前主要支持 amd64 构建，nature 构建的可执行文件体积更小，效率更高。如果需要构建等其他架构, 主仓库提供了 golang
+> nax 目前主要支持 amd64 构建，nax 构建的可执行文件体积更小，效率更高。如果需要构建等其他架构, 主仓库提供了 golang
 > 版本实现。
 
 ## 🎉 Thinks
 
-[nature](https://github.com/nature-lang/nature) 是现代系统级编程语言与编译器，携手 c 一起进行高性能且高效的开发工作。
+[nax](https://github.com/naxlang/nax) 是现代系统级编程语言与编译器，携手 c 一起进行高性能且高效的开发工作。
 
-nature 社区可用版本即将发布，现在也可以先行体验并提供改进意见。并邀您一起进行标准库贡献，所有的标准库贡献都会合并至主仓库。
+nax 社区可用版本即将发布，现在也可以先行体验并提供改进意见。并邀您一起进行标准库贡献，所有的标准库贡献都会合并至主仓库。
 
-邀您加入 nature 编程语言交流群，添加微信号 `nature-lang`
+邀您加入 nax 编程语言交流群，添加微信号 `nature-lang`
 
 ## 🪶 License
 

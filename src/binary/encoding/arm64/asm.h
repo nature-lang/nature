@@ -1,5 +1,5 @@
-#ifndef NATURE_ARM64_ASM_H
-#define NATURE_ARM64_ASM_H
+#ifndef NAX_ARM64_ASM_H
+#define NAX_ARM64_ASM_H
 
 #include "src/types.h"
 
@@ -646,4 +646,4 @@ extern arm64_opr_flags_list arm64_opcode_map[];
 
 void arm64_match_opcode(arm64_asm_inst_t *inst);
 
-#endif //NATURE_ASM_H
+#endif //NAX_ASM_H

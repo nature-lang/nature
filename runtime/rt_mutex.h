@@ -1,5 +1,5 @@
-#ifndef NATURE_RT_MUTEX_H
-#define NATURE_RT_MUTEX_H
+#ifndef NAX_RT_MUTEX_H
+#define NAX_RT_MUTEX_H
 
 #include "rt_linked.h"
 #include "utils/mutex.h"
@@ -44,4 +44,4 @@ void rt_do_spin();
 
 int64_t atomic_add_int64(ATOMIC int64_t *state, int64_t delta);
 
-#endif//NATURE_RT_MUTEX_H
+#endif//NAX_RT_MUTEX_H

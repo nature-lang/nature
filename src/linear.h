@@ -1,5 +1,5 @@
-#ifndef NATURE_SRC_LINEAR_H_
-#define NATURE_SRC_LINEAR_H_
+#ifndef NAX_SRC_LINEAR_H_
+#define NAX_SRC_LINEAR_H_
 
 #include "utils/linked.h"
 #include "ast.h"
@@ -23,4 +23,4 @@ static lir_operand_t *linear_array_access(module_t *m, ast_expr_t expr, lir_oper
 
 static lir_operand_t *linear_default_operand(module_t *m, type_t t, lir_operand_t *target);
 
-#endif //NATURE_SRC_linear_H_
+#endif //NAX_SRC_linear_H_

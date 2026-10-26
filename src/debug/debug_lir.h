@@ -1,5 +1,5 @@
-#ifndef NATURE_SRC_DEBUG_LIR_H_
-#define NATURE_SRC_DEBUG_LIR_H_
+#ifndef NAX_SRC_DEBUG_LIR_H_
+#define NAX_SRC_DEBUG_LIR_H_
 
 #include "src/lir.h"
 
@@ -27,4 +27,4 @@ string lir_vars_to_string(slice_t *vars);
 
 string lir_regs_to_string(slice_t *regs);
 
-#endif //NATURE_SRC_DEBUG_DEBUG_LIR_H_
+#endif //NAX_SRC_DEBUG_DEBUG_LIR_H_

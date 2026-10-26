@@ -778,7 +778,7 @@ pub fn socket(int domain, int t, int protocol):int! {
 
 // TODO limit <T:sockaddr_in|sockaddr_un>
 pub fn bind<T>(int sockfd, T addr):void! {
-    //  nature struct to c
+    //  nax struct to c
      var len = 16 as anyptr // in 和 unix 长度为 16byte
      call6(SYS_BIND, sockfd as anyptr, addr as anyptr, len, 0, 0, 0)
 }

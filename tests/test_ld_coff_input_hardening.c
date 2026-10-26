@@ -42,7 +42,7 @@ static void write_all(int descriptor, const uint8_t *bytes, size_t size) {
 
 static int load_bytes(const uint8_t *bytes, size_t size,
                       diagnostic_capture_t *capture) {
-    char path[] = "/tmp/nature-coff-input-XXXXXX";
+    char path[] = "/tmp/nax-coff-input-XXXXXX";
     int descriptor = mkstemp(path);
     assert(descriptor >= 0);
     write_all(descriptor, bytes, size);
@@ -167,7 +167,7 @@ static void test_bigobj_sections_symbols_aux_and_relocation(void) {
     put32(bytes, size, string_table, 16U);
     memcpy(bytes + string_table + 4U, "ExitProcess", 12U);
 
-    char path[] = "/tmp/nature-coff-bigobj-XXXXXX";
+    char path[] = "/tmp/nax-coff-bigobj-XXXXXX";
     int descriptor = mkstemp(path);
     assert(descriptor >= 0);
     write_all(descriptor, bytes, size);

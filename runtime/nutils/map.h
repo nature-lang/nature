@@ -1,5 +1,5 @@
-#ifndef NATURE_MAP_H
-#define NATURE_MAP_H
+#ifndef NAX_MAP_H
+#define NAX_MAP_H
 
 #include "utils/type.h"
 
@@ -29,4 +29,4 @@ void rt_map_delete(n_map_t *m, void *key_ref);
  */
 bool rt_map_contains(n_map_t *m, void *key_ref);
 
-#endif //NATURE_MAP_H
+#endif //NAX_MAP_H

@@ -9,15 +9,15 @@ static table_t *std_package_table;
 static table_t *std_temp_package_table;
 
 bool is_std_package(char *package) {
-    // 扫描 nature root 下的所有 文件，并注册到全局变量 std_packages 中
+    // 扫描 nax root 下的所有 文件，并注册到全局变量 std_packages 中
     if (std_package_table) {
         return table_exist(std_package_table, package);
     }
 
     std_package_table = table_new();
 
-    // 遍历 NATURE_ROOT 下的 std 目录下的所有文件夹
-    char *std_dir = path_join(NATURE_ROOT, "std");
+    // 遍历 NAX_ROOT 下的 std 目录下的所有文件夹
+    char *std_dir = path_join(NAX_ROOT, "std");
     DIR *dir = opendir(std_dir);
     assertf(dir, "cannot found std dir %s", std_dir);
 

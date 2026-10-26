@@ -1,5 +1,5 @@
-#ifndef NATURE_CUSTOM_LINKS_H
-#define NATURE_CUSTOM_LINKS_H
+#ifndef NAX_CUSTOM_LINKS_H
+#define NAX_CUSTOM_LINKS_H
 
 #include "ct_list.h"
 #include "src/types.h"
@@ -7,7 +7,7 @@
 #include "utils/sc_map.h"
 
 /**
- * 这里存储了 nature 所有全局变量
+ * 这里存储了 nax 所有全局变量
  */
 typedef struct {
     // base 一定要放在第一个位置，这关乎到能否争取进行重定位
@@ -273,4 +273,4 @@ static inline uint64_t errsets_put() {
     return offset;
 }
 
-#endif //NATURE_CUSTOM_LINKS_H
+#endif //NAX_CUSTOM_LINKS_H

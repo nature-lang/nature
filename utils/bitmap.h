@@ -1,5 +1,5 @@
-#ifndef NATURE_UTILS_BITMAP_H
-#define NATURE_UTILS_BITMAP_H
+#ifndef NAX_UTILS_BITMAP_H
+#define NAX_UTILS_BITMAP_H
 
 #include <stdbool.h>
 #include <stdatomic.h>
@@ -231,4 +231,4 @@ static inline void bitmap_copy(bitmap_t *dst, bitmap_t *src) {
 }
 
 
-#endif // NATURE_BITMAP_H
+#endif // NAX_BITMAP_H

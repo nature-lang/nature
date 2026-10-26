@@ -1,5 +1,5 @@
-#ifndef NATURE_REGISTER_RISCV64_H
-#define NATURE_REGISTER_RISCV64_H
+#ifndef NAX_REGISTER_RISCV64_H
+#define NAX_REGISTER_RISCV64_H
 
 #include "src/types.h"
 
@@ -116,4 +116,4 @@ extern reg_t *r_f24s, *r_f25s, *r_f26s, *r_f27s, *r_f28s, *r_f29s, *r_f30s, *r_f
 
 void riscv64_reg_init();
 
-#endif //NATURE_REGISTER_RISCV64_H
+#endif //NAX_REGISTER_RISCV64_H

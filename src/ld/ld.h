@@ -1,5 +1,5 @@
-#ifndef NATURE_LD_H
-#define NATURE_LD_H
+#ifndef NAX_LD_H
+#define NAX_LD_H
 
 #include <stdbool.h>
 #include <stddef.h>

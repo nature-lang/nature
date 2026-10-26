@@ -1,5 +1,5 @@
-#ifndef NATURE_LD_ELF_ZLIB_H
-#define NATURE_LD_ELF_ZLIB_H
+#ifndef NAX_LD_ELF_ZLIB_H
+#define NAX_LD_ELF_ZLIB_H
 
 #include <stddef.h>
 #include <stdint.h>

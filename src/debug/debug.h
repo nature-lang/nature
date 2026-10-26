@@ -1,5 +1,5 @@
-#ifndef NATURE_SRC_DEBUG_DEBUG_H_
-#define NATURE_SRC_DEBUG_DEBUG_H_
+#ifndef NAX_SRC_DEBUG_DEBUG_H_
+#define NAX_SRC_DEBUG_DEBUG_H_
 
 #include "utils/helper.h"
 #include "src/ast.h"
@@ -46,4 +46,4 @@ void debug_asm(closure_t *c);
 
 void debug_basic_block(basic_block_t *block);
 
-#endif //NATURE_SRC_DEBUG_DEBUG_H_
+#endif //NAX_SRC_DEBUG_DEBUG_H_

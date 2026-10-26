@@ -128,7 +128,7 @@ static void test_elf_archive_names(void) {
                         sizeof(gnu_names) - 1U);
     test_archive_append(archive, capacity, &cursor, "/0", object,
                         object_size);
-    char gnu_path[] = "/tmp/nature-ld-gnu-archive-XXXXXX";
+    char gnu_path[] = "/tmp/nax-ld-gnu-archive-XXXXXX";
     write_fixture(gnu_path, archive, cursor);
     free(archive);
 
@@ -170,7 +170,7 @@ static void test_elf_archive_names(void) {
                         bsd_payload_size);
     free(bsd_payload);
     free(object);
-    char bsd_path[] = "/tmp/nature-ld-bsd-archive-XXXXXX";
+    char bsd_path[] = "/tmp/nax-ld-bsd-archive-XXXXXX";
     write_fixture(bsd_path, archive, cursor);
     free(archive);
 
@@ -187,7 +187,7 @@ static void test_elf_archive_names(void) {
 }
 
 static void test_elf_thin_archive_link(void) {
-    char directory[] = "/tmp/nature-ld-thin-link-XXXXXX";
+    char directory[] = "/tmp/nax-ld-thin-link-XXXXXX";
     make_fixture_directory(directory);
     char object_directory[PATH_MAX];
     int length = snprintf(object_directory, sizeof(object_directory),
@@ -281,11 +281,11 @@ static void test_elf_thin_archive_missing_member(void) {
     test_archive_append(archive, capacity, &cursor, "//",
                         (const uint8_t *) names, sizeof(names) - 1U);
     test_thin_archive_append(archive, capacity, &cursor, "/0", 4096U);
-    char archive_path[] = "/tmp/nature-ld-thin-missing-XXXXXX";
+    char archive_path[] = "/tmp/nax-ld-thin-missing-XXXXXX";
     write_fixture(archive_path, archive, cursor);
     free(archive);
 
-    static const char output_path[] = "/tmp/nature-ld-thin-missing-output";
+    static const char output_path[] = "/tmp/nax-ld-thin-missing-output";
     diagnostic_capture_t capture = {0};
     const char *inputs[] = {archive_path};
     assert(link_test_elf_inputs(output_path, inputs, 1U, &capture) ==
@@ -298,7 +298,7 @@ static void test_elf_thin_archive_missing_member(void) {
 }
 
 static void test_elf_thin_archive_architecture_mismatch(void) {
-    char directory[] = "/tmp/nature-ld-thin-arch-XXXXXX";
+    char directory[] = "/tmp/nax-ld-thin-arch-XXXXXX";
     make_fixture_directory(directory);
     static const char member_name[] = "wrong-architecture.o";
     char object_path[PATH_MAX];
@@ -353,7 +353,7 @@ static void test_elf_thin_archive_architecture_mismatch(void) {
 static void expect_invalid_thin_archive(const uint8_t *archive,
                                         size_t archive_size,
                                         const char *diagnostic) {
-    char archive_path[] = "/tmp/nature-ld-thin-invalid-XXXXXX";
+    char archive_path[] = "/tmp/nax-ld-thin-invalid-XXXXXX";
     write_fixture(archive_path, archive, archive_size);
     diagnostic_capture_t capture = {0};
     ld_options_t options;

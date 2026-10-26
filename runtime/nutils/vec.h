@@ -1,5 +1,5 @@
-#ifndef NATURE_VEC_H
-#define NATURE_VEC_H
+#ifndef NAX_VEC_H
+#define NAX_VEC_H
 
 #include "utils/type.h"
 #include <stdint.h>
@@ -87,4 +87,4 @@ n_vec_t rt_vec_concat(n_vec_t *a, n_vec_t *b, int64_t element_hash);
 
 uint64_t rt_vec_copy(n_vec_t *dst, n_vec_t src);
 
-#endif //NATURE_VEC_H
+#endif //NAX_VEC_H

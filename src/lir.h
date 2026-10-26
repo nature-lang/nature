@@ -1,5 +1,5 @@
-#ifndef NATURE_SRC_LIR_H_
-#define NATURE_SRC_LIR_H_
+#ifndef NAX_SRC_LIR_H_
+#define NAX_SRC_LIR_H_
 
 #include "src/module.h"
 #include "src/register/register.h"
@@ -1508,4 +1508,4 @@ static inline char *local_sym_with_fn(closure_t *c, char *sym) {
 
 linked_t *lir_memory_mov(module_t *m, uint64_t size, lir_operand_t *dst, lir_operand_t *src);
 
-#endif // NATURE_SRC_LIR_H_
+#endif // NAX_SRC_LIR_H_

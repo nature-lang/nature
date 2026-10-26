@@ -1,12 +1,12 @@
-# Nature Development Guide
+# Nax Development Guide
 
-A comprehensive guide for new developers working on the Nature programming language.
+A comprehensive guide for new developers working on the Nax programming language.
 
 ## Table of Contents
 
 - [Prerequisites](#prerequisites)
 - [Initial Setup](#initial-setup)
-- [Building Nature](#building-nature)
+- [Building Nax](#building-nax)
 - [Running Tests](#running-tests)
 - [Developing the NLS (Language Server)](#developing-the-nls-language-server)
 - [Common Issues](#common-issues)
@@ -50,8 +50,8 @@ sudo dnf install gcc gcc-c++ cmake
 
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/nature-lang/nature.git
-   cd nature
+   git clone https://github.com/naxlang/nax.git
+   cd nax
    ```
 
 2. **Install Rust (if not already installed):**
@@ -68,7 +68,7 @@ sudo dnf install gcc gcc-c++ cmake
    gcc --version  # or clang --version
    ```
 
-## Building Nature
+## Building Nax
 
 ### First-Time Build
 
@@ -89,14 +89,14 @@ sudo dnf install gcc gcc-c++ cmake
    ```
 
    This builds:
-   - `nature` - The compiler binary
+   - `nax` - The compiler binary
    - `npkg` - The package manager
    - `nls` - The language server (in `build/release/nls`)
    - All tests
 
 3. **Verify the build:**
    ```bash
-   ./nature --version
+   ./nax --version
    ./npkg --version
    ```
 
@@ -122,7 +122,7 @@ make -j8
 
 ## Running Tests
 
-Nature uses CTest for running tests. All tests must pass before merging changes.
+Nax uses CTest for running tests. All tests must pass before merging changes.
 
 ### Run All Tests
 
@@ -173,7 +173,7 @@ ctest --rerun-failed --output-on-failure
    ```
 
 3. **Add test files:**
-   - `main.n` - Your Nature code
+   - `main.n` - Your Nax code
    - `*.n` - Additional modules if needed
    - `YYYYMMDD_NN_description.testar` - Expected output
 
@@ -210,13 +210,13 @@ For quick iteration during development:
 
 ```bash
 cd tests/features/cases/your_test_directory
-/path/to/nature/build/nature build main.n
+/path/to/nax/build/nax build main.n
 ./main  # or ./your_binary_name
 ```
 
 ## Developing the NLS (Language Server)
 
-The NLS (Nature Language Server) provides IDE features like autocomplete, go-to-definition, and error checking.
+The NLS (Nax Language Server) provides IDE features like autocomplete, go-to-definition, and error checking.
 
 ### NLS Project Structure
 
@@ -270,13 +270,13 @@ make nls  # Builds release version to build/release/nls
 2. **Update VS Code settings** (`~/.config/Code/User/settings.json` or workspace settings):
    ```json
    {
-     "nature.languageServer.path": "/path/to/nature/nls/target/debug/nls"
+     "nax.languageServer.path": "/path/to/nax/nls/target/debug/nls"
    }
    ```
 
 3. **Or update installed version:**
    ```bash
-   sudo cp nls/target/debug/nls /usr/local/nature/bin/nls
+   sudo cp nls/target/debug/nls /usr/local/nax/bin/nls
    ```
 
 4. **Restart VS Code or reload window:**
@@ -299,7 +299,7 @@ Enable NLS logging to debug:
 
 2. **Check VS Code Output:**
    - View → Output
-   - Select "Nature Language Server" from dropdown
+   - Select "Nax Language Server" from dropdown
 
 ### Common NLS Development Tasks
 
@@ -330,7 +330,7 @@ cd nls
 cargo build
 
 # 3. Copy to installed location (if needed)
-sudo cp target/debug/nls /usr/local/nature/bin/nls
+sudo cp target/debug/nls /usr/local/nax/bin/nls
 
 # 4. Reload VS Code window
 # Press Cmd+Shift+P → "Reload Window"
@@ -347,7 +347,7 @@ eprintln!("DEBUG: variable = {:?}", variable);
 ```
 
 **View debug output:**
-- VS Code: View → Output → "Nature Language Server"
+- VS Code: View → Output → "Nax Language Server"
 - Or check terminal where Extension Development Host was launched
 
 **Build with backtrace:**
@@ -376,19 +376,19 @@ make
 
 ### Issue: NLS changes not taking effect
 
-**Problem:** VS Code is using the installed version at `/usr/local/nature/bin/nls`, not your development version.
+**Problem:** VS Code is using the installed version at `/usr/local/nax/bin/nls`, not your development version.
 
 **Solutions:**
 
 1. **Update installed version:**
    ```bash
-   sudo cp nls/target/debug/nls /usr/local/nature/bin/nls
+   sudo cp nls/target/debug/nls /usr/local/nax/bin/nls
    ```
 
 2. **Or configure VS Code to use dev version:**
    ```json
    {
-     "nature.languageServer.path": "/path/to/nature/nls/target/debug/nls"
+     "nax.languageServer.path": "/path/to/nax/nls/target/debug/nls"
    }
    ```
 
@@ -405,7 +405,7 @@ rustup update
 
 **Solution:** Use sudo or change VS Code settings instead
 ```bash
-sudo cp nls/target/debug/nls /usr/local/nature/bin/nls
+sudo cp nls/target/debug/nls /usr/local/nax/bin/nls
 ```
 
 ## Development Workflow
@@ -461,14 +461,14 @@ make -j8 && ctest -R relevant_test -V
 **NLS changes:**
 ```bash
 cd nls
-cargo build && sudo cp target/debug/nls /usr/local/nature/bin/nls
+cargo build && sudo cp target/debug/nls /usr/local/nax/bin/nls
 # Reload VS Code window
 ```
 
-**Test a specific Nature program:**
+**Test a specific Nax program:**
 ```bash
 cd your_test_dir
-/path/to/nature/build/nature build main.n && ./main
+/path/to/nax/build/nax build main.n && ./main
 ```
 
 ## Additional Resources
@@ -476,14 +476,14 @@ cd your_test_dir
 - **Main README:** `README.md` - Project overview and installation
 - **Test README:** `tests/README.md` - Detailed testing documentation
 - **Contributing Guide:** (if available)
-- **Documentation:** https://nature-lang.org/docs
+- **Documentation:** https://naxlang.org/docs
 
 ## Getting Help
 
 - Check existing issues on GitHub
 - Read error messages carefully
 - Use verbose test output: `ctest -R test -V`
-- Check NLS logs: View → Output → "Nature Language Server"
+- Check NLS logs: View → Output → "Nax Language Server"
 - Ask for help in project discussions or issues
 
 ---

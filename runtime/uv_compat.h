@@ -1,5 +1,5 @@
-#ifndef NATURE_RUNTIME_UV_COMPAT_H
-#define NATURE_RUNTIME_UV_COMPAT_H
+#ifndef NAX_RUNTIME_UV_COMPAT_H
+#define NAX_RUNTIME_UV_COMPAT_H
 
 #ifdef __WINDOWS
 #ifndef WIN32_LEAN_AND_MEAN
@@ -9,7 +9,7 @@
 #define NOMINMAX
 #endif
 
-// Nature has instruction-width and helper macros whose names overlap Win32
+// Nax has instruction-width and helper macros whose names overlap Win32
 // typedefs and compatibility macros. Preserve their exact previous state while
 // libuv and the Windows SDK headers are parsed.
 #pragma push_macro("WORD")
@@ -29,7 +29,7 @@
 #include <include/uv.h>
 #ifdef __WINDOWS
 // Load the remaining Win32 headers used by libuv's Windows implementation
-// before restoring Nature's overlapping macros. Later includes are then no-ops
+// before restoring Nax's overlapping macros. Later includes are then no-ops
 // through the Windows SDK include guards.
 #include <userenv.h>
 #include <iphlpapi.h>
@@ -52,4 +52,4 @@ static inline int rt_thread_detach(uv_thread_t thread) {
 #endif
 }
 
-#endif // NATURE_RUNTIME_UV_COMPAT_H
+#endif // NAX_RUNTIME_UV_COMPAT_H

@@ -68,7 +68,7 @@ fn main():void! {
 }
 
 --- output.txt
-panic: 'index out of range [2] with length 2' at nature-test/main.n:13:22
+panic: 'index out of range [2] with length 2' at nax-test/main.n:13:22
 
 === test_live_in_phi_not_rename
 --- main.n
@@ -102,9 +102,9 @@ fn main():void! {
 }
 
 --- output.txt
-coroutine 'main' uncaught error: main.DIVISOR_ZERO at nature-test/main.n:5:20
+coroutine 'main' uncaught error: main.DIVISOR_ZERO at nax-test/main.n:5:20
 stack backtrace:
 0:	main.rem
-		at nature-test/main.n:5:20
+		at nax-test/main.n:5:20
 1:	main.main
-		at nature-test/main.n:27:22
+		at nax-test/main.n:27:22

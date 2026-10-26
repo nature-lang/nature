@@ -1,5 +1,5 @@
-#ifndef NATURE_TESTS_H
-#define NATURE_TESTS_H
+#ifndef NAX_TESTS_H
+#define NAX_TESTS_H
 
 #include <assert.h>
 #include <stdarg.h>
@@ -14,11 +14,11 @@
 
 #ifdef __WINDOWS
 // CTest enforces the process timeout on Windows; the CRT has no alarm().
-static inline unsigned int nature_test_alarm(unsigned int seconds) {
+static inline unsigned int nax_test_alarm(unsigned int seconds) {
     (void) seconds;
     return 0;
 }
-#define alarm nature_test_alarm
+#define alarm nax_test_alarm
 #endif
 
 #ifdef __LINUX
@@ -91,11 +91,11 @@ static inline char *feature_test_temp_dir() {
     size_t root_length = strlen(root);
     bool has_separator = root_length > 0 &&
                          (root[root_length - 1] == '/' || root[root_length - 1] == '\\');
-    char *parent = dsprintf("%s%snature-test-run.XXXXXX", root,
+    char *parent = dsprintf("%s%snax-test-run.XXXXXX", root,
                             has_separator ? "" : "/");
     assertf(mkdtemp(parent) != NULL, "cannot create test directory from %s",
             parent);
-    char *result = path_join(parent, "nature-test");
+    char *result = path_join(parent, "nax-test");
     assertf(feature_test_mkdir(result) == 0,
             "cannot create test case directory %s", result);
     free(parent);
@@ -148,8 +148,8 @@ static inline char *exec_with_args(slice_t *args) {
 }
 
 static inline int feature_test_build() {
-    char *nature_root = getenv("NATURE_ROOT");
-    assert_true(nature_root != NULL);
+    char *nax_root = getenv("NAX_ROOT");
+    assert_true(nax_root != NULL);
 
     // 从环境变量中读取 build entry
     char *entry = getenv("ENTRY_FILE");
@@ -707,4 +707,4 @@ static inline void feature_test_package_sync() {
     feature_test_build();        \
     test_basic();
 
-#endif // NATURE_TEST_H
+#endif // NAX_TEST_H

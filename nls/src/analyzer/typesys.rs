@@ -3780,7 +3780,7 @@ impl<'a> Typesys<'a> {
 
         // 当 symbol_id 存在时，使用 typedef 的 local ident 进行查找
         // 因为 impl fn 注册时使用的是 typedef 的 local ident（如 bar_t.dump），
-        // 而不是 fully qualified ident（如 nature-test.mod.bar_t.dump）
+        // 而不是 fully qualified ident（如 nax-test.mod.bar_t.dump）
         let mut impl_ident = if extract_type.symbol_id != 0 {
             if let Some(symbol) = self.symbol_table.get_symbol(extract_type.symbol_id) {
                 if let SymbolKind::Type(typedef_mutex) = &symbol.kind {

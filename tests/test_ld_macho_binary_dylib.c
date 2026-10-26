@@ -281,7 +281,7 @@ static dylib_fixture_t make_dylib_with_symbols(bool with_trie) {
 
 static void test_export_trie_is_authoritative(void) {
     dylib_fixture_t fixture = make_dylib_with_symbols(true);
-    char path[] = "/tmp/nature-ld-dylib-trie-XXXXXX";
+    char path[] = "/tmp/nax-ld-dylib-trie-XXXXXX";
     test_ld_write_fixture(path, fixture.bytes, fixture.size);
     ld_options_t options;
     ld_options_init(&options);
@@ -306,7 +306,7 @@ static void test_renamed_reexport_uses_imported_name(void) {
             "\x0b\x08\x01_renamed\x00\x00";
     dylib_fixture_t fixture = make_export_trie_dylib(
             renamed_trie, sizeof(renamed_trie) - 1U);
-    char path[] = "/tmp/nature-ld-dylib-renamed-reexport-XXXXXX";
+    char path[] = "/tmp/nax-ld-dylib-renamed-reexport-XXXXXX";
     test_ld_write_fixture(path, fixture.bytes, fixture.size);
 
     ld_options_t options;
@@ -336,7 +336,7 @@ static void test_reexport_without_imported_name_uses_prefix(void) {
             "\x03\x08\x01\x00\x00";
     dylib_fixture_t fixture = make_export_trie_dylib(
             prefix_trie, sizeof(prefix_trie) - 1U);
-    char path[] = "/tmp/nature-ld-dylib-prefix-reexport-XXXXXX";
+    char path[] = "/tmp/nax-ld-dylib-prefix-reexport-XXXXXX";
     test_ld_write_fixture(path, fixture.bytes, fixture.size);
 
     ld_options_t options;
@@ -363,7 +363,7 @@ static void test_export_trie_allows_shared_child(void) {
             "\x02\x00\x00\x00";
     dylib_fixture_t fixture = make_export_trie_dylib(
             shared_child_trie, sizeof(shared_child_trie) - 1U);
-    char path[] = "/tmp/nature-ld-dylib-shared-trie-node-XXXXXX";
+    char path[] = "/tmp/nax-ld-dylib-shared-trie-node-XXXXXX";
     test_ld_write_fixture(path, fixture.bytes, fixture.size);
 
     ld_options_t options;
@@ -390,7 +390,7 @@ static void test_export_trie_rejects_cycle_and_truncation(void) {
             "\x00\x01_loop\x00\x00";
     dylib_fixture_t cycle = make_export_trie_dylib(
             cycle_trie, sizeof(cycle_trie) - 1U);
-    char cycle_path[] = "/tmp/nature-ld-dylib-trie-cycle-XXXXXX";
+    char cycle_path[] = "/tmp/nax-ld-dylib-trie-cycle-XXXXXX";
     test_ld_write_fixture(cycle_path, cycle.bytes, cycle.size);
     test_ld_expect_invalid_input(cycle_path, LD_INVALID_INPUT,
                                  "export trie cycle");
@@ -400,7 +400,7 @@ static void test_export_trie_rejects_cycle_and_truncation(void) {
     static const uint8_t truncated_trie[] = {0x00};
     dylib_fixture_t truncated = make_export_trie_dylib(
             truncated_trie, sizeof(truncated_trie));
-    char truncated_path[] = "/tmp/nature-ld-dylib-trie-truncated-XXXXXX";
+    char truncated_path[] = "/tmp/nax-ld-dylib-trie-truncated-XXXXXX";
     test_ld_write_fixture(truncated_path, truncated.bytes, truncated.size);
     test_ld_expect_invalid_input(truncated_path, LD_INVALID_INPUT,
                                  "truncated export trie node");
@@ -410,7 +410,7 @@ static void test_export_trie_rejects_cycle_and_truncation(void) {
 
 static void test_dysymtab_fallback_filters_private_externals(void) {
     dylib_fixture_t fixture = make_dylib_with_symbols(false);
-    char path[] = "/tmp/nature-ld-dylib-fallback-XXXXXX";
+    char path[] = "/tmp/nax-ld-dylib-fallback-XXXXXX";
     test_ld_write_fixture(path, fixture.bytes, fixture.size);
     ld_options_t options;
     ld_options_init(&options);
@@ -435,7 +435,7 @@ static void test_missing_dylib_id_is_malformed(void) {
     header.cputype = LD_CPU_TYPE_ARM64;
     header.cpusubtype = LD_CPU_SUBTYPE_ARM64_ALL;
     header.filetype = LD_MH_DYLIB;
-    char path[] = "/tmp/nature-ld-dylib-no-id-XXXXXX";
+    char path[] = "/tmp/nax-ld-dylib-no-id-XXXXXX";
     test_ld_write_fixture(path, &header, sizeof(header));
     test_ld_expect_invalid_input(path, LD_INVALID_INPUT,
                                  "missing LC_ID_DYLIB");
@@ -524,9 +524,9 @@ static void test_output_writes_rpath_load_command(void) {
     memcpy(object + symbol_offset, &main_symbol, sizeof(main_symbol));
     memcpy(object + strings_offset, strings, sizeof(strings));
 
-    char object_path[] = "/tmp/nature-ld-rpath-object-XXXXXX";
+    char object_path[] = "/tmp/nax-ld-rpath-object-XXXXXX";
     test_ld_write_fixture(object_path, object, object_size);
-    char output_path[] = "/tmp/nature-ld-rpath-output-XXXXXX";
+    char output_path[] = "/tmp/nax-ld-rpath-output-XXXXXX";
     int output_fd = mkstemp(output_path);
     assert(output_fd >= 0);
     assert(close(output_fd) == 0);
@@ -587,7 +587,7 @@ static void test_output_writes_rpath_load_command(void) {
 }
 
 static void test_binary_dylib_rpath_resolution(void) {
-    char root[] = "/tmp/nature-ld-binary-rpath-XXXXXX";
+    char root[] = "/tmp/nax-ld-binary-rpath-XXXXXX";
     assert(mkdtemp(root) != NULL);
     char search[PATH_MAX], parent[PATH_MAX], child[PATH_MAX], output[PATH_MAX];
     assert(snprintf(search, sizeof(search), "%s/reexports", root) > 0);
@@ -602,7 +602,7 @@ static void test_binary_dylib_rpath_resolution(void) {
 }
 
 static void test_binary_dylib_loader_path_resolution(void) {
-    char root[] = "/tmp/nature-ld-binary-loader-XXXXXX";
+    char root[] = "/tmp/nax-ld-binary-loader-XXXXXX";
     assert(mkdtemp(root) != NULL);
     char parent[PATH_MAX], child[PATH_MAX], output[PATH_MAX];
     assert(snprintf(parent, sizeof(parent), "%s/Parent.dylib", root) > 0);
@@ -615,7 +615,7 @@ static void test_binary_dylib_loader_path_resolution(void) {
 }
 
 static void test_binary_dylib_executable_path_resolution(void) {
-    char root[] = "/tmp/nature-ld-binary-executable-XXXXXX";
+    char root[] = "/tmp/nax-ld-binary-executable-XXXXXX";
     assert(mkdtemp(root) != NULL);
     char libraries[PATH_MAX], executable[PATH_MAX];
     char parent[PATH_MAX], child[PATH_MAX], output[PATH_MAX];
@@ -635,7 +635,7 @@ static void test_binary_dylib_executable_path_resolution(void) {
 }
 
 static void test_linker_rpath_resolution(void) {
-    char root[] = "/tmp/nature-ld-option-rpath-XXXXXX";
+    char root[] = "/tmp/nax-ld-option-rpath-XXXXXX";
     assert(mkdtemp(root) != NULL);
     char search[PATH_MAX], parent[PATH_MAX], child[PATH_MAX], output[PATH_MAX];
     assert(snprintf(search, sizeof(search), "%s/search", root) > 0);
@@ -650,7 +650,7 @@ static void test_linker_rpath_resolution(void) {
 }
 
 static void test_sdk_library_path_resolves_nested_install_name(void) {
-    char root[] = "/tmp/nature-ld-sdk-library-path-XXXXXX";
+    char root[] = "/tmp/nax-ld-sdk-library-path-XXXXXX";
     assert(mkdtemp(root) != NULL);
     char usr[PATH_MAX], library[PATH_MAX], system[PATH_MAX];
     char parent[PATH_MAX], child[PATH_MAX], output[PATH_MAX];
@@ -684,7 +684,7 @@ static void test_malformed_binary_dylib_rpaths(void) {
     ld_rpath_command_t *command =
             (ld_rpath_command_t *) (invalid_offset.bytes + command_offset);
     command->path_offset = command->cmdsize;
-    char invalid_offset_path[] = "/tmp/nature-ld-rpath-offset-XXXXXX";
+    char invalid_offset_path[] = "/tmp/nax-ld-rpath-offset-XXXXXX";
     test_ld_write_fixture(invalid_offset_path, invalid_offset.bytes,
                           invalid_offset.size);
     test_ld_expect_invalid_input(invalid_offset_path, LD_INVALID_INPUT,
@@ -697,7 +697,7 @@ static void test_malformed_binary_dylib_rpaths(void) {
     command = (ld_rpath_command_t *) (unterminated.bytes + command_offset);
     memset(unterminated.bytes + command_offset + command->path_offset, 'x',
            command->cmdsize - command->path_offset);
-    char unterminated_path[] = "/tmp/nature-ld-rpath-string-XXXXXX";
+    char unterminated_path[] = "/tmp/nax-ld-rpath-string-XXXXXX";
     test_ld_write_fixture(unterminated_path, unterminated.bytes,
                           unterminated.size);
     test_ld_expect_invalid_input(unterminated_path, LD_INVALID_INPUT,
@@ -711,7 +711,7 @@ static void test_malformed_binary_dylib_rpaths(void) {
     command->cmdsize = sizeof(ld_load_command_t);
     ld_mach_header_64_t *header = (ld_mach_header_64_t *) truncated.bytes;
     header->sizeofcmds = id_size + command->cmdsize;
-    char truncated_path[] = "/tmp/nature-ld-rpath-command-XXXXXX";
+    char truncated_path[] = "/tmp/nax-ld-rpath-command-XXXXXX";
     test_ld_write_fixture(truncated_path, truncated.bytes, truncated.size);
     test_ld_expect_invalid_input(truncated_path, LD_INVALID_INPUT,
                                  "invalid LC_RPATH");
@@ -720,7 +720,7 @@ static void test_malformed_binary_dylib_rpaths(void) {
 }
 
 static void test_missing_reexport_is_lazy_and_diagnostic(void) {
-    char root[] = "/tmp/nature-ld-missing-reexport-XXXXXX";
+    char root[] = "/tmp/nax-ld-missing-reexport-XXXXXX";
     assert(mkdtemp(root) != NULL);
     char parent_path[PATH_MAX], output[PATH_MAX];
     assert(snprintf(parent_path, sizeof(parent_path), "%s/Parent.dylib", root) >
@@ -766,7 +766,7 @@ static void test_missing_reexport_is_lazy_and_diagnostic(void) {
 }
 
 static void test_reexport_cycle_is_bounded(void) {
-    char root[] = "/tmp/nature-ld-reexport-cycle-XXXXXX";
+    char root[] = "/tmp/nax-ld-reexport-cycle-XXXXXX";
     assert(mkdtemp(root) != NULL);
     char a_path[PATH_MAX], b_path[PATH_MAX], output[PATH_MAX];
     assert(snprintf(a_path, sizeof(a_path), "%s/A.dylib", root) > 0);

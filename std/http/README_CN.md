@@ -1,4 +1,4 @@
-# import [http](https://github.com/nature-lang/nature/tree/master/std/http/http.n)
+# import [http](https://github.com/naxlang/nax/tree/master/std/http/http.n)
 
 HTTP 服务器和客户端库，用于构建 Web 应用程序和发送 HTTP 请求。
 
@@ -171,7 +171,7 @@ fn response_t.send(string msg)
 
 发送带有指定消息的响应。
 
-# import [http.client](https://github.com/nature-lang/nature/tree/master/std/http/client.n)
+# import [http.client](https://github.com/naxlang/nax/tree/master/std/http/client.n)
 
 用于发送 HTTP 请求的 HTTP 客户端。
 

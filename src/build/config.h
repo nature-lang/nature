@@ -1,5 +1,5 @@
-#ifndef NATURE_BUILD_CONFIG_H
-#define NATURE_BUILD_CONFIG_H
+#ifndef NAX_BUILD_CONFIG_H
+#define NAX_BUILD_CONFIG_H
 
 #include "utils/helper.h"
 #include "utils/slice.h"
@@ -21,9 +21,9 @@ typedef enum {
 extern build_param_t BUILD_OS;
 extern build_param_t BUILD_ARCH;
 
-extern char *NATURE_ROOT;
-char *nature_root_from_executable_path(const char *executable_path);
-char *nature_root_from_running_executable();
+extern char *NAX_ROOT;
+char *nax_root_from_executable_path(const char *executable_path);
+char *nax_root_from_running_executable();
 
 extern char BUILD_OUTPUT_NAME[PATH_MAX]; // main
 extern bool BUILD_OUTPUT_EXPLICIT; // true when -o/--output was provided
@@ -39,16 +39,16 @@ extern char LDFLAGS[1024]; // 自定义链接器参数
 
 extern bool VERBOSE; // 是否开启 verbose 模式 (--verbose)
 
-// test mode (nature test)
+// test mode (nax test)
 extern bool BUILD_TEST;
 extern slice_t *TEST_SKIP_LIST;
 
-extern char *BUILD_ENTRY; // nature build {test/main.n} 花括号包起来的这部分
+extern char *BUILD_ENTRY; // nax build {test/main.n} 花括号包起来的这部分
 extern char SOURCE_PATH[PATH_MAX]; // /opt/test/main.n 的绝对路径
 
 #define LD_ENTRY "runtime_main"
 
-#define BUILD_TMP_DIR "/tmp/nature-build.XXXXXX"
+#define BUILD_TMP_DIR "/tmp/nax-build.XXXXXX"
 //#define DARWIN_BUILD_TMP_DIR  ""
 #define LIB_START_FILE "crt1.o"
 #define LIB_RUNTIME_FILE "libruntime.a"
@@ -79,7 +79,7 @@ static inline char *temp_dir() {
     if (env_tmpdir != NULL && strlen(env_tmpdir) > 0) {
         size_t length = strlen(env_tmpdir);
         bool has_separator = env_tmpdir[length - 1] == '/' || env_tmpdir[length - 1] == '\\';
-        snprintf(temp, sizeof(temp), "%s%snature-build.XXXXXX", env_tmpdir, has_separator ? "" : "/");
+        snprintf(temp, sizeof(temp), "%s%snax-build.XXXXXX", env_tmpdir, has_separator ? "" : "/");
     } else {
         // Fall back to BUILD_TMP_DIR
         strcpy(temp, BUILD_TMP_DIR);
@@ -211,14 +211,14 @@ static inline void env_init() {
         assertf(false, "only windows_amd64 is supported");
     }
 
-    char *root = getenv("NATURE_ROOT");
+    char *root = getenv("NAX_ROOT");
     if (root != NULL && strlen(root) > 0) {
-        NATURE_ROOT = root;
+        NAX_ROOT = root;
     } else {
-        NATURE_ROOT = nature_root_from_running_executable();
+        NAX_ROOT = nax_root_from_running_executable();
     }
-    assertf(NATURE_ROOT != NULL,
-            "cannot find NATURE_ROOT; set NATURE_ROOT or use a complete nature installation");
+    assertf(NAX_ROOT != NULL,
+            "cannot find NAX_ROOT; set NAX_ROOT or use a complete nax installation");
 
     char *build_output_dir = getenv("BUILD_OUTPUT_DIR");
     if (build_output_dir != NULL && strlen(BUILD_OUTPUT_DIR) == 0) {
@@ -227,4 +227,4 @@ static inline void env_init() {
 }
 
 
-#endif //NATURE_ENV_H
+#endif //NAX_ENV_H

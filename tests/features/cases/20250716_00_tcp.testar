@@ -45,7 +45,7 @@ fn main() {
     var len = conn.read(buf)
     println('read buf 1:', buf.slice(0, len) as string)
 
-    conn.write('hello nature' as [u8])
+    conn.write('hello nax' as [u8])
     len =  conn.read(buf)
     println('read buf 2:', buf.slice(0, len) as string)
 
@@ -54,7 +54,7 @@ fn main() {
 
 --- output.txt
 read buf 1: hello world
-read buf 2: hello nature
+read buf 2: hello nax
 
 === test_connect_timeout[exclude_os=windows]
 --- main.n
@@ -69,7 +69,7 @@ fn main() {
 }
 
 --- output.txt
-coroutine 'main' uncaught error: io.TIMEOUT at nature-test/main.n:6:15
+coroutine 'main' uncaught error: io.TIMEOUT at nax-test/main.n:6:15
 
 
 === test_cross_goroutine[exclude_os=windows]
@@ -189,7 +189,7 @@ fn main() {
 
 --- output.txt
 server is start
-panic: 'io.CLOSED' at nature-test/main.n:18:31
+panic: 'io.CLOSED' at nax-test/main.n:18:31
 
 === test_url_parser
 --- main.n
@@ -414,7 +414,7 @@ fn main() {
     var conn = tcp.connect('34.160.111.145:80')
     var http_request = 'GET /ip HTTP/1.1\r\n' +
                        'Host: ifconfig.me\r\n' +
-                       'User-Agent: nature-client/1.0' +
+                       'User-Agent: nax-client/1.0' +
                        'Accept: application/json\r\n' +
                        'Connection: close\r\n' +
                        '\r\n'

@@ -18,7 +18,7 @@ use lazy_static::lazy_static;
 pub const MOD_DECL_IDENT: &str = "mod";
 const PACKAGE_TOML: &str = "package.toml";
 
-/// nature source extensions, `.n` compiles in normal mode and `.x` in x mode
+/// nax source extensions, `.n` compiles in normal mode and `.x` in x mode
 pub const SOURCE_EXT_N: &str = ".n";
 pub const SOURCE_EXT_X: &str = ".x";
 
@@ -34,12 +34,12 @@ pub fn source_ext(filename: &str) -> Option<&'static str> {
     }
 }
 
-/// Whether the path names a nature source file of either mode.
+/// Whether the path names a nax source file of either mode.
 pub fn is_source_path(path: &str) -> bool {
     source_ext(path).is_some()
 }
 
-/// Whether a bare extension (as returned by `Path::extension`, no leading dot) is a nature source.
+/// Whether a bare extension (as returned by `Path::extension`, no leading dot) is a nax source.
 pub fn is_source_extension(ext: &str) -> bool {
     ext == "n" || ext == "x"
 }

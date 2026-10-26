@@ -1,5 +1,5 @@
-#ifndef NATURE_EXEC_H
-#define NATURE_EXEC_H
+#ifndef NAX_EXEC_H
+#define NAX_EXEC_H
 
 #include <stdlib.h>
 #include <stdint.h>
@@ -13,4 +13,4 @@ char *exec(char *work_dir, char *file, slice_t *list, int32_t *pid, int32_t *sta
 
 char *command_output(const char *work_dir, const char *command);
 
-#endif //NATURE_EXEC_H
+#endif //NAX_EXEC_H

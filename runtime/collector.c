@@ -392,8 +392,8 @@ static void scan_stack(n_processor_t *p, coroutine_t *co) {
         return;
     }
 
-    // 由于 nature 支持调用 c 语言，所以 frame_bp 可能是 c 代码，此时不需要进行 scan_stack
-    // 直到遇到 nature code, 才需要进行 stack
+    // 由于 nax 支持调用 c 语言，所以 frame_bp 可能是 c 代码，此时不需要进行 scan_stack
+    // 直到遇到 nax code, 才需要进行 stack
     // 基于 frame_bp + ret_addr 想栈底，目前采用协作式调度后，只有 safepoint 或者 再 c 代码中进行 yield, 这里的 c 代码一定是在 runtime 中进行 yield，并且由于采用了
     // -fno-omit-frame-pointer 方式，所以存在完整的栈帧
     addr_t stack_top_ptr = (addr_t) co->aco.save_stack.ptr;
@@ -455,7 +455,7 @@ static void scan_stack(n_processor_t *p, coroutine_t *co) {
                 (void *) assist_preempt_yield_ret_addr);
             break;
         }
-        // check prev value is nature fn
+        // check prev value is nax fn
         fndef_t *fn = find_fn(ret_addr, p);
         DEBUGF("[runtime_gc.scan_stack] find frame_bp=%p, bp_offset=%ld, ret_addr=%p, fn=%s",
                (void *) share_stack_frame_bp, bp_offset, (void *) ret_addr, fn ? STRTABLE(fn->name_offset) : "-");
@@ -465,7 +465,7 @@ static void scan_stack(n_processor_t *p, coroutine_t *co) {
             break;
         }
 
-        // 继续推进栈帧直到获取首个 nature fn
+        // 继续推进栈帧直到获取首个 nax fn
 #ifdef __RISCV64
         share_stack_frame_bp = fetch_addr_value(stack_top_ptr + bp_offset - POINTER_SIZE - POINTER_SIZE);
         // save_stack.ptr 指向栈顶, new ret_addr, ret_addr 总是在 prev_bp 的前一个位置(+pointer_size)
@@ -479,7 +479,7 @@ static void scan_stack(n_processor_t *p, coroutine_t *co) {
 
     if (!found && !found_assist) {
         DEBUGF(
-            "[runtime_gc.scan_stack] no bounded nature frame, conservatively scan co=%p",
+            "[runtime_gc.scan_stack] no bounded nax frame, conservatively scan co=%p",
             co);
         scan_saved_stack_conservative(worklist, &save_stack);
         return;
@@ -516,8 +516,8 @@ static void scan_stack(n_processor_t *p, coroutine_t *co) {
             frame_cursor -= POINTER_SIZE;
         }
 
-        // 重新提取 ret_addr 和 share_stack_frame_bp, ret_addr 必须存在于 nature 代码
-        // 只有 nature 代码通过 safepoint 才能调用到 assist_preempt_yield
+        // 重新提取 ret_addr 和 share_stack_frame_bp, ret_addr 必须存在于 nax 代码
+        // 只有 nax 代码通过 safepoint 才能调用到 assist_preempt_yield
 #ifdef __RISCV64
         share_stack_frame_bp = fetch_addr_value(stack_top_ptr + bp_offset - POINTER_SIZE - POINTER_SIZE);
         ret_addr = fetch_addr_value(stack_top_ptr + bp_offset - POINTER_SIZE);
@@ -570,7 +570,7 @@ static void scan_stack(n_processor_t *p, coroutine_t *co) {
         // 将 share 转换为 prev 偏移量
         addr_t frame_cursor = stack_top_ptr + bp_offset; // stack_top_ptr 指向了 sp top
 
-        // nature 代码对于 riscv64/arm64/amd64 采用了同样的栈帧布局 stack_top(0) -> [local_var..., fp, prev_fp, ret_addr, local_var...] -> max
+        // nax 代码对于 riscv64/arm64/amd64 采用了同样的栈帧布局 stack_top(0) -> [local_var..., fp, prev_fp, ret_addr, local_var...] -> max
         // 所以不需要像 c 代码部分一样，对 riscv64 进行特殊处理
         frame_cursor -= POINTER_SIZE; // -8 之后才能向上取值
 
@@ -903,7 +903,7 @@ static void scan_pool() {
     mutex_unlock(&const_str_pool_locker);
 
     // signal_handlers is a native map keyed by raw channel pointers, so the
-    // normal Nature stack/global scan cannot see channels that remain
+    // normal Nax stack/global scan cannot see channels that remain
     // registered with os.signal. Keep those channels alive until signal.stop
     // removes them from the registry. Without this root, the background
     // signal coroutine can call rt_chan_send on a channel reclaimed by GC.

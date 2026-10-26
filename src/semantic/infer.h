@@ -1,8 +1,8 @@
 /**
  * 类型推导与判断
  */
-#ifndef NATURE_SRC_AST_INFER_H_
-#define NATURE_SRC_AST_INFER_H_
+#ifndef NAX_SRC_AST_INFER_H_
+#define NAX_SRC_AST_INFER_H_
 
 #include "src/ast.h"
 #include "src/types.h"
@@ -26,4 +26,4 @@ static type_t infer_right_expr(module_t *m, ast_expr_t *expr, type_t target_type
 
 static type_t infer_left_expr(module_t *m, ast_expr_t *expr);
 
-#endif //NATURE_SRC_AST_INFER_H_
+#endif //NAX_SRC_AST_INFER_H_

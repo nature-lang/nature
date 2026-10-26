@@ -1,5 +1,5 @@
-#ifndef NATURE_SRC_SCANNER_H_
-#define NATURE_SRC_SCANNER_H_
+#ifndef NAX_SRC_SCANNER_H_
+#define NAX_SRC_SCANNER_H_
 
 #include "src/module.h"
 #include "src/syntax/token.h"
@@ -8,4 +8,4 @@
 
 linked_t *scanner(module_t *m);
 
-#endif//NATURE_SRC_SCANNER_H_
+#endif//NAX_SRC_SCANNER_H_

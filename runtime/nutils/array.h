@@ -1,5 +1,5 @@
-#ifndef NATURE_RT_TYPE_ARRAY_H
-#define NATURE_RT_TYPE_ARRAY_H
+#ifndef NAX_RT_TYPE_ARRAY_H
+#define NAX_RT_TYPE_ARRAY_H
 
 #include "nutils.h"
 #include "runtime/memory.h"
@@ -35,4 +35,4 @@ static inline n_array_t *rti_array_new(rtype_t *element_rtype, uint64_t length) 
     return addr;
 }
 
-#endif // NATURE_BASE_H
+#endif // NAX_BASE_H

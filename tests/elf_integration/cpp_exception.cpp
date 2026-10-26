@@ -11,7 +11,7 @@ static global_state state;
 
 static int exercise_cpp_runtime() {
     std::vector<int> values{1, 2, 3, 4};
-    std::string text = "nature-elf";
+    std::string text = "nax-elf";
     int sum = 0;
     for (int value: values)
         sum += value;

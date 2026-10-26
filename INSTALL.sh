@@ -2,17 +2,17 @@
 set -e
 
 # -----------------------------
-# Nature ASCII Banner
+# Nax ASCII Banner
 # -----------------------------
 echo " _   _       _                 "
 echo "| \\ | | __ _| |_ _   _ _ __    "
 echo "|  \\| |/ _\` | __| | | | '_ \\ "
 echo "| |\\  | (_| | |_| |_| | | | |  "
 echo "|_| \\_|\\__,_|\\__|\\__,_|_| |_| "
-echo "          Nature Programming Language"
+echo "          Nax Programming Language"
 echo
 
-echo "Starting Nature installer..."
+echo "Starting Nax installer..."
 
 # -----------------------------
 # Detect OS
@@ -53,7 +53,7 @@ echo "Looking for asset: $ASSET_PATTERN"
 # -----------------------------
 # Fetch latest release asset URL
 # -----------------------------
-LATEST_URL=$(curl -s https://api.github.com/repos/nature-lang/nature/releases/latest \
+LATEST_URL=$(curl -s https://api.github.com/repos/naxlang/nax/releases/latest \
   | grep "browser_download_url" \
   | grep -i "$ASSET_PATTERN" \
   | cut -d '"' -f 4)
@@ -73,9 +73,9 @@ echo "Downloading $FILE..."
 curl -L "$LATEST_URL" -o "$FILE"
 
 # -----------------------------
-# Install to /usr/local/nature
+# Install to /usr/local/nax
 # -----------------------------
-INSTALL_DIR="/usr/local/nature"
+INSTALL_DIR="/usr/local/nax"
 
 echo "Extracting to $INSTALL_DIR..."
 sudo mkdir -p "$INSTALL_DIR"
@@ -89,10 +89,10 @@ rm "$FILE"
 PROFILE="$HOME/.bashrc"
 [[ "$OS" == "darwin" ]] && PROFILE="$HOME/.zshrc"
 
-if ! grep -q "/usr/local/nature/bin" "$PROFILE"; then
+if ! grep -q "/usr/local/nax/bin" "$PROFILE"; then
   echo "Updating PATH in $PROFILE..."
-  echo 'export PATH="/usr/local/nature/bin:$PATH"' >> "$PROFILE"
+  echo 'export PATH="/usr/local/nax/bin:$PATH"' >> "$PROFILE"
 fi
 
-echo "✅ Nature installed successfully!"
+echo "✅ Nax installed successfully!"
 echo "Restart your terminal to begin using it."

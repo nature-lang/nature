@@ -58,7 +58,7 @@ static uint8_t *make_platform_object(uint32_t command_kind,
 }
 
 static void parse_object_success(const uint8_t *bytes, size_t size) {
-    char path[] = "/tmp/nature-ld-platform-ok-XXXXXX";
+    char path[] = "/tmp/nax-ld-platform-ok-XXXXXX";
     test_ld_write_fixture(path, bytes, size);
     ld_options_t options;
     ld_options_init(&options);
@@ -73,7 +73,7 @@ static void parse_object_success(const uint8_t *bytes, size_t size) {
 
 static void expect_object_failure(const uint8_t *bytes, size_t size,
                                   int error, const char *message) {
-    char path[] = "/tmp/nature-ld-platform-bad-XXXXXX";
+    char path[] = "/tmp/nax-ld-platform-bad-XXXXXX";
     test_ld_write_fixture(path, bytes, size);
     test_ld_expect_invalid_input(path, error, message);
     unlink(path);

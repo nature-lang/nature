@@ -72,7 +72,7 @@ static void rt_windows_report_exception(EXCEPTION_POINTERS *exception) {
     CONTEXT context = *exception->ContextRecord;
     char line[512];
     snprintf(line, sizeof(line),
-             "nature: unhandled Windows exception 0x%08lx at 0x%llx\n",
+             "nax: unhandled Windows exception 0x%08lx at 0x%llx\n",
              (unsigned long) record->ExceptionCode,
              (unsigned long long) (uintptr_t) record->ExceptionAddress);
     rt_windows_write_crash_line(line);
@@ -82,7 +82,7 @@ static void rt_windows_report_exception(EXCEPTION_POINTERS *exception) {
         const char *operation = "read";
         if (record->ExceptionInformation[0] == 1) operation = "write";
         if (record->ExceptionInformation[0] == 8) operation = "execute";
-        snprintf(line, sizeof(line), "nature: invalid %s at 0x%llx\n",
+        snprintf(line, sizeof(line), "nax: invalid %s at 0x%llx\n",
                  operation,
                  (unsigned long long) record->ExceptionInformation[1]);
         rt_windows_write_crash_line(line);
@@ -90,12 +90,12 @@ static void rt_windows_report_exception(EXCEPTION_POINTERS *exception) {
 
 #ifdef __x86_64__
     snprintf(line, sizeof(line),
-             "nature: rip=0x%llx rsp=0x%llx rbp=0x%llx\n",
+             "nax: rip=0x%llx rsp=0x%llx rbp=0x%llx\n",
              (unsigned long long) context.Rip,
              (unsigned long long) context.Rsp,
              (unsigned long long) context.Rbp);
     rt_windows_write_crash_line(line);
-    rt_windows_write_crash_line("nature: stack backtrace:\n");
+    rt_windows_write_crash_line("nax: stack backtrace:\n");
 
     HANDLE process = GetCurrentProcess();
     for (unsigned i = 0; i < 64 && context.Rip != 0; ++i) {
@@ -859,7 +859,7 @@ void ptr_valid(void *ptr) {
 }
 
 
-// A C fn bound in std panics at the nature code calling it, ret_addr is CALLER_RET_ADDR() in that fn.
+// A C fn bound in std panics at the nax code calling it, ret_addr is CALLER_RET_ADDR() in that fn.
 void rti_panic_at(addr_t ret_addr, char *msg) {
     panic_dump(caller_from_return_address(ret_addr), msg);
 }

@@ -1,5 +1,5 @@
-#ifndef NATURE_FN_H
-#define NATURE_FN_H
+#ifndef NAX_FN_H
+#define NAX_FN_H
 
 #include "utils/mutex.h"
 #include "utils/type.h"
@@ -31,4 +31,4 @@ void env_access_ref(n_fn_t *fn, uint64_t index, void *dst_ref, uint64_t size);
 void env_assign_ref(n_fn_t *fn, uint64_t index, void *src_ref, uint64_t size);
 
 
-#endif //NATURE_FN_H
+#endif //NAX_FN_H

@@ -117,12 +117,12 @@ static int ld_coff_prepare_ctor_dtor_list(ld_coff_context_t *ctx,
 
 static int ld_coff_prepare_mingw_synthetics(ld_coff_context_t *ctx) {
     int status = ld_coff_prepare_ctor_dtor_list(
-            ctx, "__CTOR_LIST__", ".ctors$__nature_head",
-            ".ctors$__nature_tail");
+            ctx, "__CTOR_LIST__", ".ctors$__nax_head",
+            ".ctors$__nax_tail");
     if (status != LD_OK) return status;
     return ld_coff_prepare_ctor_dtor_list(
-            ctx, "__DTOR_LIST__", ".dtors$__nature_head",
-            ".dtors$__nature_tail");
+            ctx, "__DTOR_LIST__", ".dtors$__nax_head",
+            ".dtors$__nax_tail");
 }
 
 static int ld_coff_import_compare(const void *left_value,
@@ -516,11 +516,11 @@ static int ld_coff_input_section_compare(const void *left_value,
             *(ld_coff_section_t *const *) left_value;
     const ld_coff_section_t *right =
             *(ld_coff_section_t *const *) right_value;
-    bool left_head = strstr(left->name, "$__nature_head") != NULL;
-    bool right_head = strstr(right->name, "$__nature_head") != NULL;
+    bool left_head = strstr(left->name, "$__nax_head") != NULL;
+    bool right_head = strstr(right->name, "$__nax_head") != NULL;
     if (left_head != right_head) return left_head ? -1 : 1;
-    bool left_tail = strstr(left->name, "$__nature_tail") != NULL;
-    bool right_tail = strstr(right->name, "$__nature_tail") != NULL;
+    bool left_tail = strstr(left->name, "$__nax_tail") != NULL;
+    bool right_tail = strstr(right->name, "$__nax_tail") != NULL;
     if (left_tail != right_tail) return left_tail ? 1 : -1;
     const char *left_family = ld_coff_legacy_family(left->name);
     const char *right_family = ld_coff_legacy_family(right->name);
@@ -1655,7 +1655,7 @@ int ld_coff_write_map(ld_coff_context_t *ctx) {
     ld_coff_text_buffer_t buffer = {0};
     int status = ld_coff_text_append(
             ctx, &buffer,
-            "# Nature COFF/PE map v1\n"
+            "# Nax COFF/PE map v1\n"
             "image_base 0x%016" PRIx64 "\n"
             "entry      0x%016" PRIx64 " 0x%08" PRIx32 " %s\n"
             "\nsections\n"

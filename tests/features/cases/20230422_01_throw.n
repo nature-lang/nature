@@ -1,7 +1,7 @@
 errdef WORLD_ERROR
 
 fn hello():void! {
-    println('hello nature')
+    println('hello nax')
     throw WORLD_ERROR
 }
 

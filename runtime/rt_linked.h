@@ -1,5 +1,5 @@
-#ifndef NATURE_RT_LINKED_H
-#define NATURE_RT_LINKED_H
+#ifndef NAX_RT_LINKED_H
+#define NAX_RT_LINKED_H
 
 #include "fixalloc.h"
 #include "utils/mutex.h"
@@ -167,4 +167,4 @@ static inline void rt_linked_fixalloc_free(rt_linked_fixalloc_t *l) {
     fixalloc_destroy(&l->nodealloc);
 }
 
-#endif// NATURE_RT_LINKED_H
+#endif// NAX_RT_LINKED_H

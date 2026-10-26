@@ -1,5 +1,5 @@
-#ifndef NATURE_LD_OUTPUT_H
-#define NATURE_LD_OUTPUT_H
+#ifndef NAX_LD_OUTPUT_H
+#define NAX_LD_OUTPUT_H
 
 #include "ld.h"
 

@@ -1,5 +1,5 @@
-#ifndef NATURE_SRC_LIB_STACK_H_
-#define NATURE_SRC_LIB_STACK_H_
+#ifndef NAX_SRC_LIB_STACK_H_
+#define NAX_SRC_LIB_STACK_H_
 
 #include <stdlib.h>
 #include "helper.h"
@@ -24,4 +24,4 @@ bool stack_empty(ct_stack_t *s);
 
 stack_node *stack_new_node(void *value);
 
-#endif //NATURE_SRC_LIB_STACK_H_
+#endif //NAX_SRC_LIB_STACK_H_

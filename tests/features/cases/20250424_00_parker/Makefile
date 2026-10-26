@@ -5,11 +5,11 @@ TARGET_DIR=$(PWD)/build/parker/bin
 all: amd64 arm64
 
 amd64:
-	@echo "Building for amd64 using nature build..."
+	@echo "Building for amd64 using nax build..."
 	mkdir -p $(TARGET_DIR)
 	npkg sync
-	BUILD_OS=linux BUILD_ARCH=amd64 nature build -o $(TARGET_DIR)/parker parker.n
-	BUILD_OS=linux BUILD_ARCH=amd64 nature build -o $(TARGET_DIR)/runner runner.n
+	BUILD_OS=linux BUILD_ARCH=amd64 nax build -o $(TARGET_DIR)/parker parker.n
+	BUILD_OS=linux BUILD_ARCH=amd64 nax build -o $(TARGET_DIR)/runner runner.n
 	@make copy-version
 
 arm64:

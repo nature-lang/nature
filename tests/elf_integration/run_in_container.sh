@@ -1,10 +1,10 @@
 #!/bin/sh
 set -eu
 
-root=${NATURE_ROOT:-/work}
-jobs=${NATURE_JOBS:-8}
-arches=${NATURE_ELF_ARCHES:-"amd64 arm64 riscv64"}
-work=$(mktemp -d /tmp/nature-elf-integration.XXXXXX)
+root=${NAX_ROOT:-/work}
+jobs=${NAX_JOBS:-8}
+arches=${NAX_ELF_ARCHES:-"amd64 arm64 riscv64"}
+work=$(mktemp -d /tmp/nax-elf-integration.XXXXXX)
 trap 'rm -rf "$work"' EXIT HUP INT TERM
 
 require_tool() {
@@ -42,10 +42,10 @@ for tool in cmake cc readelf nm addr2line file; do
 done
 
 cmake -B "$work/build" -S "$root" -DBUILD_TESTING=ON >/dev/null 2>&1
-cmake --build "$work/build" --target nature_common_test -- -j"$jobs"
+cmake --build "$work/build" --target nax_common_test -- -j"$jobs"
 cc -std=gnu11 -O2 -I"$root" -I"$root/include" \
     "$root/tests/elf_integration/link_driver.c" \
-    "$work/build/tests/libnature_common_test.a" -lm \
+    "$work/build/tests/libnax_common_test.a" -lm \
     -o "$work/ld-driver"
 
 compile_debug_object() {

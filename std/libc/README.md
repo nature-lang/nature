@@ -1,4 +1,4 @@
-# import [libc](https://github.com/nature-lang/nature/tree/master/std/libc/libc.n)
+# import [libc](https://github.com/naxlang/nax/tree/master/std/libc/libc.n)
 
 C standard library bindings for memory management, string operations, system functions, and more
 
@@ -177,7 +177,7 @@ Directory entry structure containing file information
 fn string.to_cstr(self):cstr
 ```
 
-Convert Nature string to C-style string
+Convert Nax string to C-style string
 
 ## fn cstr.to_string
 
@@ -185,7 +185,7 @@ Convert Nature string to C-style string
 fn cstr.to_string():string
 ```
 
-Convert C-style string to Nature string
+Convert C-style string to Nax string
 
 ## fn atoi
 
@@ -2611,7 +2611,7 @@ fn isspace(u8 c):bool
 
 Test for whitespace character
 
-# import [libc.dirent](https://github.com/nature-lang/nature/tree/master/std/libc/dirent.linux.n)
+# import [libc.dirent](https://github.com/naxlang/nax/tree/master/std/libc/dirent.linux.n)
 
 Get information about the specified directory and traverse it recursively.
 

@@ -1,5 +1,5 @@
-#ifndef NATURE_FS_H
-#define NATURE_FS_H
+#ifndef NAX_FS_H
+#define NAX_FS_H
 
 #include "runtime/processor.h"
 #include "utils/helper.h"
@@ -46,4 +46,4 @@ n_errable_stat_t rt_uv_fs_stat(fs_context_t *ctx);
 
 n_errable_t rt_uv_fs_from(n_int_t fd, n_string_t name);
 
-#endif //NATURE_FS_H
+#endif //NAX_FS_H

@@ -214,11 +214,11 @@ impl<'a> CompletionProvider<'a> {
         };
 
         // Find the module directory.  We check:
-        //  1. std library:  $NATURE_ROOT/std/<module_name>/
+        //  1. std library:  $NAX_ROOT/std/<module_name>/
         //  2. local file:   <module_dir>/<module_name>.n
         //  3. package sub-dir: <project_root>/<module_name>/
         let std_module_dir = {
-            let mut p = std::path::PathBuf::from(&self.nature_root);
+            let mut p = std::path::PathBuf::from(&self.nax_root);
             p.push("std");
             p.push(module_name);
             p
@@ -497,7 +497,7 @@ impl<'a> CompletionProvider<'a> {
         }
 
         // 3. Scan standard library packages
-        let std_dir = std::path::Path::new(&self.nature_root).join("std");
+        let std_dir = std::path::Path::new(&self.nax_root).join("std");
         debug!("Scanning std directory: {}", std_dir.display());
 
         if let Ok(entries) = std::fs::read_dir(&std_dir) {
@@ -685,7 +685,7 @@ impl<'a> CompletionProvider<'a> {
         // Build the builtin directory path so we can skip symbols that are
         // always in scope (e.g. println, print, …).
         let builtin_dir = {
-            let mut p = std::path::PathBuf::from(&self.nature_root);
+            let mut p = std::path::PathBuf::from(&self.nax_root);
             p.push("std");
             p.push("builtin");
             p
@@ -717,7 +717,7 @@ impl<'a> CompletionProvider<'a> {
                 &self.module.dir,
                 &self.module.path,
                 &self.project_root,
-                &self.nature_root,
+                &self.nax_root,
                 package_name,
             ) {
                 Some(info) => info,

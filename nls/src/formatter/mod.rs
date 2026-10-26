@@ -12,7 +12,7 @@ enum BlockKind {
     Match,
 }
 
-/// Formatting options for the Nature formatter.
+/// Formatting options for the Nax formatter.
 #[derive(Debug, Clone)]
 pub struct FormatterOptions {
     pub line_width: usize,
@@ -24,7 +24,7 @@ impl Default for FormatterOptions {
     }
 }
 
-/// Format a Nature source file using the canonical style.
+/// Format a Nax source file using the canonical style.
 ///
 /// Returns the formatted text or an error message when the source cannot be
 /// lexed cleanly.

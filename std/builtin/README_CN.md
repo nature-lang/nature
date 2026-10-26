@@ -1,4 +1,4 @@
-# [builtin](https://github.com/nature-lang/nature/blob/master/std/builtin/builtin.n)
+# [builtin](https://github.com/naxlang/nax/blob/master/std/builtin/builtin.n)
 
 builtin 中包含的都是全局函数和类型，不需要 import 引入
 
@@ -52,7 +52,7 @@ errdef TYPE_ASSERT_FAILED 'type assert failed'
 
 索引或切片越界、map 里没有这个 key、`as` 失败都会 panic。catch 紧跟在这类表达式后面时，会把 panic 当作其中一个 errset 接住，`.x` 和 `.n` 都一样：
 
-```nature
+```nax
 var a = list[5] catch e {
     // e == INDEX_OUT_OF_RANGE
     -1
@@ -61,7 +61,7 @@ var a = list[5] catch e {
 
 只有 catch 紧跟的那个表达式算数：`list[list[5]] catch e { ... }` 里内层的越界照样 panic。被调函数内部的 panic、`panic()` 和 `assert()` 总是结束程序。
 
-# [chan](https://github.com/nature-lang/nature/blob/master/std/builtin/chan.n)
+# [chan](https://github.com/naxlang/nax/blob/master/std/builtin/chan.n)
 
 ## fn chan<T>.new
 
@@ -147,7 +147,7 @@ fn chan<T>.is_successful(self):bool
 
 检查上次操作是否成功。
 
-# [coroutine](https://github.com/nature-lang/nature/blob/master/std/builtin/coroutine.n)
+# [coroutine](https://github.com/naxlang/nax/blob/master/std/builtin/coroutine.n)
 
 ## type future_t
 
@@ -194,7 +194,7 @@ fn co_return<T>(ptr<T> result)
 
 从协程返回结果。
 
-# [error](https://github.com/nature-lang/nature/blob/master/std/builtin/error.n)
+# [error](https://github.com/naxlang/nax/blob/master/std/builtin/error.n)
 
 ## type errable
 
@@ -209,7 +209,7 @@ type errable<T,E> = union{
 
 错误只能传播给错误类型相同的函数。错误类型不同的调用必须 catch 后转换，编译器会检查：
 
-```nature
+```nax
 // .x 中
 errdef BAD
 
@@ -231,7 +231,7 @@ fn load(string s):int! {
 
 ## errdef
 
-```nature
+```nax
 // 在 io 模块中
 errdef TIMEOUT 'request timed out'
 errdef CLOSED
@@ -269,7 +269,7 @@ stack backtrace:
 		at main.n:9:9
 ```
 
-# [map](https://github.com/nature-lang/nature/blob/master/std/builtin/map.n)
+# [map](https://github.com/naxlang/nax/blob/master/std/builtin/map.n)
 
 ## fn map<T,U>.new
 
@@ -305,7 +305,7 @@ fn map<T,U>.contains(self, T key):bool
 
 检查映射是否包含给定键。
 
-# [set](https://github.com/nature-lang/nature/blob/master/std/builtin/set.n)
+# [set](https://github.com/naxlang/nax/blob/master/std/builtin/set.n)
 
 ## fn set<T>.new
 
@@ -341,7 +341,7 @@ fn set<T>.del(self, T key)
 
 从集合中移除元素。
 
-# [string](https://github.com/nature-lang/nature/blob/master/std/builtin/string.n)
+# [string](https://github.com/naxlang/nax/blob/master/std/builtin/string.n)
 
 ## type string
 
@@ -369,7 +369,7 @@ fn string.char(self):u8
 
 获取字符串的第一个字符。
 
-# [vec](https://github.com/nature-lang/nature/blob/master/std/builtin/vec.n)
+# [vec](https://github.com/naxlang/nax/blob/master/std/builtin/vec.n)
 
 ## fn vec<T>.new
 

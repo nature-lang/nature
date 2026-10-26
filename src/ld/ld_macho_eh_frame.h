@@ -1,5 +1,5 @@
-#ifndef NATURE_LD_MACHO_EH_FRAME_H
-#define NATURE_LD_MACHO_EH_FRAME_H
+#ifndef NAX_LD_MACHO_EH_FRAME_H
+#define NAX_LD_MACHO_EH_FRAME_H
 
 #include "ld_internal.h"
 

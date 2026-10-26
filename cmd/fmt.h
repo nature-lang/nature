@@ -1,5 +1,5 @@
-#ifndef NATURE_FMT_H
-#define NATURE_FMT_H
+#ifndef NAX_FMT_H
+#define NAX_FMT_H
 
 #include "root.h"
 #include "utils/exec.h"
@@ -49,7 +49,7 @@ void cmd_fmt_entry(int argc, char **argv) {
     }
 
     if (check_only && write_back) {
-        printf("usage: nature fmt [-w|--write] [--check] [--diff|-d] [-l|--list] [-e|--errors] [path ...]\n");
+        printf("usage: nax fmt [-w|--write] [--check] [--diff|-d] [-l|--list] [-e|--errors] [path ...]\n");
         printf("cannot use --write with --check or --diff\n");
         exit(EXIT_FAILURE);
     }
@@ -79,4 +79,4 @@ void cmd_fmt_entry(int argc, char **argv) {
     exec_imm(NULL, "nls", args);
 }
 
-#endif // NATURE_FMT_H
+#endif // NAX_FMT_H

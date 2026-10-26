@@ -1,6 +1,6 @@
-# Nature Tests
+# Nax Tests
 
-This document explains how to work with tests in the Nature programming language project.
+This document explains how to work with tests in the Nax programming language project.
 
 ## Test Structure
 
@@ -16,7 +16,7 @@ Tests are located in `tests/features/` and follow a naming convention: `YYYYMMDD
 Before running tests, ensure the runtime library is up to date. If you encounter linking errors like `_global_safepoint` symbol not found, rebuild the runtime:
 
 ```bash
-cd /path/to/nature
+cd /path/to/nax
 cmake -B build-runtime -S runtime -DCMAKE_BUILD_TYPE=Release
 cmake --build build-runtime --target runtime
 ```
@@ -28,7 +28,7 @@ This generates the `lib/darwin_arm64/libruntime.a` (or appropriate platform libr
 Build the entire project including tests:
 
 ```bash
-cd /path/to/nature/build
+cd /path/to/nax/build
 cmake ..
 make
 ```
@@ -36,7 +36,7 @@ make
 Or rebuild everything from scratch:
 
 ```bash
-cd /path/to/nature/build
+cd /path/to/nax/build
 make clean
 cmake ..
 make -j8
@@ -165,18 +165,18 @@ Example: `20260103_00_selective_imports.c`
 
 ## Debugging Tests
 
-To manually test a Nature program without ctest:
+To manually test a Nax program without ctest:
 
 ```bash
 cd tests/features/cases/your_test_directory
-/path/to/nature/build/nature build main.n
+/path/to/nax/build/nax build main.n
 ./main
 ```
 
-This helps isolate issues in the Nature code vs. the test harness.
+This helps isolate issues in the Nax code vs. the test harness.
 
 ## Additional Resources
 
 - Main project README: `../README.md`
-- Nature documentation: https://nature-lang.org/docs
+- Nax documentation: https://naxlang.org/docs
 - Test cases examples: `tests/features/cases/`

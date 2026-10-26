@@ -164,7 +164,7 @@ type book_t = struct{
 
 fn main() {
     var b = book_t{
-        title: "Nature Lang",
+        title: "Nax Lang",
         author: "weiwenhao",
         a: 12,
     }

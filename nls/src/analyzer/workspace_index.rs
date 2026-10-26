@@ -39,14 +39,14 @@ impl WorkspaceIndex {
     }
 
     /// Scan a workspace root directory and index all .n files
-    pub fn scan_workspace(&mut self, root: &str, nature_root: &str) {
+    pub fn scan_workspace(&mut self, root: &str, nax_root: &str) {
         debug!("WorkspaceIndex: scanning workspace root '{}'", root);
 
         // 1. Scan project directory
         self.scan_directory(root, root);
 
         // 2. Scan standard library
-        let std_dir = Path::new(nature_root).join("std");
+        let std_dir = Path::new(nax_root).join("std");
         if std_dir.exists() {
             self.scan_directory(std_dir.to_str().unwrap_or(""), root);
         }
@@ -204,7 +204,7 @@ impl WorkspaceIndex {
                     }
                     '\'' if prev != '\\' && !in_str => {
                         // Skip character literals / string literals with single quotes
-                        // In Nature, single-quoted strings are file imports, skip content
+                        // In Nax, single-quoted strings are file imports, skip content
                     }
                     '{' if !in_str => depth += 1,
                     '}' if !in_str => depth -= 1,
@@ -439,7 +439,7 @@ impl WorkspaceIndex {
         current_module_dir: &str,
         current_module_path: &str,
         project_root: &str,
-        nature_root: &str,
+        nax_root: &str,
         package_name: Option<&str>,
     ) -> Option<ImportInfo> {
         let symbol_path = Path::new(symbol_file);
@@ -463,7 +463,7 @@ impl WorkspaceIndex {
         }
 
         // 2. Check if it's in the standard library
-        let std_dir = Path::new(nature_root).join("std");
+        let std_dir = Path::new(nax_root).join("std");
         if let Ok(std_canonical) = std_dir.canonicalize() {
             if let Ok(symbol_canonical) = symbol_path.canonicalize() {
                 if symbol_canonical.starts_with(&std_canonical) {

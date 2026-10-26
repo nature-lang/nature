@@ -482,14 +482,14 @@ static void test_property_link_integration(void) {
             "_start", first_note, first_note_size, &first_size);
     uint8_t *second_object = make_test_property_object(
             "helper", second_note, second_note_size, &second_size);
-    char first_path[] = "/tmp/nature-ld-property-first-XXXXXX";
-    char second_path[] = "/tmp/nature-ld-property-second-XXXXXX";
+    char first_path[] = "/tmp/nax-ld-property-first-XXXXXX";
+    char second_path[] = "/tmp/nax-ld-property-second-XXXXXX";
     write_fixture(first_path, first_object, first_size);
     write_fixture(second_path, second_object, second_size);
     free(first_object);
     free(second_object);
     const char *inputs[] = {first_path, second_path};
-    const char *output = "/tmp/nature-ld-property-output";
+    const char *output = "/tmp/nax-ld-property-output";
     diagnostic_capture_t capture = {0};
     assert(link_test_elf_inputs(output, inputs, 2U, &capture) == LD_OK);
     assert(capture.count == 0U);
@@ -530,7 +530,7 @@ static void test_property_link_integration(void) {
     assert(test_elf_read_u64(property_program + 48U) == 8U);
     free(image);
     const char *preserved =
-            getenv("NATURE_TEST_ELF_PROPERTY_OUTPUT");
+            getenv("NAX_TEST_ELF_PROPERTY_OUTPUT");
     if (preserved && preserved[0]) {
         unlink(preserved);
         assert(rename(output, preserved) == 0);
@@ -540,7 +540,7 @@ static void test_property_link_integration(void) {
 
     second_object = make_test_property_object(
             "helper", NULL, 0U, &second_size);
-    char missing_path[] = "/tmp/nature-ld-property-missing-XXXXXX";
+    char missing_path[] = "/tmp/nax-ld-property-missing-XXXXXX";
     write_fixture(missing_path, second_object, second_size);
     free(second_object);
     const char *missing_inputs[] = {first_path, missing_path};
@@ -569,7 +569,7 @@ static void test_property_link_integration(void) {
                         "unused.o/", second_object, second_size);
     assert(archive_size == archive_capacity);
     free(second_object);
-    char archive_path[] = "/tmp/nature-ld-property-archive-XXXXXX";
+    char archive_path[] = "/tmp/nax-ld-property-archive-XXXXXX";
     write_fixture(archive_path, archive, archive_size);
     free(archive);
     const char *archive_inputs[] = {first_path, archive_path};
@@ -590,7 +590,7 @@ static void test_property_link_integration(void) {
     test_elf_write_u32(malformed_note + 20U, 8U);
     first_object = make_test_property_object(
             "_start", malformed_note, first_note_size, &first_size);
-    char malformed_path[] = "/tmp/nature-ld-property-malformed-XXXXXX";
+    char malformed_path[] = "/tmp/nax-ld-property-malformed-XXXXXX";
     write_fixture(malformed_path, first_object, first_size);
     free(first_object);
     const char *malformed_inputs[] = {malformed_path};
@@ -612,7 +612,7 @@ static void test_property_link_integration(void) {
             first_object + (size_t) section_table_offset +
                     2U * LD_ELF64_SHDR_SIZE + 48U,
             4U);
-    char alignment_path[] = "/tmp/nature-ld-property-alignment-XXXXXX";
+    char alignment_path[] = "/tmp/nax-ld-property-alignment-XXXXXX";
     write_fixture(alignment_path, first_object, first_size);
     free(first_object);
     const char *alignment_inputs[] = {alignment_path};

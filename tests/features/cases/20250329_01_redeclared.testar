@@ -7,7 +7,7 @@ fn main():void! {
 }
 
 --- output.txt
-nature-test/main.n:2:4: ident 'main.a' redeclared
+nax-test/main.n:2:4: ident 'main.a' redeclared
 
 === test_redeclared2
 --- main.n
@@ -18,7 +18,7 @@ fn main():void! {
 }
 
 --- output.txt
-nature-test/main.n:2:3: ident 'main.a' redeclared
+nax-test/main.n:2:3: ident 'main.a' redeclared
 
 === test_redeclared3
 --- main.n
@@ -34,7 +34,7 @@ fn main():void! {
 }
 
 --- output.txt
-nature-test/main.n:6:2: ident 'main.foo' redeclared
+nax-test/main.n:6:2: ident 'main.foo' redeclared
 
 === test_redeclared4
 --- main.n
@@ -50,4 +50,4 @@ fn main():void! {
 }
 
 --- output.txt
-nature-test/main.n:6:2: ident 'main.t.foo' redeclared
+nax-test/main.n:6:2: ident 'main.t.foo' redeclared

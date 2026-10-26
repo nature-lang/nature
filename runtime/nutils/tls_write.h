@@ -1,5 +1,5 @@
-#ifndef NATURE_RUNTIME_NUTILS_TLS_WRITE_H_
-#define NATURE_RUNTIME_NUTILS_TLS_WRITE_H_
+#ifndef NAX_RUNTIME_NUTILS_TLS_WRITE_H_
+#define NAX_RUNTIME_NUTILS_TLS_WRITE_H_
 
 #include <stddef.h>
 #include <stdint.h>
@@ -19,4 +19,4 @@ static inline int64_t tls_write_all_records(void *ctx, tls_record_write_fn write
     return written;
 }
 
-#endif // NATURE_RUNTIME_NUTILS_TLS_WRITE_H_
+#endif // NAX_RUNTIME_NUTILS_TLS_WRITE_H_

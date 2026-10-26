@@ -1,5 +1,5 @@
-#ifndef NATURE_LD_ELF_SYMTAB_H
-#define NATURE_LD_ELF_SYMTAB_H
+#ifndef NAX_LD_ELF_SYMTAB_H
+#define NAX_LD_ELF_SYMTAB_H
 
 #include <stddef.h>
 #include <stdint.h>

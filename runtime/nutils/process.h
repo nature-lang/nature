@@ -1,5 +1,5 @@
-#ifndef NATURE_PROCESS_H
-#define NATURE_PROCESS_H
+#ifndef NAX_PROCESS_H
+#define NAX_PROCESS_H
 
 #include "runtime/processor.h"
 #include "runtime/uv_compat.h"
@@ -62,4 +62,4 @@ n_errable_t rt_uv_process_wait(process_context_t *ctx);
 
 n_errable_t rt_uv_process_spawn(command_t *cmd);
 
-#endif //NATURE_PROCESS_H
+#endif //NAX_PROCESS_H

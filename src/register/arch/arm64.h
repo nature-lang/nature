@@ -1,5 +1,5 @@
-#ifndef NATURE_REGISTER_ARM64_H
-#define NATURE_REGISTER_ARM64_H
+#ifndef NAX_REGISTER_ARM64_H
+#define NAX_REGISTER_ARM64_H
 
 #include "src/types.h"
 
@@ -48,4 +48,4 @@ extern reg_t *s24, *s25, *s26, *s27, *s28, *s29, *s30, *s31;
 
 void arm64_reg_init();
 
-#endif //NATURE_ARM64_H
+#endif //NAX_ARM64_H

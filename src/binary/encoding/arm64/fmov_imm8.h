@@ -1,5 +1,5 @@
-#ifndef NATURE_ARM64_FMOV_IMM_TABLE_H
-#define NATURE_ARM64_FMOV_IMM_TABLE_H
+#ifndef NAX_ARM64_FMOV_IMM_TABLE_H
+#define NAX_ARM64_FMOV_IMM_TABLE_H
 
 #include <math.h>
 #include <stdbool.h>
@@ -71,4 +71,4 @@ static inline uint8_t arm64_fmov_double_to_imm8(double value) {
     return imm8;
 }
 
-#endif // NATURE_ARM64_FMOV_IMM_TABLE_H
+#endif // NAX_ARM64_FMOV_IMM_TABLE_H

@@ -6,7 +6,7 @@
 /*
  * This is a direct C translation of Cie.eql and the first-winner loop in
  * calcEhFrameSize from Zig commit
- * 738d2be9d6b6ef3ff3559130c05159ef53336224. Nature keeps the comparison in a
+ * 738d2be9d6b6ef3ff3559130c05159ef53336224. Nax keeps the comparison in a
  * target-independent module so the ELF backend can use the same deterministic
  * rule on any host. Zig is MIT licensed; see ZIG-LICENSE.txt.
  */

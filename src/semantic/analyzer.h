@@ -1,5 +1,5 @@
-#ifndef NATURE_SRC_AST_ANALYZER_H_
-#define NATURE_SRC_AST_ANALYZER_H_
+#ifndef NAX_SRC_AST_ANALYZER_H_
+#define NAX_SRC_AST_ANALYZER_H_
 
 #include "src/ast.h"
 #include "src/module.h"
@@ -19,4 +19,4 @@ void analyzer_import(module_t *m, ast_import_t *import);
 
 char *analyzer_force_unique_ident(module_t *m);
 
-#endif//NATURE_SRC_AST_ANALYZER_H_
+#endif//NAX_SRC_AST_ANALYZER_H_

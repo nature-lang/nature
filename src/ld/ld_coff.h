@@ -1,5 +1,5 @@
-#ifndef NATURE_LD_COFF_H
-#define NATURE_LD_COFF_H
+#ifndef NAX_LD_COFF_H
+#define NAX_LD_COFF_H
 
 #include "ld.h"
 

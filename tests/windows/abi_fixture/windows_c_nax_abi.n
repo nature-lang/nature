@@ -1,4 +1,4 @@
-mod windows_c_nature_abi
+mod windows_c_nax_abi
 
 import libc
 
@@ -27,13 +27,13 @@ fn c_pair64(pair64_t value):i64
 #linkid c_make_pair64
 fn c_make_pair64(i64 a, i64 b):pair64_t
 
-#linkid c_call_nature
-fn c_call_nature(anyptr callback):i64
+#linkid c_call_nax
+fn c_call_nax(anyptr callback):i64
 
 #linkid c_check_xmm_nonvolatile
 fn c_check_xmm_nonvolatile(anyptr callback):i64
 
-fn nature_mixed_callback(i64 a, f64 b, i64 c, f64 d, i64 e, f64 f, i64 g, f64 h):i64 {
+fn nax_mixed_callback(i64 a, f64 b, i64 c, f64 d, i64 e, f64 f, i64 g, f64 h):i64 {
     return a + b as i64 + c + d as i64 + e + f as i64 + g + h as i64
 }
 
@@ -49,7 +49,7 @@ fn main() {
     var returned = c_make_pair64(91, 23)
     assert(returned.a == 91 && returned.b == 23)
 
-    var callback = libc.to_cfn(nature_mixed_callback as anyptr)
-    assert(c_call_nature(callback) == 36)
+    var callback = libc.to_cfn(nax_mixed_callback as anyptr)
+    assert(c_call_nax(callback) == 36)
     assert(c_check_xmm_nonvolatile(callback) == 36)
 }

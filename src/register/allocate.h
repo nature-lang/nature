@@ -1,5 +1,5 @@
-#ifndef NATURE_SRC_REGISTER_ALLOCATE_H_
-#define NATURE_SRC_REGISTER_ALLOCATE_H_
+#ifndef NAX_SRC_REGISTER_ALLOCATE_H_
+#define NAX_SRC_REGISTER_ALLOCATE_H_
 
 #include "utils/slice.h"
 #include "utils/linked.h"
@@ -41,4 +41,4 @@ bool allocate_block_reg(closure_t *c, allocate_t *a);
  */
 void sort_to_unhandled(linked_t *unhandled, interval_t *to);
 
-#endif //NATURE_SRC_REGISTER_ALLOCATE_H_
+#endif //NAX_SRC_REGISTER_ALLOCATE_H_

@@ -1,5 +1,5 @@
-#ifndef NATURE_LINKCO_H
-#define NATURE_LINKCO_H
+#ifndef NAX_LINKCO_H
+#define NAX_LINKCO_H
 
 #include "nutils/nutils.h"
 #include "runtime.h"
@@ -166,4 +166,4 @@ static inline void linkco_list_lock_remove(rt_linkco_list_t *list, linkco_t *lin
     pthread_mutex_unlock(&list->locker);
 }
 
-#endif//NATURE_LINKCO_H
+#endif//NAX_LINKCO_H

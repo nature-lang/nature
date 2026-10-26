@@ -20,18 +20,18 @@ static void test_run() {
     int status = 0;
     char *actual = exec(WORKDIR, noded_path, slice_new(), &pid, &status);
     char *expect = "read env count success: 5\n"
-                   "0 hello nature\n"
-                   "1 hello nature\n"
-                   "2 hello nature\n"
-                   "3 hello nature\n"
-                   "4 hello nature\n";
+                   "0 hello nax\n"
+                   "1 hello nax\n"
+                   "2 hello nax\n"
+                   "3 hello nax\n"
+                   "4 hello nax\n";
     printf("actual: %s", actual);
     assert_string_equal(actual, expect);
 }
 
 static void build_test_node() {
-    char *nature_root = getenv("NATURE_ROOT");
-    assert_true(nature_root != NULL);
+    char *nax_root = getenv("NAX_ROOT");
+    assert_true(nax_root != NULL);
 
     char *entry = "tests/mockdir/node.n";
     char *workdir = get_workdir();
@@ -45,8 +45,8 @@ static void build_test_node() {
 
 
 static void build_parker() {
-    char *nature_root = getenv("NATURE_ROOT");
-    assert_true(nature_root != NULL);
+    char *nax_root = getenv("NAX_ROOT");
+    assert_true(nax_root != NULL);
 
     // 从环境变量中读取 build entry
     char *entry = "main.n";
@@ -58,8 +58,8 @@ static void build_parker() {
 }
 
 static void build_runner() {
-    char *nature_root = getenv("NATURE_ROOT");
-    assert_true(nature_root != NULL);
+    char *nax_root = getenv("NAX_ROOT");
+    assert_true(nax_root != NULL);
 
     // 从环境变量中读取 build entry
     char *entry = "runner.n";

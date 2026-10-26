@@ -157,7 +157,7 @@ static void expect_invalid_symtab_shndx(test_elf_shndx_variant_t variant,
     size_t object_size;
     uint8_t *object =
             make_test_elf_symtab_shndx_object(variant, &object_size);
-    char object_path[] = "/tmp/nature-ld-elf-shndx-invalid-XXXXXX";
+    char object_path[] = "/tmp/nax-ld-elf-shndx-invalid-XXXXXX";
     write_fixture(object_path, object, object_size);
     free(object);
 
@@ -182,7 +182,7 @@ static void test_elf_extended_symbol_section_indexes(void) {
     size_t object_size;
     uint8_t *object = make_test_elf_symtab_shndx_object(
             TEST_ELF_SHNDX_VALID, &object_size);
-    char object_path[] = "/tmp/nature-ld-elf-shndx-XXXXXX";
+    char object_path[] = "/tmp/nax-ld-elf-shndx-XXXXXX";
     write_fixture(object_path, object, object_size);
     free(object);
 
@@ -210,7 +210,7 @@ static void test_elf_extended_symbol_section_indexes(void) {
     ld_elf_context_deinit(&ctx);
     ld_options_deinit(&options);
 
-    static const char *output_path = "/tmp/nature-ld-elf-shndx-output";
+    static const char *output_path = "/tmp/nax-ld-elf-shndx-output";
     unlink(output_path);
     memset(&capture, 0, sizeof(capture));
     ld_options_init(&options);

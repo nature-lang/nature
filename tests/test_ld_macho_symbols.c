@@ -424,10 +424,10 @@ static void test_private_external_symbol_output(void) {
              .n_desc = LD_N_WEAK_DEF,
              .n_value = 8U},
     };
-    char object_path[] = "/tmp/nature-ld-hidden-symbol-XXXXXX";
+    char object_path[] = "/tmp/nax-ld-hidden-symbol-XXXXXX";
     test_make_symbol_object(object_path, text, sizeof(text), relocations,
                             1U, symbols, 2U, strings, sizeof(strings));
-    char output_path[] = "/tmp/nature-ld-hidden-output-XXXXXX";
+    char output_path[] = "/tmp/nax-ld-hidden-output-XXXXXX";
     int output_fd = mkstemp(output_path);
     assert(output_fd >= 0);
     assert(close(output_fd) == 0);
@@ -483,14 +483,14 @@ static void test_private_weak_page_relocation_beats_strong_dylib(void) {
              .n_desc = LD_N_WEAK_DEF,
              .n_value = 8U},
     };
-    char object_path[] = "/tmp/nature-ld-private-weak-page-XXXXXX";
+    char object_path[] = "/tmp/nax-ld-private-weak-page-XXXXXX";
     test_make_symbol_object(object_path, text, sizeof(text), relocations,
                             2U, symbols, 2U, strings, sizeof(strings));
-    char dylib_path[] = "/tmp/nature-ld-private-weak-tbd-XXXXXX";
+    char dylib_path[] = "/tmp/nax-ld-private-weak-tbd-XXXXXX";
     test_write_symbol_dylib(dylib_path,
                             "/usr/lib/libPrivateWeakFixture.dylib",
                             "_hidden_weak");
-    char output_path[] = "/tmp/nature-ld-private-weak-output-XXXXXX";
+    char output_path[] = "/tmp/nax-ld-private-weak-output-XXXXXX";
     int output_fd = mkstemp(output_path);
     assert(output_fd >= 0);
     assert(close(output_fd) == 0);
@@ -539,10 +539,10 @@ static void test_exported_weak_branch_stub(void) {
              .n_sect = 1U,
              .n_value = 12U},
     };
-    char object_path[] = "/tmp/nature-ld-weak-symbol-XXXXXX";
+    char object_path[] = "/tmp/nax-ld-weak-symbol-XXXXXX";
     test_make_symbol_object(object_path, text, sizeof(text), relocations,
                             1U, symbols, 3U, strings, sizeof(strings));
-    char output_path[] = "/tmp/nature-ld-weak-output-XXXXXX";
+    char output_path[] = "/tmp/nax-ld-weak-output-XXXXXX";
     int output_fd = mkstemp(output_path);
     assert(output_fd >= 0);
     assert(close(output_fd) == 0);
@@ -607,10 +607,10 @@ static void test_unresolved_weak_import_uses_self_ordinal(void) {
              .n_type = LD_N_UNDF | LD_N_EXT,
              .n_desc = LD_N_WEAK_REF},
     };
-    char object_path[] = "/tmp/nature-ld-unresolved-weak-object-XXXXXX";
+    char object_path[] = "/tmp/nax-ld-unresolved-weak-object-XXXXXX";
     test_make_symbol_object(object_path, text, sizeof(text), relocations, 1U,
                             symbols, 2U, strings, sizeof(strings));
-    char output_path[] = "/tmp/nature-ld-unresolved-weak-output-XXXXXX";
+    char output_path[] = "/tmp/nax-ld-unresolved-weak-output-XXXXXX";
     int output_fd = mkstemp(output_path);
     assert(output_fd >= 0);
     assert(close(output_fd) == 0);

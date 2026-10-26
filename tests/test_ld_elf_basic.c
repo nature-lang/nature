@@ -285,10 +285,10 @@ static void test_elf_minimal_link(void) {
     size_t object_size;
     uint8_t *object = make_test_elf_object(LD_ELF_EM_AARCH64, false, false,
                                            &object_size);
-    char object_path[] = "/tmp/nature-ld-elf-object-XXXXXX";
+    char object_path[] = "/tmp/nax-ld-elf-object-XXXXXX";
     write_fixture(object_path, object, object_size);
     free(object);
-    static const char *output_path = "/tmp/nature-ld-elf-executable";
+    static const char *output_path = "/tmp/nax-ld-elf-executable";
     unlink(output_path);
 
     diagnostic_capture_t capture = {0};
@@ -509,11 +509,11 @@ static void test_elf_executable_stack_note(void) {
     size_t object_size;
     uint8_t *object = make_test_elf_object(LD_ELF_EM_AARCH64, false, true,
                                            &object_size);
-    char object_path[] = "/tmp/nature-ld-execstack-object-XXXXXX";
+    char object_path[] = "/tmp/nax-ld-execstack-object-XXXXXX";
     write_fixture(object_path, object, object_size);
     free(object);
 
-    static const char *output_path = "/tmp/nature-ld-execstack-output";
+    static const char *output_path = "/tmp/nax-ld-execstack-output";
     diagnostic_capture_t capture = {0};
     const char *inputs[] = {object_path};
     assert(link_test_elf_inputs(output_path, inputs, 1U, &capture) == LD_OK);
@@ -549,11 +549,11 @@ static void test_elf_riscv_minimal_link(void) {
                                            &object_size);
     test_elf_write_u32(object + 48U, 0x5U);
     test_elf_write_u32(object + LD_ELF64_EHDR_SIZE, 0x00008067U);
-    char object_path[] = "/tmp/nature-ld-riscv-object-XXXXXX";
+    char object_path[] = "/tmp/nax-ld-riscv-object-XXXXXX";
     write_fixture(object_path, object, object_size);
     free(object);
 
-    static const char *output_path = "/tmp/nature-ld-riscv-executable";
+    static const char *output_path = "/tmp/nax-ld-riscv-executable";
     unlink(output_path);
     diagnostic_capture_t capture = {0};
     ld_options_t options;
@@ -596,9 +596,9 @@ static void test_elf_riscv_minimal_link(void) {
 static void expect_invalid_elf_input(const uint8_t *bytes, size_t size,
                                      int expected,
                                      const char *message_fragment) {
-    char input_path[] = "/tmp/nature-ld-invalid-elf-XXXXXX";
+    char input_path[] = "/tmp/nax-ld-invalid-elf-XXXXXX";
     write_fixture(input_path, bytes, size);
-    static const char *output_path = "/tmp/nature-ld-invalid-elf-output";
+    static const char *output_path = "/tmp/nax-ld-invalid-elf-output";
     unlink(output_path);
 
     diagnostic_capture_t capture = {0};
@@ -684,10 +684,10 @@ static void test_elf_unreferenced_ifunc_definition(void) {
     start_symbol[4] =
             LD_ELF_SYM_INFO(LD_ELF_STB_GLOBAL, LD_ELF_STT_GNU_IFUNC);
 
-    char object_path[] = "/tmp/nature-ld-ifunc-XXXXXX";
+    char object_path[] = "/tmp/nax-ld-ifunc-XXXXXX";
     write_fixture(object_path, object, object_size);
     free(object);
-    static const char *output_path = "/tmp/nature-ld-ifunc-output";
+    static const char *output_path = "/tmp/nax-ld-ifunc-output";
     unlink(output_path);
 
     diagnostic_capture_t capture = {0};
@@ -836,14 +836,14 @@ static void test_elf_comdat_winner_order(void) {
     uint8_t *second = make_test_elf_group_object(
             "comdat.entry", ".text.comdat_entry", second_word, false,
             TEST_ELF_GROUP_VALID, &second_size);
-    char first_path[] = "/tmp/nature-ld-comdat-first-XXXXXX";
-    char second_path[] = "/tmp/nature-ld-comdat-second-XXXXXX";
+    char first_path[] = "/tmp/nax-ld-comdat-first-XXXXXX";
+    char second_path[] = "/tmp/nax-ld-comdat-second-XXXXXX";
     write_fixture(first_path, first, first_size);
     write_fixture(second_path, second, second_size);
     free(first);
     free(second);
 
-    static const char *output_path = "/tmp/nature-ld-comdat-output";
+    static const char *output_path = "/tmp/nax-ld-comdat-output";
     diagnostic_capture_t capture = {0};
     const char *forward[] = {first_path, second_path};
     assert(link_test_elf_inputs(output_path, forward, 2U, &capture) == LD_OK);
@@ -869,15 +869,15 @@ static void test_elf_comdat_distinct_signatures(void) {
     uint8_t *second = make_test_elf_group_object(
             "comdat.second", ".text.comdat_entry", 0xd503201fU, false,
             TEST_ELF_GROUP_VALID, &second_size);
-    char first_path[] = "/tmp/nature-ld-comdat-distinct-a-XXXXXX";
-    char second_path[] = "/tmp/nature-ld-comdat-distinct-b-XXXXXX";
+    char first_path[] = "/tmp/nax-ld-comdat-distinct-a-XXXXXX";
+    char second_path[] = "/tmp/nax-ld-comdat-distinct-b-XXXXXX";
     write_fixture(first_path, first, first_size);
     write_fixture(second_path, second, second_size);
     free(first);
     free(second);
 
     static const char *output_path =
-            "/tmp/nature-ld-comdat-distinct-output";
+            "/tmp/nax-ld-comdat-distinct-output";
     diagnostic_capture_t capture = {0};
     const char *inputs[] = {first_path, second_path};
     assert(link_test_elf_inputs(output_path, inputs, 2U, &capture) ==
@@ -899,15 +899,15 @@ static void test_elf_ordinary_group_is_not_comdat(void) {
     uint8_t *second = make_test_elf_group_object(
             "ordinary.group", ".text.ordinary_group", 0xd503201fU, false,
             TEST_ELF_GROUP_ORDINARY, &second_size);
-    char first_path[] = "/tmp/nature-ld-ordinary-group-a-XXXXXX";
-    char second_path[] = "/tmp/nature-ld-ordinary-group-b-XXXXXX";
+    char first_path[] = "/tmp/nax-ld-ordinary-group-a-XXXXXX";
+    char second_path[] = "/tmp/nax-ld-ordinary-group-b-XXXXXX";
     write_fixture(first_path, first, first_size);
     write_fixture(second_path, second, second_size);
     free(first);
     free(second);
 
     static const char *output_path =
-            "/tmp/nature-ld-ordinary-group-output";
+            "/tmp/nax-ld-ordinary-group-output";
     diagnostic_capture_t capture = {0};
     const char *inputs[] = {first_path, second_path};
     assert(link_test_elf_inputs(output_path, inputs, 2U, &capture) ==
@@ -927,15 +927,15 @@ static void test_elf_comdat_live_winner_undefined(void) {
     uint8_t *loser = make_test_elf_group_object(
             "comdat.undefined", ".text.comdat_undefined", 0xd503201fU,
             false, TEST_ELF_GROUP_VALID, &loser_size);
-    char winner_path[] = "/tmp/nature-ld-comdat-live-undef-a-XXXXXX";
-    char loser_path[] = "/tmp/nature-ld-comdat-live-undef-b-XXXXXX";
+    char winner_path[] = "/tmp/nax-ld-comdat-live-undef-a-XXXXXX";
+    char loser_path[] = "/tmp/nax-ld-comdat-live-undef-b-XXXXXX";
     write_fixture(winner_path, winner, winner_size);
     write_fixture(loser_path, loser, loser_size);
     free(winner);
     free(loser);
 
     static const char *output_path =
-            "/tmp/nature-ld-comdat-live-undef-output";
+            "/tmp/nax-ld-comdat-live-undef-output";
     diagnostic_capture_t capture = {0};
     const char *inputs[] = {winner_path, loser_path};
     assert(link_test_elf_inputs(output_path, inputs, 2U, &capture) ==
@@ -957,15 +957,15 @@ static void test_elf_comdat_section_symbol_signature(void) {
     uint8_t *second = make_test_elf_group_object(
             "unused.second", ".text.fallback", second_word, true,
             TEST_ELF_GROUP_VALID, &second_size);
-    char first_path[] = "/tmp/nature-ld-group-fallback-a-XXXXXX";
-    char second_path[] = "/tmp/nature-ld-group-fallback-b-XXXXXX";
+    char first_path[] = "/tmp/nax-ld-group-fallback-a-XXXXXX";
+    char second_path[] = "/tmp/nax-ld-group-fallback-b-XXXXXX";
     write_fixture(first_path, first, first_size);
     write_fixture(second_path, second, second_size);
     free(first);
     free(second);
 
     static const char *output_path =
-            "/tmp/nature-ld-group-fallback-output";
+            "/tmp/nax-ld-group-fallback-output";
     diagnostic_capture_t capture = {0};
     const char *same_section[] = {first_path, second_path};
     assert(link_test_elf_inputs(output_path, same_section, 2U, &capture) ==
@@ -983,9 +983,9 @@ static void test_elf_comdat_section_symbol_signature(void) {
             "unused.second", ".text.fallback_second", second_word, true,
             TEST_ELF_GROUP_VALID, &second_size);
     char distinct_first_path[] =
-            "/tmp/nature-ld-group-fallback-distinct-a-XXXXXX";
+            "/tmp/nax-ld-group-fallback-distinct-a-XXXXXX";
     char distinct_second_path[] =
-            "/tmp/nature-ld-group-fallback-distinct-b-XXXXXX";
+            "/tmp/nax-ld-group-fallback-distinct-b-XXXXXX";
     write_fixture(distinct_first_path, first, first_size);
     write_fixture(distinct_second_path, second, second_size);
     free(first);
@@ -1046,8 +1046,8 @@ static void test_elf_comdat_loser_only_undefined(void) {
     memcpy(provider + LD_ELF64_EHDR_SIZE + sizeof(uint32_t) + 1U,
            "foobar", sizeof("foobar") - 1U);
 
-    char winner_path[] = "/tmp/nature-ld-comdat-loser-undef-a-XXXXXX";
-    char loser_path[] = "/tmp/nature-ld-comdat-loser-undef-b-XXXXXX";
+    char winner_path[] = "/tmp/nax-ld-comdat-loser-undef-a-XXXXXX";
+    char loser_path[] = "/tmp/nax-ld-comdat-loser-undef-b-XXXXXX";
     write_fixture(winner_path, winner, winner_size);
     write_fixture(loser_path, loser, loser_size);
     free(winner);
@@ -1062,12 +1062,12 @@ static void test_elf_comdat_loser_only_undefined(void) {
     test_archive_append(archive, archive_capacity, &archive_size,
                         "provider.o/", provider, provider_size);
     free(provider);
-    char archive_path[] = "/tmp/nature-ld-comdat-loser-archive-XXXXXX";
+    char archive_path[] = "/tmp/nax-ld-comdat-loser-archive-XXXXXX";
     write_fixture(archive_path, archive, archive_size);
     free(archive);
 
     static const char *output_path =
-            "/tmp/nature-ld-comdat-loser-undef-output";
+            "/tmp/nax-ld-comdat-loser-undef-output";
     diagnostic_capture_t capture = {0};
     const char *inputs[] = {winner_path, loser_path, archive_path};
     assert(link_test_elf_inputs(output_path, inputs, 3U, &capture) == LD_OK);

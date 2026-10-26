@@ -725,9 +725,9 @@ static void test_elf_cross_object_cie_deduplication(void) {
             make_test_elf_eh_frame_object(&same_options, &same_size);
     uint8_t *different = make_test_elf_eh_frame_object(
             &different_options, &different_size);
-    char first_path[] = "/tmp/nature-ld-cie-first-XXXXXX";
-    char same_path[] = "/tmp/nature-ld-cie-same-XXXXXX";
-    char different_path[] = "/tmp/nature-ld-cie-different-XXXXXX";
+    char first_path[] = "/tmp/nax-ld-cie-first-XXXXXX";
+    char same_path[] = "/tmp/nax-ld-cie-same-XXXXXX";
+    char different_path[] = "/tmp/nax-ld-cie-different-XXXXXX";
     write_fixture(first_path, first, first_size);
     write_fixture(same_path, same, same_size);
     write_fixture(different_path, different, different_size);
@@ -735,7 +735,7 @@ static void test_elf_cross_object_cie_deduplication(void) {
     free(same);
     free(different);
 
-    static const char *output_path = "/tmp/nature-ld-cie-dedup-output";
+    static const char *output_path = "/tmp/nax-ld-cie-dedup-output";
     diagnostic_capture_t capture = {0};
     const char *same_inputs[] = {first_path, same_path};
     assert(link_test_elf_amd64_inputs(output_path, same_inputs, 2U,
@@ -813,11 +813,11 @@ static void test_elf_expect_eh_frame_failure(
     size_t object_size;
     uint8_t *object =
             make_test_elf_eh_frame_object(fixture_options, &object_size);
-    char object_path[] = "/tmp/nature-ld-eh-invalid-XXXXXX";
+    char object_path[] = "/tmp/nax-ld-eh-invalid-XXXXXX";
     write_fixture(object_path, object, object_size);
     free(object);
 
-    static const char *output_path = "/tmp/nature-ld-eh-invalid-output";
+    static const char *output_path = "/tmp/nax-ld-eh-invalid-output";
     diagnostic_capture_t capture = {0};
     const char *inputs[] = {object_path};
     int status =
@@ -838,7 +838,7 @@ static void test_elf_expect_eh_frame_failure(
 }
 
 static void test_elf_eh_frame_boundaries(void) {
-    static const char *output_path = "/tmp/nature-ld-eh-boundary-output";
+    static const char *output_path = "/tmp/nax-ld-eh-boundary-output";
 
     /* An ET_REL FDE without an initial-location relocation has no input atom
        owner.  Match Zig by dropping both the FDE and its now-unused CIE. */
@@ -846,7 +846,7 @@ static void test_elf_eh_frame_boundaries(void) {
     size_t object_size;
     uint8_t *object =
             make_test_elf_eh_frame_object(&fixture_options, &object_size);
-    char object_path[] = "/tmp/nature-ld-eh-no-owner-XXXXXX";
+    char object_path[] = "/tmp/nax-ld-eh-no-owner-XXXXXX";
     write_fixture(object_path, object, object_size);
     free(object);
     diagnostic_capture_t capture = {0};
@@ -869,7 +869,7 @@ static void test_elf_eh_frame_boundaries(void) {
             .owner_relocation = true,
     };
     object = make_test_elf_eh_frame_object(&fixture_options, &object_size);
-    char dwarf64_path[] = "/tmp/nature-ld-eh-dwarf64-XXXXXX";
+    char dwarf64_path[] = "/tmp/nax-ld-eh-dwarf64-XXXXXX";
     write_fixture(dwarf64_path, object, object_size);
     free(object);
     memset(&capture, 0, sizeof(capture));
@@ -987,8 +987,8 @@ static void test_elf_comdat_eh_frame_compaction(void) {
     uint8_t *loser = make_test_elf_eh_comdat_loser(&loser_size);
     uint8_t *provider = make_test_elf_eh_archive_provider(&provider_size);
 
-    char winner_path[] = "/tmp/nature-ld-eh-comdat-winner-XXXXXX";
-    char loser_path[] = "/tmp/nature-ld-eh-comdat-loser-XXXXXX";
+    char winner_path[] = "/tmp/nax-ld-eh-comdat-winner-XXXXXX";
+    char loser_path[] = "/tmp/nax-ld-eh-comdat-loser-XXXXXX";
     write_fixture(winner_path, winner, winner_size);
     write_fixture(loser_path, loser, loser_size);
     free(winner);
@@ -1003,11 +1003,11 @@ static void test_elf_comdat_eh_frame_compaction(void) {
     test_archive_append(archive, archive_capacity, &archive_size,
                         "dead-provider.o/", provider, provider_size);
     free(provider);
-    char archive_path[] = "/tmp/nature-ld-eh-comdat-provider-XXXXXX";
+    char archive_path[] = "/tmp/nax-ld-eh-comdat-provider-XXXXXX";
     write_fixture(archive_path, archive, archive_size);
     free(archive);
 
-    static const char *output_path = "/tmp/nature-ld-eh-comdat-output";
+    static const char *output_path = "/tmp/nax-ld-eh-comdat-output";
     diagnostic_capture_t capture = {0};
     const char *inputs[] = {winner_path, loser_path, archive_path};
     int link_status =

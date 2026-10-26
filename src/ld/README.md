@@ -1,6 +1,6 @@
-# Nature portable linker
+# Nax portable linker
 
-`ld` is the portable C linker used by `nature build`. It currently emits
+`ld` is the portable C linker used by `nax build`. It currently emits
 Darwin arm64 Mach-O executables and static Linux ELF64 executables without
 invoking a host linker. Explicit `--ld <path>` remains available as an
 external-linker fallback.
@@ -15,8 +15,8 @@ compiled and used on non-native hosts.
 The translation is behavioral rather than a mechanical preservation of every
 Zig rank value.  In particular, that Zig revision ranks a strong dylib export
 ahead of a weak definition in an already-loaded object.  `zig cc -lc++` avoids
-the practical conflict by linking Zig's bundled static libc++, whereas Nature
-links the Darwin SDK's dynamic libc++ for ordinary C++ package inputs.  Nature
+the practical conflict by linking Zig's bundled static libc++, whereas Nax
+links the Darwin SDK's dynamic libc++ for ordinary C++ package inputs.  Nax
 therefore follows ld64/LLD `Defined` and `CommonSymbol` semantics at this
 boundary: a loaded object definition (strong, weak, or tentative) wins over a
 dylib export, while an unselected archive member remains lazy.  This is needed
@@ -134,7 +134,7 @@ The implementation is split by responsibility:
 - `ld_elf_internal.h` contains the ELF input model shared by the ELF backend
   implementation units.
 
-The build driver adds Nature's platform library directory to the `-l` search
+The build driver adds Nax's platform library directory to the `-l` search
 paths before parsing user `--ldflags`, so package libraries can be selected by
 name as well as by direct archive path.
 
@@ -209,7 +209,7 @@ Selected relocatable inputs also participate in GNU property merging. Generic
 `UINT32_AND` properties plus AArch64 `FEATURE_1_AND` and x86-64
 `FEATURE_1_AND` are intersected across every selected object; an object which
 does not carry the property therefore clears it, matching GNU ld and avoiding
-incorrectly marking uninstrumented Nature code as IBT, SHSTK, BTI, or PAC
+incorrectly marking uninstrumented Nax code as IBT, SHSTK, BTI, or PAC
 compatible. Generic `UINT32_OR`, x86-64 ISA used/needed, stack-size, and
 no-copy-on-protected properties use their ABI-defined OR, maximum, or
 presence semantics. Unselected archive members do not participate. The
@@ -299,7 +299,7 @@ supported. `R_RISCV_SET_ULEB128` and `R_RISCV_SUB_ULEB128` are each valid on
 their own and execute in input relocation order, exactly as Zig 738d2be9's
 `writeSetUleb`/`writeSubUleb` path does. The usual same-offset SET/SUB sequence
 therefore observes the intermediate fixed-width value, while intervening
-relocations are not reordered. Nature additionally validates the existing
+relocations are not reordered. Nax additionally validates the existing
 ULEB field, preserves its encoded byte length, checks `S +/- A`, and stages
 each individual write so malformed input cannot partially update the field.
 
@@ -309,7 +309,7 @@ preserving the normal `.symtab`, `.strtab`, and `.shstrtab`. Callers may set
 and relocate non-allocated DWARF. Output Debug sections are always
 uncompressed, have `sh_addr == 0`, follow the loaded image, precede the linker
 symbol tables, and never change a load segment, entry point, TLS layout, RELRO
-range, or thunk distance. Nature does not yet expose this mode through its
+range, or thunk distance. Nax does not yet expose this mode through its
 front end or CLI because the language compiler does not yet emit DWARF.
 
 Ordinary dynamically loaded PIE, shared-object input/output, `PT_INTERP`,
@@ -332,9 +332,9 @@ relocation forms with diagnostics. Out-of-range arm64 calls can use a checked
 interleaved islands for `__text` larger than the BRANCH26 range remain
 reserved. Imported function stubs currently use eager GOT binding, so the
 full lazy `__stub_helper`/`__la_symbol_ptr` path is also reserved. The current
-Nature Darwin test corpus does not require interleaved islands or lazy binding.
+Nax Darwin test corpus does not require interleaved islands or lazy binding.
 Zig's literal-pool deduplication, section/atom dead stripping, dylib output,
 relocatable Mach-O output, dSYM/STABS production, and x86_64 Mach-O backend are
-also outside Nature's current arm64 executable contract.  Literal sections are
+also outside Nax's current arm64 executable contract.  Literal sections are
 linked correctly but are not coalesced, so this difference affects output size
 and pointer coalescing rather than relocation correctness.

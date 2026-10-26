@@ -1,4 +1,4 @@
-# import [strings](https://github.com/nature-lang/nature/blob/master/std/strings/strings.n)
+# import [strings](https://github.com/naxlang/nax/blob/master/std/strings/strings.n)
 
 字符串操作工具库，提供常用的字符串处理功能
 
@@ -8,7 +8,7 @@
 fn from(anyptr p):string!
 ```
 
-从 C 字符串指针创建 nature 字符串
+从 C 字符串指针创建 nax 字符串
 
 ## fn join
 

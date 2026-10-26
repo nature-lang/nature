@@ -1,5 +1,5 @@
-#ifndef NATURE_RISCV64_ASM_H
-#define NATURE_RISCV64_ASM_H
+#ifndef NAX_RISCV64_ASM_H
+#define NAX_RISCV64_ASM_H
 
 #include "src/register/arch/riscv64.h"
 #include "src/types.h"
@@ -575,4 +575,4 @@ typedef struct {
 
 void riscv64_match_opcode(riscv64_asm_inst_t *inst);
 
-#endif //NATURE_ASM_H
+#endif //NAX_ASM_H

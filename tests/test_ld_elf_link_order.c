@@ -257,11 +257,11 @@ static void test_elf_link_order_layout(void) {
     size_t object_size;
     uint8_t *object = make_test_elf_link_order_object(
             TEST_ELF_LINK_ORDER_VALID, &object_size);
-    char object_path[] = "/tmp/nature-ld-link-order-XXXXXX";
+    char object_path[] = "/tmp/nax-ld-link-order-XXXXXX";
     write_fixture(object_path, object, object_size);
     free(object);
 
-    static const char *output_path = "/tmp/nature-ld-link-order-output";
+    static const char *output_path = "/tmp/nax-ld-link-order-output";
     const char *inputs[] = {object_path};
     diagnostic_capture_t capture = {0};
     assert(link_test_elf_inputs(output_path, inputs, 1U, &capture) == LD_OK);
@@ -320,12 +320,12 @@ static void expect_invalid_link_order(test_elf_link_order_variant_t variant,
                                       const char *message_fragment) {
     size_t object_size;
     uint8_t *object = make_test_elf_link_order_object(variant, &object_size);
-    char object_path[] = "/tmp/nature-ld-link-order-invalid-XXXXXX";
+    char object_path[] = "/tmp/nax-ld-link-order-invalid-XXXXXX";
     write_fixture(object_path, object, object_size);
     free(object);
 
     static const char *output_path =
-            "/tmp/nature-ld-link-order-invalid-output";
+            "/tmp/nax-ld-link-order-invalid-output";
     const char *inputs[] = {object_path};
     diagnostic_capture_t capture = {0};
     assert(link_test_elf_inputs(output_path, inputs, 1U, &capture) ==

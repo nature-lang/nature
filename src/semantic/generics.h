@@ -1,5 +1,5 @@
-#ifndef NATURE_SRC_SEMANTIC_GENERICS_H_
-#define NATURE_SRC_SEMANTIC_GENERICS_H_
+#ifndef NAX_SRC_SEMANTIC_GENERICS_H_
+#define NAX_SRC_SEMANTIC_GENERICS_H_
 
 #include "src/types.h"
 
@@ -12,4 +12,4 @@ bool generics_constraint_deny_type(module_t *m, type_t interface_type, type_t ta
 
 void generics_interface_fill_builtin_alloc_types(type_t t);
 
-#endif // NATURE_SRC_SEMANTIC_GENERIC_CHECK_H_
+#endif // NAX_SRC_SEMANTIC_GENERIC_CHECK_H_

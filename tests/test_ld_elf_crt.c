@@ -180,11 +180,11 @@ static uint8_t *make_test_elf_empty_alloc_object(size_t *result_size) {
 static void test_elf_empty_alloc_section_symbols(void) {
     size_t object_size;
     uint8_t *object = make_test_elf_empty_alloc_object(&object_size);
-    char object_path[] = "/tmp/nature-ld-empty-alloc-XXXXXX";
+    char object_path[] = "/tmp/nax-ld-empty-alloc-XXXXXX";
     write_fixture(object_path, object, object_size);
     free(object);
 
-    static const char *output_path = "/tmp/nature-ld-empty-alloc-output";
+    static const char *output_path = "/tmp/nax-ld-empty-alloc-output";
     diagnostic_capture_t capture = {0};
     const char *inputs[] = {object_path};
     assert(link_test_elf_inputs(output_path, inputs, 1U, &capture) == LD_OK);

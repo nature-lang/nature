@@ -1,4 +1,4 @@
-# import [reflect](https://github.com/nature-lang/nature/blob/master/std/reflect/reflect.n)
+# import [reflect](https://github.com/naxlang/nax/blob/master/std/reflect/reflect.n)
 
 Runtime reflection utilities for type introspection and value manipulation
 

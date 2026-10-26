@@ -1,5 +1,5 @@
-#ifndef NATURE_SRC_AST_H_
-#define NATURE_SRC_AST_H_
+#ifndef NAX_SRC_AST_H_
+#define NAX_SRC_AST_H_
 
 #include <stdlib.h>
 #include <string.h>
@@ -965,4 +965,4 @@ static inline ast_fndef_t *ast_fndef_new(module_t *m, int line, int column) {
     return fndef;
 }
 
-#endif // NATURE_SRC_AST_H_
+#endif // NAX_SRC_AST_H_

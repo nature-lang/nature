@@ -1,5 +1,5 @@
-#ifndef NATURE_DEBUG_ASM_H
-#define NATURE_DEBUG_ASM_H
+#ifndef NAX_DEBUG_ASM_H
+#define NAX_DEBUG_ASM_H
 
 #include "src/native/amd64.h"
 #include "src/native/arm64.h"
@@ -20,4 +20,4 @@ static inline char *code_to_string(uint8_t *data, uint8_t count) {
     fflush(stdout);
 }
 
-#endif //NATURE_ASM_H
+#endif //NAX_ASM_H

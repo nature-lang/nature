@@ -1,5 +1,5 @@
-#ifndef NATURE_UTILS_SLICE_H_
-#define NATURE_UTILS_SLICE_H_
+#ifndef NAX_UTILS_SLICE_H_
+#define NAX_UTILS_SLICE_H_
 
 //#define SLICE_TACK(_type, _slice, _index) ((_type*) _slice->take[_index])
 
@@ -42,4 +42,4 @@ void slice_concat_free(slice_t *dst, slice_t *src);
 
 void *slice_remove(slice_t *s, int i);
 
-#endif //NATURE_SRC_LIB_SLICE_H_
+#endif //NAX_SRC_LIB_SLICE_H_

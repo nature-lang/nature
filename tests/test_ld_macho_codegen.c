@@ -176,9 +176,9 @@ static void test_arm64_branch_island(void) {
     memcpy(object + symbol_offset, symbols, sizeof(symbols));
     memcpy(object + strings_offset, strings, sizeof(strings));
 
-    char object_path[] = "/tmp/nature-ld-branch-object-XXXXXX";
+    char object_path[] = "/tmp/nax-ld-branch-object-XXXXXX";
     test_ld_write_fixture(object_path, object, object_size);
-    char output_path[] = "/tmp/nature-ld-branch-output-XXXXXX";
+    char output_path[] = "/tmp/nax-ld-branch-output-XXXXXX";
     int output_fd = mkstemp(output_path);
     assert(output_fd >= 0);
     assert(close(output_fd) == 0);
@@ -261,9 +261,9 @@ static void test_arm64_branch_island(void) {
     };
     memcpy(object + relocation_offset, invalid_pointer_relocation,
            sizeof(invalid_pointer_relocation));
-    char invalid_object_path[] = "/tmp/nature-ld-pointer-object-XXXXXX";
+    char invalid_object_path[] = "/tmp/nax-ld-pointer-object-XXXXXX";
     test_ld_write_fixture(invalid_object_path, object, object_size);
-    char invalid_output_path[] = "/tmp/nature-ld-pointer-output-XXXXXX";
+    char invalid_output_path[] = "/tmp/nax-ld-pointer-output-XXXXXX";
     int invalid_output_fd = mkstemp(invalid_output_path);
     assert(invalid_output_fd >= 0);
     assert(close(invalid_output_fd) == 0);
@@ -279,7 +279,7 @@ static void test_arm64_branch_island(void) {
 
     /* Zig's arm64 Mach-O parser only accepts ADDEND before PAGE21 and
        PAGEOFF12.  ADDEND+BRANCH26 must be rejected rather than becoming a
-       Nature-only relocation dialect. */
+       Nax-only relocation dialect. */
     input_section->nreloc = 2U;
     uint32_t invalid_branch_addend[4] = {
             0U,
@@ -291,10 +291,10 @@ static void test_arm64_branch_island(void) {
     memcpy(object + relocation_offset, invalid_branch_addend,
            sizeof(invalid_branch_addend));
     char invalid_addend_path[] =
-            "/tmp/nature-ld-branch-addend-object-XXXXXX";
+            "/tmp/nax-ld-branch-addend-object-XXXXXX";
     test_ld_write_fixture(invalid_addend_path, object, object_size);
     char invalid_addend_output[] =
-            "/tmp/nature-ld-branch-addend-output-XXXXXX";
+            "/tmp/nax-ld-branch-addend-output-XXXXXX";
     int invalid_addend_fd = mkstemp(invalid_addend_output);
     assert(invalid_addend_fd >= 0);
     assert(close(invalid_addend_fd) == 0);
@@ -373,10 +373,10 @@ static void test_indirect_symbol_alias(void) {
     memcpy(object + symbol_offset, symbols, sizeof(symbols));
     memcpy(object + strings_offset, strings, sizeof(strings));
 
-    char object_path[] = "/tmp/nature-ld-alias-object-XXXXXX";
+    char object_path[] = "/tmp/nax-ld-alias-object-XXXXXX";
     test_ld_write_fixture(object_path, object, object_size);
     free(object);
-    char output_path[] = "/tmp/nature-ld-alias-output-XXXXXX";
+    char output_path[] = "/tmp/nax-ld-alias-output-XXXXXX";
     int output_fd = mkstemp(output_path);
     assert(output_fd >= 0);
     assert(close(output_fd) == 0);

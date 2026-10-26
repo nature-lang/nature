@@ -26,8 +26,8 @@ func Sync() {
 	SyncByConfig(configFile)
 }
 
-// ~/.nature/package/sources
-// ~/.nature/package/caches
+// ~/.nax/package/sources
+// ~/.nax/package/caches
 func initPackageDir() {
 	u, err := user.Current()
 	if err != nil {
@@ -38,13 +38,13 @@ func initPackageDir() {
 		throw("cannot get home dir")
 	}
 
-	packageSourcesDir = fmt.Sprintf("%s/.nature/package/sources", homeDir)
+	packageSourcesDir = fmt.Sprintf("%s/.nax/package/sources", homeDir)
 	err = os.MkdirAll(packageSourcesDir, 0755)
 	if err != nil {
 		throw("cannot create dir=%v, err=%v", packageSourcesDir, err)
 	}
 
-	packageCachesDir := fmt.Sprintf("%s/.nature/package/caches", homeDir)
+	packageCachesDir := fmt.Sprintf("%s/.nax/package/caches", homeDir)
 	err = os.MkdirAll(packageCachesDir, 0755)
 	if err != nil {
 		throw("cannot create dir=%v, err=%v", packageCachesDir, err)

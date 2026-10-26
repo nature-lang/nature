@@ -1,5 +1,5 @@
-#ifndef NATURE_BINARY_ARCH_RISCV64_H
-#define NATURE_BINARY_ARCH_RISCV64_H
+#ifndef NAX_BINARY_ARCH_RISCV64_H
+#define NAX_BINARY_ARCH_RISCV64_H
 
 #include "src/binary/encoding/riscv64/asm.h"
 #include "src/binary/encoding/riscv64/opcode.h"
@@ -679,4 +679,4 @@ static inline void elf_riscv64_operation_encodings(elf_context_t *ctx, module_t 
     }
 }
 
-#endif // NATURE_BINARY_ARCH_RISCV64_H
+#endif // NAX_BINARY_ARCH_RISCV64_H

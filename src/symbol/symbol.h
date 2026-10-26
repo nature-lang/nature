@@ -1,5 +1,5 @@
-#ifndef NATURE_SRC_AST_SYMBOL_H_
-#define NATURE_SRC_AST_SYMBOL_H_
+#ifndef NAX_SRC_AST_SYMBOL_H_
+#define NAX_SRC_AST_SYMBOL_H_
 
 #include "src/ast.h"
 #include "utils/helper.h"
@@ -117,4 +117,4 @@ static inline void symbol_table_set_raw_string(module_t *m, char *unique_ident, 
 
 void symbol_init();
 
-#endif //NATURE_SRC_AST_SYMBOL_H_
+#endif //NAX_SRC_AST_SYMBOL_H_

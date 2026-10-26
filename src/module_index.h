@@ -1,5 +1,5 @@
-#ifndef NATURE_MODULE_INDEX_H
-#define NATURE_MODULE_INDEX_H
+#ifndef NAX_MODULE_INDEX_H
+#define NAX_MODULE_INDEX_H
 
 #include "utils/slice.h"
 #include "utils/table.h"
@@ -77,11 +77,11 @@ char *module_source_rel_path(char *package_dir, char *source_path);
 /**
  * Whether unit contains a source part whose basename is <name>.n
  */
-// nature source extensions, .n compiles in normal mode and .x in x mode
+// nax source extensions, .n compiles in normal mode and .x in x mode
 #define SOURCE_EXT_N ".n"
 #define SOURCE_EXT_X ".x"
 
-// returns SOURCE_EXT_N / SOURCE_EXT_X for a nature source file, NULL otherwise
+// returns SOURCE_EXT_N / SOURCE_EXT_X for a nax source file, NULL otherwise
 char *module_source_ext(char *filename);
 
 bool module_unit_has_source_named(module_unit_t *unit, char *name);
@@ -96,4 +96,4 @@ char *module_key_join(char *package_dir, char *module_path);
 /** Replace internal package-qualified keys in a diagnostic with logical module names. */
 char *module_keys_display(char *message);
 
-#endif // NATURE_MODULE_INDEX_H
+#endif // NAX_MODULE_INDEX_H

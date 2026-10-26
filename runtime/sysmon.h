@@ -1,5 +1,5 @@
-#ifndef NATURE_SYSMON_H
-#define NATURE_SYSMON_H
+#ifndef NAX_SYSMON_H
+#define NAX_SYSMON_H
 
 #include "processor.h"
 
@@ -9,4 +9,4 @@
  */
 void wait_sysmond();
 
-#endif // NATURE_SYSMON_H
+#endif // NAX_SYSMON_H

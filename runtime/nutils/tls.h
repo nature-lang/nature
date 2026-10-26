@@ -1,5 +1,5 @@
-#ifndef NATURE_RUNTIME_NUTILS_TLS_H_
-#define NATURE_RUNTIME_NUTILS_TLS_H_
+#ifndef NAX_RUNTIME_NUTILS_TLS_H_
+#define NAX_RUNTIME_NUTILS_TLS_H_
 
 #include "mbedtls/aes.h"
 #include "mbedtls/ctr_drbg.h"
@@ -230,7 +230,7 @@ static inline int tls_init_ssl_context(inner_tls_conn_t *conn, n_string_t *addr)
     mbedtls_x509_crt_init(&conn->cacert);
 
     // 初始化随机数生成器
-    const char *pers = "nature_tls_client";
+    const char *pers = "nax_tls_client";
     ret = mbedtls_ctr_drbg_seed(&conn->ctr_drbg, mbedtls_entropy_func, &conn->entropy,
                                 (const unsigned char *) pers, strlen(pers));
     if (ret != 0) {
@@ -526,4 +526,4 @@ void rt_uv_tls_conn_close(n_tls_conn_t *n_conn) {
     global_async_send(uv_async_conn_close, conn, 0, 0);
 }
 
-#endif //NATURE_RUNTIME_NUTILS_TLS_H_
+#endif //NAX_RUNTIME_NUTILS_TLS_H_

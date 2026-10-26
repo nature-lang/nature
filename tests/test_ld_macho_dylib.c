@@ -28,7 +28,7 @@ static void test_tbd_objc_exports(void) {
             "  - targets: [ x86_64-macos ]\n"
             "    objc-classes: [ NSWrongArchitecture ]\n"
             "...\n";
-    char v4_path[] = "/tmp/nature-ld-tbd-v4-XXXXXX";
+    char v4_path[] = "/tmp/nax-ld-tbd-v4-XXXXXX";
     test_ld_write_fixture(v4_path, tbd_v4, sizeof(tbd_v4) - 1U);
 
     ld_options_t options;
@@ -75,7 +75,7 @@ static void test_tbd_objc_exports(void) {
             "  - archs: [ x86_64 ]\n"
             "    weak-objc-ivars: [ WrongArchitecture._value ]\n"
             "...\n";
-    char v3_path[] = "/tmp/nature-ld-tbd-v3-XXXXXX";
+    char v3_path[] = "/tmp/nax-ld-tbd-v3-XXXXXX";
     test_ld_write_fixture(v3_path, tbd_v3, sizeof(tbd_v3) - 1U);
     memset(&ctx, 0, sizeof(ctx));
     ctx.options = &options;
@@ -128,7 +128,7 @@ static void test_tbd_arm64e_targets(void) {
             "               arm64e-macos ]\n"
             "    symbols: [ _strstr ]\n"
             "...\n";
-    char path[] = "/tmp/nature-ld-tbd-arm64e-XXXXXX";
+    char path[] = "/tmp/nax-ld-tbd-arm64e-XXXXXX";
     test_ld_write_fixture(path, tbd, sizeof(tbd) - 1U);
 
     ld_options_t options;
@@ -160,7 +160,7 @@ static void test_tbd_arm64e_targets(void) {
             "targets: [ 'arm64e-macos ]\n"
             "install-name: '/usr/lib/libMalformed.dylib'\n"
             "...\n";
-    char malformed_path[] = "/tmp/nature-ld-tbd-arm64e-malformed-XXXXXX";
+    char malformed_path[] = "/tmp/nax-ld-tbd-arm64e-malformed-XXXXXX";
     test_ld_write_fixture(malformed_path, malformed_tbd, sizeof(malformed_tbd) - 1U);
     test_ld_expect_invalid_input(malformed_path, LD_INVALID_INPUT,
                                  "cannot parse text-based stub");
@@ -204,7 +204,7 @@ static void test_binary_dylib_reexport(void) {
     memcpy(bytes + offset, &reexport, sizeof(reexport));
     memcpy(bytes + offset + sizeof(reexport), reexport_name, sizeof(reexport_name));
 
-    char path[] = "/tmp/nature-ld-reexport-dylib-XXXXXX";
+    char path[] = "/tmp/nax-ld-reexport-dylib-XXXXXX";
     test_ld_write_fixture(path, bytes, file_size);
     ld_options_t options;
     ld_options_init(&options);
@@ -225,7 +225,7 @@ static void test_binary_dylib_reexport(void) {
        the command in the fixture to ensure the parser checks the header flag
        instead of blindly recording every reexport command. */
     ((ld_mach_header_64_t *) bytes)->flags = LD_MH_NO_REEXPORTED_DYLIBS;
-    char no_reexport_path[] = "/tmp/nature-ld-no-reexport-dylib-XXXXXX";
+    char no_reexport_path[] = "/tmp/nax-ld-no-reexport-dylib-XXXXXX";
     test_ld_write_fixture(no_reexport_path, bytes, file_size);
     ld_options_init(&options);
     memset(&ctx, 0, sizeof(ctx));
@@ -262,7 +262,7 @@ static void test_framework_path_reexport(void) {
             "    symbols: [ _child ]\n"
             "...\n";
 
-    char root[] = "/tmp/nature-ld-framework-reexport-XXXXXX";
+    char root[] = "/tmp/nax-ld-framework-reexport-XXXXXX";
     assert(mkdtemp(root) != NULL);
     char system[PATH_MAX], library[PATH_MAX], frameworks[PATH_MAX];
     char parent_dir[PATH_MAX], child_dir[PATH_MAX], parent_path[PATH_MAX], child_path[PATH_MAX];

@@ -1,5 +1,5 @@
-#ifndef NATURE_GCBITS_H
-#define NATURE_GCBITS_H
+#ifndef NAX_GCBITS_H
+#define NAX_GCBITS_H
 
 #include <stdint.h>
 #include <stdlib.h>
@@ -56,4 +56,4 @@ void gcbits_arenas_epoch();
  */
 gc_bits_arena_t *gcbits_arena_new();
 
-#endif // NATURE_GCBITS_H
+#endif // NAX_GCBITS_H

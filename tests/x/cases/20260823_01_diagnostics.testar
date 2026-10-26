@@ -10,7 +10,7 @@ fn main() {
 pub fn normal() {}
 
 --- output.txt
-nature-test/main.x:4:9: calling .n fn 'normal' from .x fn 'main' is not allowed.
+nax-test/main.x:4:9: calling .n fn 'normal' from .x fn 'main' is not allowed.
 
 === test_x_fn_type_mismatch
 --- main.n
@@ -24,7 +24,7 @@ fn main() {
 pub fn worker() {}
 
 --- output.txt
-nature-test/main.n:4:19: type inconsistency, expect=fn(...):void, actual=xfn(...):void
+nax-test/main.n:4:19: type inconsistency, expect=fn(...):void, actual=xfn(...):void
 
 === test_interface_mode_mismatch
 --- main.x
@@ -47,7 +47,7 @@ pub type allocatable = interface{
 }
 
 --- output.txt
-nature-test/main.x:5:2: the fn 'new' of type 'main.heap_t' mismatch interface 'nature-test.iface.allocatable'
+nax-test/main.x:5:2: the fn 'new' of type 'main.heap_t' mismatch interface 'nax-test.iface.allocatable'
 
 === test_vec_literal
 --- main.x
@@ -57,7 +57,7 @@ fn main() {
 }
 
 --- output.txt
-nature-test/main.x:2:15: vec literal is not supported in .x, use vec<T>.alloc with an allocator
+nax-test/main.x:2:15: vec literal is not supported in .x, use vec<T>.alloc with an allocator
 
 === test_vec_literal_empty
 --- main.x
@@ -67,7 +67,7 @@ fn main() {
 }
 
 --- output.txt
-nature-test/main.x:2:15: vec literal is not supported in .x, use vec<T>.alloc with an allocator
+nax-test/main.x:2:15: vec literal is not supported in .x, use vec<T>.alloc with an allocator
 
 === test_n_impl_x_interface
 --- main.n
@@ -92,4 +92,4 @@ pub type allocatable = interface{
 }
 
 --- output.txt
-nature-test/main.n:7:2: the fn 'alloc' of type 'main.heap_t' mismatch interface 'nature-test.iface.allocatable'
+nax-test/main.n:7:2: the fn 'alloc' of type 'main.heap_t' mismatch interface 'nax-test.iface.allocatable'

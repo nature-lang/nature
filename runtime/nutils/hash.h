@@ -1,5 +1,5 @@
-#ifndef NATURE_RUNTIME_HASH_H
-#define NATURE_RUNTIME_HASH_H
+#ifndef NAX_RUNTIME_HASH_H
+#define NAX_RUNTIME_HASH_H
 
 #include "nutils.h"
 #include "runtime/memory.h"
@@ -120,4 +120,4 @@ static uint64_t find_hash_slot(uint64_t *hash_table, uint64_t capacity, uint8_t 
     }
 }
 
-#endif // NATURE_HASH_H
+#endif // NAX_HASH_H

@@ -293,13 +293,13 @@ static const uint8_t *test_elf_output_section_contents(
 static void test_elf_start_stop_link(bool define_start_override) {
     size_t object_size;
     uint8_t *object = make_test_elf_start_stop_object(
-            "nature_registry", "__start_nature_registry",
-            "__stop_nature_registry", define_start_override, &object_size);
-    char object_path[] = "/tmp/nature-ld-start-stop-object-XXXXXX";
+            "nax_registry", "__start_nax_registry",
+            "__stop_nax_registry", define_start_override, &object_size);
+    char object_path[] = "/tmp/nax-ld-start-stop-object-XXXXXX";
     write_fixture(object_path, object, object_size);
     free(object);
 
-    static const char *output_path = "/tmp/nature-ld-start-stop-output";
+    static const char *output_path = "/tmp/nax-ld-start-stop-output";
     diagnostic_capture_t capture = {0};
     const char *inputs[] = {object_path};
     assert(link_test_elf_inputs(output_path, inputs, 1U, &capture) == LD_OK);
@@ -308,7 +308,7 @@ static void test_elf_start_stop_link(bool define_start_override) {
     size_t image_size;
     uint8_t *image = read_test_fixture(output_path, &image_size, NULL);
     const uint8_t *registry = test_elf_find_output_section(
-            image, image_size, "nature_registry");
+            image, image_size, "nax_registry");
     const uint8_t *write_registry = test_elf_find_output_section(
             image, image_size, "write_registry");
     const uint8_t *exec_registry = test_elf_find_output_section(
@@ -336,9 +336,9 @@ static void test_elf_start_stop_link(bool define_start_override) {
            registry_stop);
 
     test_elf_output_symbol_t start = test_elf_find_output_symbol(
-            image, image_size, "__start_nature_registry");
+            image, image_size, "__start_nax_registry");
     test_elf_output_symbol_t stop = test_elf_find_output_symbol(
-            image, image_size, "__stop_nature_registry");
+            image, image_size, "__stop_nax_registry");
     assert(start.found && stop.found);
     assert(start.value == registry_start && stop.value == registry_stop);
     uint16_t registry_index =
@@ -377,12 +377,12 @@ static void test_elf_start_stop_failure(const char *section_name,
     size_t object_size;
     uint8_t *object = make_test_elf_start_stop_object(
             section_name, start_name, stop_name, false, &object_size);
-    char object_path[] = "/tmp/nature-ld-start-stop-invalid-XXXXXX";
+    char object_path[] = "/tmp/nax-ld-start-stop-invalid-XXXXXX";
     write_fixture(object_path, object, object_size);
     free(object);
 
     static const char *output_path =
-            "/tmp/nature-ld-start-stop-invalid-output";
+            "/tmp/nax-ld-start-stop-invalid-output";
     diagnostic_capture_t capture = {0};
     const char *inputs[] = {object_path};
     assert(link_test_elf_inputs(output_path, inputs, 1U, &capture) ==
@@ -397,7 +397,7 @@ void test_ld_elf_linker_defined(void) {
     test_elf_start_stop_link(false);
     test_elf_start_stop_link(true);
     test_elf_start_stop_failure(
-            "nature-bad", "__start_nature-bad", "__stop_nature-bad");
+            "nax-bad", "__start_nax-bad", "__stop_nax-bad");
     test_elf_start_stop_failure(
-            "nature_registry", "__start_missing", "__stop_missing");
+            "nax_registry", "__start_missing", "__stop_missing");
 }

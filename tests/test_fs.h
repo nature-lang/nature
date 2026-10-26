@@ -1,5 +1,5 @@
-#ifndef NATURE_TEST_FS_H
-#define NATURE_TEST_FS_H
+#ifndef NAX_TEST_FS_H
+#define NAX_TEST_FS_H
 
 #ifdef _WIN32
 #include <direct.h>

@@ -67,7 +67,7 @@ int64_t test_processor_busy_no_safepoint(int64_t milliseconds) {
     uint64_t duration = (uint64_t) milliseconds * 1000 * 1000;
     uint64_t started_at = uv_hrtime();
     while (uv_hrtime() - started_at < duration) {
-        // This C loop deliberately contains no Nature function-entry
+        // This C loop deliberately contains no Nax function-entry
         // safepoint. A pending request must remain cooperative until return.
     }
 

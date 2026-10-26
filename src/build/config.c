@@ -24,8 +24,8 @@ build_param_t BUILD_ARCH = ARCH_RISCV64;
 build_param_t BUILD_ARCH = 0;
 #endif
 
-char *NATURE_ROOT = NULL;
-char *NATURE_PATH = "~/.nature";
+char *NAX_ROOT = NULL;
+char *NAX_PATH = "~/.nax";
 char BUILD_OUTPUT_NAME[PATH_MAX] = "main";
 bool BUILD_OUTPUT_EXPLICIT = false;
 char SOURCE_PATH[PATH_MAX] = "";
@@ -45,9 +45,9 @@ char *WORKDIR; // 执行 shell 命令所在的目录(import 搜索将会基于�
 char *BASE_NS; // 最后一级目录的名称，也可以自定义
 char *TEMP_DIR; // 链接临时目录
 
-char *BUILD_ENTRY; // nature build {test/main.n} 花括号包起来的这部分
+char *BUILD_ENTRY; // nax build {test/main.n} 花括号包起来的这部分
 
-char *nature_root_from_executable_path(const char *executable_path) {
+char *nax_root_from_executable_path(const char *executable_path) {
     if (executable_path == NULL || strlen(executable_path) == 0) {
         return NULL;
     }
@@ -81,7 +81,7 @@ char *nature_root_from_executable_path(const char *executable_path) {
     return NULL;
 }
 
-char *nature_root_from_running_executable() {
+char *nax_root_from_running_executable() {
     char executable_path[PATH_MAX];
 #ifdef __WINDOWS
     uint32_t length = GetModuleFileNameA(NULL, executable_path, PATH_MAX);
@@ -108,5 +108,5 @@ char *nature_root_from_running_executable() {
 #else
     return NULL;
 #endif
-    return nature_root_from_executable_path(executable_path);
+    return nax_root_from_executable_path(executable_path);
 }

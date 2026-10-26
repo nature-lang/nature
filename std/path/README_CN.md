@@ -1,4 +1,4 @@
-# import [path](https://github.com/nature-lang/nature/blob/master/std/path/path.n)
+# import [path](https://github.com/naxlang/nax/blob/master/std/path/path.n)
 
 文件系统路径操作工具
 

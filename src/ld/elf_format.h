@@ -1,8 +1,8 @@
-#ifndef NATURE_LD_ELF_FORMAT_H
-#define NATURE_LD_ELF_FORMAT_H
+#ifndef NAX_LD_ELF_FORMAT_H
+#define NAX_LD_ELF_FORMAT_H
 
 /*
- * ELF and archive wire-format definitions used by Nature's portable linker.
+ * ELF and archive wire-format definitions used by Nax's portable linker.
  * The parser and data model are informed by Zig's ELF linker, in particular
  * src/link/Elf/Object.zig and src/link/Elf/Archive.zig at commit
  * 738d2be9d6b6ef3ff3559130c05159ef53336224. Zig is distributed under the MIT

@@ -1,5 +1,5 @@
-#ifndef NATURE_LD_ELF_MERGE_H
-#define NATURE_LD_ELF_MERGE_H
+#ifndef NAX_LD_ELF_MERGE_H
+#define NAX_LD_ELF_MERGE_H
 
 #include "ld_elf_internal.h"
 

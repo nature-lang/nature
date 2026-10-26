@@ -1,5 +1,5 @@
-#ifndef NATURE_SYSCALL_H
-#define NATURE_SYSCALL_H
+#ifndef NAX_SYSCALL_H
+#define NAX_SYSCALL_H
 
 #include "runtime/runtime.h"
 #include "utils/type.h"
@@ -10,4 +10,4 @@ n_errable_t syscall_exec(n_string_t path, n_vec_t argv, n_vec_t envp);
 
 n_u32_t syscall_wait(n_int_t pid);
 
-#endif //NATURE_SYSCALL_H
+#endif //NAX_SYSCALL_H

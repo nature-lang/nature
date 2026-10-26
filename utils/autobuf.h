@@ -1,5 +1,5 @@
-#ifndef NATURE_AUTOBUF_H
-#define NATURE_AUTOBUF_H
+#ifndef NAX_AUTOBUF_H
+#define NAX_AUTOBUF_H
 
 #include <stdlib.h>
 #include <stdint.h>
@@ -24,4 +24,4 @@ void autobuf_padding(autobuf_t *buf, uint64_t element_size);
 
 void autobuf_free(autobuf_t *buf);
 
-#endif //NATURE_AUTOBUF_H
+#endif //NAX_AUTOBUF_H

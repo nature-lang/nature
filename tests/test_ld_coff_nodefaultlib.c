@@ -243,7 +243,7 @@ static void test_archive_member_discovery(const char *directory) {
 }
 
 int main(void) {
-    char directory[] = "/tmp/nature-ld-coff-nodefaultlib-XXXXXX";
+    char directory[] = "/tmp/nax-ld-coff-nodefaultlib-XXXXXX";
     assert(mkdtemp(directory));
     test_direct_object_order(directory);
     test_directive_order(directory);

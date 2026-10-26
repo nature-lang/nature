@@ -1,5 +1,5 @@
-#ifndef NATURE_LD_MACHO_FORMAT_H
-#define NATURE_LD_MACHO_FORMAT_H
+#ifndef NAX_LD_MACHO_FORMAT_H
+#define NAX_LD_MACHO_FORMAT_H
 
 #include <stdint.h>
 

@@ -1,5 +1,5 @@
 
-# [import fs](https://github.com/nature-lang/nature/blob/master/std/fs/fs.n)
+# [import fs](https://github.com/naxlang/nax/blob/master/std/fs/fs.n)
 
 File system, including opening and writing of files
 

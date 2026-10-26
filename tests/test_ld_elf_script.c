@@ -113,7 +113,7 @@ static void write_named_fixture(const char *path, const void *bytes,
 }
 
 static void test_script_relative_and_library_inputs(void) {
-    char directory[] = "/tmp/nature-ld-elf-script-XXXXXX";
+    char directory[] = "/tmp/nax-ld-elf-script-XXXXXX";
     assert(mkdtemp(directory) != NULL);
     char object_path[PATH_MAX];
     char script_path[PATH_MAX];
@@ -153,7 +153,7 @@ static void test_script_relative_and_library_inputs(void) {
 }
 
 static void test_script_cycle_and_missing_input(void) {
-    char cycle_path[] = "/tmp/nature-ld-elf-script-cycle-XXXXXX";
+    char cycle_path[] = "/tmp/nax-ld-elf-script-cycle-XXXXXX";
     int fd = mkstemp(cycle_path);
     assert(fd >= 0);
     assert(close(fd) == 0);
@@ -178,7 +178,7 @@ static void test_script_cycle_and_missing_input(void) {
     ld_options_deinit(&options);
     unlink(cycle_path);
 
-    char missing_path[] = "/tmp/nature-ld-elf-script-missing-XXXXXX";
+    char missing_path[] = "/tmp/nax-ld-elf-script-missing-XXXXXX";
     fd = mkstemp(missing_path);
     assert(fd >= 0);
     static const char missing[] = "INPUT(no-such-input.o)\n";

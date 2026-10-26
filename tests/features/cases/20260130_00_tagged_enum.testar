@@ -94,4 +94,4 @@ fn main() {
 }
 
 --- output.txt
-nature-test/main.n:18:18: match expression lacks a default case '_' and enum value lacks, for example 'some'
+nax-test/main.n:18:18: match expression lacks a default case '_' and enum value lacks, for example 'some'

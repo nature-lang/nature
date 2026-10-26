@@ -138,7 +138,7 @@ impl Backend {
 
         // Register file watchers for .n / .x sources and package.toml.
         let registrations = vec![Registration {
-            id: "nature-file-watcher".into(),
+            id: "nax-file-watcher".into(),
             method: "workspace/didChangeWatchedFiles".into(),
             register_options: serde_json::to_value(DidChangeWatchedFilesRegistrationOptions {
                 watchers: vec![
@@ -168,7 +168,7 @@ impl Backend {
             .client
             .configuration(vec![ConfigurationItem {
                 scope_uri: None,
-                section: Some("nature".into()),
+                section: Some("nax".into()),
             }])
             .await
         {
@@ -229,9 +229,9 @@ mod tests {
         }
     }
 
-    /// Semantic tokens document filter must target "nature" language.
+    /// Semantic tokens document filter must target "nax" language.
     #[test]
-    fn caps_semantic_tokens_filter_is_nature() {
+    fn caps_semantic_tokens_filter_is_nax() {
         let caps = build_server_capabilities();
         if let Some(SemanticTokensServerCapabilities::SemanticTokensRegistrationOptions(reg)) =
             caps.semantic_tokens_provider

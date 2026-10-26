@@ -1,5 +1,5 @@
-#ifndef NATURE_MEMORY_H
-#define NATURE_MEMORY_H
+#ifndef NAX_MEMORY_H
+#define NAX_MEMORY_H
 
 #include <stdatomic.h>
 #include <stdint.h>
@@ -275,4 +275,4 @@ void mheap_grow(uint64_t pages_count);
 
 uint64_t page_alloc_find(uint64_t pages_count, bool must_find);
 
-#endif // NATURE_MEMORY_H
+#endif // NAX_MEMORY_H

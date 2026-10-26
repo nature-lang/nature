@@ -370,16 +370,16 @@ static void test_relro_output_for_arch(ld_arch_t arch, uint16_t machine,
     size_t object_size;
     uint8_t *object = make_test_elf_relro_object(
             machine, true, &object_size);
-    char object_path[] = "/tmp/nature-ld-relro-object-XXXXXX";
+    char object_path[] = "/tmp/nax-ld-relro-object-XXXXXX";
     write_fixture(object_path, object, object_size);
     free(object);
 
     char default_output[128];
     int length = snprintf(default_output, sizeof(default_output),
-                          "/tmp/nature-ld-relro-%s", tag);
+                          "/tmp/nax-ld-relro-%s", tag);
     assert(length > 0 && (size_t) length < sizeof(default_output));
     const char *retained = arch == LD_ARCH_ARM64
-                                   ? getenv("NATURE_TEST_ELF_RELRO_OUTPUT")
+                                   ? getenv("NAX_TEST_ELF_RELRO_OUTPUT")
                                    : NULL;
     const char *output_path = retained && retained[0]
                                       ? retained
@@ -529,10 +529,10 @@ static void test_output_without_relro_has_no_header(void) {
     size_t object_size;
     uint8_t *object = make_test_elf_relro_object(
             LD_ELF_EM_AARCH64, false, &object_size);
-    char object_path[] = "/tmp/nature-ld-no-relro-object-XXXXXX";
+    char object_path[] = "/tmp/nax-ld-no-relro-object-XXXXXX";
     write_fixture(object_path, object, object_size);
     free(object);
-    static const char output_path[] = "/tmp/nature-ld-no-relro-output";
+    static const char output_path[] = "/tmp/nax-ld-no-relro-output";
     diagnostic_capture_t capture = {0};
     assert(link_test_elf_relro_object(
                    LD_ARCH_ARM64, object_path, output_path, &capture) ==

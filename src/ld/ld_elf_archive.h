@@ -1,5 +1,5 @@
-#ifndef NATURE_LD_ELF_ARCHIVE_H
-#define NATURE_LD_ELF_ARCHIVE_H
+#ifndef NAX_LD_ELF_ARCHIVE_H
+#define NAX_LD_ELF_ARCHIVE_H
 
 #include <stdbool.h>
 #include <stddef.h>

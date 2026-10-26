@@ -1,5 +1,5 @@
-#ifndef NATURE_BINARY_COFF_WRITER_H
-#define NATURE_BINARY_COFF_WRITER_H
+#ifndef NAX_BINARY_COFF_WRITER_H
+#define NAX_BINARY_COFF_WRITER_H
 
 /*
  * Portable AMD64 COFF relocatable-object builder.

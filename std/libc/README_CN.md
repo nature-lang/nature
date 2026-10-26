@@ -1,4 +1,4 @@
-# import [libc](https://github.com/nature-lang/nature/tree/master/std/libc/libc.n)
+# import [libc](https://github.com/naxlang/nax/tree/master/std/libc/libc.n)
 
 C 标准库绑定，提供内存管理、字符串操作、系统函数等功能
 
@@ -177,7 +177,7 @@ type dirent_t = struct {
 fn string.to_cstr(self):cstr
 ```
 
-将 Nature 字符串转换为 C 风格字符串
+将 Nax 字符串转换为 C 风格字符串
 
 ## fn cstr.to_string
 
@@ -185,7 +185,7 @@ fn string.to_cstr(self):cstr
 fn cstr.to_string():string
 ```
 
-将 C 风格字符串转换为 Nature 字符串
+将 C 风格字符串转换为 Nax 字符串
 
 ## fn atoi
 
@@ -2307,7 +2307,7 @@ fn isspace(u8 c):bool
 
 测试是否为空白字符
 
-# import [libc.dirent](https://github.com/nature-lang/nature/tree/master/std/libc/dirent.linux.n)
+# import [libc.dirent](https://github.com/naxlang/nax/tree/master/std/libc/dirent.linux.n)
 
 获取指定目录的相关信息，以及进行目录的递归遍历
 

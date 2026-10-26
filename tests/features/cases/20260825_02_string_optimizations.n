@@ -25,7 +25,7 @@ fn churn_dynamic_short_strings() {
 }
 
 fn main() {
-    // find_after must honor Nature string lengths instead of C NUL termination.
+    // find_after must honor Nax string lengths instead of C NUL termination.
     var embedded_bytes = ['a'.char(), 0, 'b'.char(), 'c'.char()]
     string embedded = embedded_bytes as string
     assert(embedded.find_after('bc', 0) == 2)

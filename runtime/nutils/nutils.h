@@ -1,5 +1,5 @@
-#ifndef NATURE_NUTILS_BASIC_H
-#define NATURE_NUTILS_BASIC_H
+#ifndef NAX_NUTILS_BASIC_H
+#define NAX_NUTILS_BASIC_H
 
 #include "runtime/runtime.h"
 #include "utils/sc_map.h"
@@ -112,4 +112,4 @@ bool rt_vec_slice_out(n_vec_t *out, n_vec_t *vec, int64_t start, int64_t end, bo
 
 bool rt_in_heap(n_anyptr_t addr);
 
-#endif // NATURE_BASIC_H
+#endif // NAX_BASIC_H

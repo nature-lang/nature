@@ -1,5 +1,5 @@
-#ifndef NATURE_LINKER_H
-#define NATURE_LINKER_H
+#ifndef NAX_LINKER_H
+#define NAX_LINKER_H
 
 /**
  * 包含 loader 和 linker 两部分
@@ -312,4 +312,4 @@ static void *linker_realloc(void *ptr, unsigned long size) {
     return ptr1;
 }
 
-#endif //NATURE_LINKER_H
+#endif //NAX_LINKER_H

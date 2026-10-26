@@ -1,5 +1,5 @@
-#ifndef NATURE_LD_INTERNAL_H
-#define NATURE_LD_INTERNAL_H
+#ifndef NAX_LD_INTERNAL_H
+#define NAX_LD_INTERNAL_H
 
 #include "ld.h"
 #include "macho_format.h"

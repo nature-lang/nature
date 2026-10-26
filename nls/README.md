@@ -1,6 +1,6 @@
-# NLS — Nature Language Server
+# NLS — Nax Language Server
 
-LSP server and VSCode client for the [Nature](https://github.com/nature-lang/nature) programming language.
+LSP server and VSCode client for the [Nax](https://github.com/naxlang/nax) programming language.
 
 ## Features
 
@@ -101,7 +101,7 @@ The binary is output to `target/{debug,release}/nls`.
 
 ## Formatting
 
-NLS exposes the Nature formatter in two ways:
+NLS exposes the Nax formatter in two ways:
 
 - LSP document formatting for editors
 - a CLI subcommand: `nls fmt`
@@ -203,9 +203,9 @@ RUST_LOG=debug ./target/debug/nls
 RUST_LOG=nls::server=debug,nls::analyzer=info ./target/debug/nls
 ```
 
-When running via the VSCode extension host, logs appear in the **Output** panel under the "Nature Language Server" channel.
+When running via the VSCode extension host, logs appear in the **Output** panel under the "Nax Language Server" channel.
 
-### Manual testing against a Nature project
+### Manual testing against a Nax project
 
 ```bash
 # 1. Build NLS
@@ -221,13 +221,13 @@ export SERVER_PATH="$(pwd)/target/debug/nls"
 
 ### VSCode Extension
 
-Search for **"nature language"** in the VSCode extension marketplace.
+Search for **"nax language"** in the VSCode extension marketplace.
 
 ### Server
 
-The `nls` binary should be placed at `/usr/local/nature/bin/nls`. The VSCode client automatically detects and launches it from that path.
+The `nls` binary should be placed at `/usr/local/nax/bin/nls`. The VSCode client automatically detects and launches it from that path.
 
-> The nls binary is also bundled in the nature-lang release package. If you already have nature-lang installed at `/usr/local/nature`, no extra installation step is needed.
+> The nls binary is also bundled in the nax release package. If you already have nax installed at `/usr/local/nax`, no extra installation step is needed.
 
 ## License
 

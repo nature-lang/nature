@@ -1,5 +1,5 @@
-#ifndef NATURE_WINDOWS_UTF8_H
-#define NATURE_WINDOWS_UTF8_H
+#ifndef NAX_WINDOWS_UTF8_H
+#define NAX_WINDOWS_UTF8_H
 
 #include <stddef.h>
 #include <stdint.h>

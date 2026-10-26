@@ -141,7 +141,7 @@ static char **windows_utf8_argv(int *argc_out) {
  * `crt2.obj` owns mainCRTStartup and performs UCRT process initialization,
  * wildcard setup and termination. The UCRT narrow argv follows the active
  * ANSI code page, so rebuild argv from the UTF-16 command line before handing
- * it to Nature, whose strings use UTF-8.
+ * it to Nax, whose strings use UTF-8.
  */
 int main(int argc, char *argv[]) {
     rt_install_windows_exception_handler();

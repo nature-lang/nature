@@ -18,7 +18,7 @@ use crate::module_index::{
     package_unit_load, strip_source_ext, PackageUnit,
 };
 use crate::package::parse_package;
-use crate::project::{Module, DEFAULT_NATURE_ROOT};
+use crate::project::{Module, DEFAULT_NAX_ROOT};
 use crate::utils::{errors_push, format_global_ident};
 use common::{AnalyzerError, AstNode, ImportStmt, PackageConfig, Stmt};
 use lazy_static::lazy_static;
@@ -50,7 +50,7 @@ const TARGET_ARCH: &str = "riscv64";
 lazy_static! {
     static ref STD_PACKAGES: Mutex<Option<HashSet<String>>> = Mutex::new(None);
 }
-const PACKAGE_SOURCE_INFIX: &str = ".nature/package/sources";
+const PACKAGE_SOURCE_INFIX: &str = ".nax/package/sources";
 const PACKAGE_TOML: &str = "package.toml";
 
 fn dep_package_dir() -> PathBuf {
@@ -92,7 +92,7 @@ fn is_std_package(package: &str) -> bool {
     let mut packages = HashSet::new();
 
     // 扫描 std 目录
-    let std_dir = Path::new(&std::env::var("NATURE_ROOT").unwrap_or(DEFAULT_NATURE_ROOT.to_string())).join("std");
+    let std_dir = Path::new(&std::env::var("NAX_ROOT").unwrap_or(DEFAULT_NAX_ROOT.to_string())).join("std");
 
     if let Ok(entries) = fs::read_dir(&std_dir) {
         for entry in entries {
@@ -178,7 +178,7 @@ fn analyze_import_std(_m: &mut Module, import: &mut ImportStmt) -> Result<(), An
     let package_ident = import.ast_package.as_ref().unwrap()[0].clone();
 
     // 获取标准库目录
-    let std_dir = Path::new(&std::env::var("NATURE_ROOT").unwrap_or(DEFAULT_NATURE_ROOT.to_string()))
+    let std_dir = Path::new(&std::env::var("NAX_ROOT").unwrap_or(DEFAULT_NAX_ROOT.to_string()))
         .join("std")
         .join(&package_ident);
 
@@ -514,7 +514,7 @@ pub fn analyze_imports(
 
 /**
  * 在 main module 进行 analyze 之前，需要将 import 关联的所有的模块的 global symbol 都注册到符号表中, ast 暂时不用进行解析
- *  后续的统一 analyzer 时会全部进行解析, 是对原始 nature 编译器的 can_import_symbol_table 字段的优化
+ *  后续的统一 analyzer 时会全部进行解析, 是对原始 nax 编译器的 can_import_symbol_table 字段的优化
  */
 pub fn register_global_symbol(m: &mut Module, symbol_table: &mut SymbolTable, stmts: &Vec<Box<Stmt>>) {
     for stmt in stmts {

@@ -1,4 +1,4 @@
-//! Nature Language Server (NLS) — library root.
+//! Nax Language Server (NLS) — library root.
 //!
 //! Module boundaries:
 //! - [`analyzer`]  — lexer, parser, semantic analysis, type system (existing).

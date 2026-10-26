@@ -1,4 +1,4 @@
-# import [crypto.hmac](https://github.com/nature-lang/nature/tree/master/std/crypto/hmac.n)
+# import [crypto.hmac](https://github.com/naxlang/nax/tree/master/std/crypto/hmac.n)
 
 Cryptographic hash functions and HMAC implementation using mbedTLS.
 
@@ -121,7 +121,7 @@ fn hmac_t.hex():string
 
 Finalize HMAC computation and return hexadecimal string.
 
-# import [crypto.md5](https://github.com/nature-lang/nature/tree/master/std/crypto/md5.n)
+# import [crypto.md5](https://github.com/naxlang/nax/tree/master/std/crypto/md5.n)
 
 MD5 hash function implementation.
 
@@ -175,7 +175,7 @@ fn md5_t.hex():string
 
 Finalize MD5 computation and return hexadecimal string.
 
-# import [crypto.sha256](https://github.com/nature-lang/nature/tree/master/std/crypto/sha256.n)
+# import [crypto.sha256](https://github.com/naxlang/nax/tree/master/std/crypto/sha256.n)
 
 SHA-256 hash function implementation.
 
@@ -229,7 +229,7 @@ fn sha256_t.hex():string
 
 Finalize SHA-256 computation and return hexadecimal string.
 
-# import [crypto.bcrypt](https://github.com/nature-lang/nature/tree/master/std/crypto/bcrypt.n)
+# import [crypto.bcrypt](https://github.com/naxlang/nax/tree/master/std/crypto/bcrypt.n)
 
 bcrypt password hashing implementation using Blowfish algorithm.
 
@@ -267,7 +267,7 @@ fn verify([u8] hashed_password, [u8] password):void!
 
 Verify if password matches the hash.
 
-# import [crypto.rsa](https://github.com/nature-lang/nature/tree/master/std/crypto/rsa.n)
+# import [crypto.rsa](https://github.com/naxlang/nax/tree/master/std/crypto/rsa.n)
 
 RSA asymmetric encryption implementation using mbedTLS.
 
@@ -445,7 +445,7 @@ fn rsa_private_key_t.free():void
 
 Release RSA private key resources.
 
-# import [crypto.utils](https://github.com/nature-lang/nature/tree/master/std/crypto/utils.n)
+# import [crypto.utils](https://github.com/naxlang/nax/tree/master/std/crypto/utils.n)
 
 Cryptographic utility functions.
 
@@ -460,7 +460,7 @@ Convert input byte array to hexadecimal string.
 
 
 
-# import [crypto.utils](https://github.com/nature-lang/nature/tree/master/std/crypto/utils.n)
+# import [crypto.utils](https://github.com/naxlang/nax/tree/master/std/crypto/utils.n)
 
 ## fn to_hex
 

@@ -30,7 +30,7 @@ fn main() {
 }
 
 --- output.txt
-nature-test/main.n:9:17: type inconsistency, expect=i64, actual=bool
+nax-test/main.n:9:17: type inconsistency, expect=i64, actual=bool
 
 
 === test_impl_check_failed
@@ -44,7 +44,7 @@ fn main() {
 }
 
 --- output.txt
-nature-test/main.n:2:20: generic param 'T' has no constraint declaring fn 'hello'
+nax-test/main.n:2:20: generic param 'T' has no constraint declaring fn 'hello'
 
 === test_impl_check_failed2
 --- main.n
@@ -60,7 +60,7 @@ fn main() {
 }
 
 --- output.txt
-nature-test/main.n:5:20: generic param 'T' has no constraint declaring fn 'hello'
+nax-test/main.n:5:20: generic param 'T' has no constraint declaring fn 'hello'
 
 
 
@@ -91,7 +91,7 @@ fn main() {
 }
 
 --- output.txt
-nature-test/main.n:2:17: generic param 'T' cannot use operator '*' without 'numeric' constraint
+nax-test/main.n:2:17: generic param 'T' cannot use operator '*' without 'numeric' constraint
 
 === test_opr_failed2
 --- main.n
@@ -104,7 +104,7 @@ fn main() {
 }
 
 --- output.txt
-nature-test/main.n:2:17: generic param 'T' cannot use operator '+' without 'addable' constraint
+nax-test/main.n:2:17: generic param 'T' cannot use operator '+' without 'addable' constraint
 
 === test_opr_basic
 --- main.n
@@ -140,7 +140,7 @@ fn main() {
 }
 
 --- output.txt
-nature-test/main.n:2:8: generic param 'T' cannot be used as bool value
+nax-test/main.n:2:8: generic param 'T' cannot be used as bool value
 
 === test_boolike_interface_as_bool
 --- main.n
@@ -223,7 +223,7 @@ fn main() {
 }
 
 --- output.txt
-nature-test/main.n:3:16: generic param 'T' cannot use operator '+' without 'addable' constraint
+nax-test/main.n:3:16: generic param 'T' cannot use operator '+' without 'addable' constraint
 
 
 === test_multi_constraints
@@ -349,7 +349,7 @@ fn main() {
 }
 
 --- output.txt
-nature-test/main.n:31:37: type 'main.bad_u' not impl 'main.Testuable' interface
+nax-test/main.n:31:37: type 'main.bad_u' not impl 'main.Testuable' interface
 
 
 === test_nonvoid_basic
@@ -376,7 +376,7 @@ fn main() {
 }
 
 --- output.txt
-nature-test/main.n:7:8: type 'void' denied by 'nonvoid' interface
+nax-test/main.n:7:8: type 'void' denied by 'nonvoid' interface
 
 
 === test_basic

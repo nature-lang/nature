@@ -442,11 +442,11 @@ static uint8_t *make_riscv_align_object(bool corrupt_padding,
 static void test_riscv_align_link_relaxes_and_maps_offsets(void) {
     size_t object_size;
     uint8_t *object = make_riscv_align_object(false, &object_size);
-    char object_path[] = "/tmp/nature-ld-riscv-align-object-XXXXXX";
+    char object_path[] = "/tmp/nax-ld-riscv-align-object-XXXXXX";
     write_fixture(object_path, object, object_size);
     free(object);
 
-    static const char *output_path = "/tmp/nature-ld-riscv-align-output";
+    static const char *output_path = "/tmp/nax-ld-riscv-align-output";
     unlink(output_path);
     diagnostic_capture_t capture = {0};
     ld_options_t options;
@@ -480,7 +480,7 @@ static void test_riscv_align_link_relaxes_and_maps_offsets(void) {
     unlink(output_path);
 
     object = make_riscv_align_object(true, &object_size);
-    char bad_path[] = "/tmp/nature-ld-riscv-align-bad-XXXXXX";
+    char bad_path[] = "/tmp/nax-ld-riscv-align-bad-XXXXXX";
     write_fixture(bad_path, object, object_size);
     free(object);
     memset(&capture, 0, sizeof(capture));
@@ -585,11 +585,11 @@ static void test_amd64_rex_gotpcrelx_link_relaxes_without_got(void) {
     size_t object_size;
     uint8_t *object =
             make_amd64_rex_gotpcrelx_object(false, &object_size);
-    char object_path[] = "/tmp/nature-ld-gotpcrelx-object-XXXXXX";
+    char object_path[] = "/tmp/nax-ld-gotpcrelx-object-XXXXXX";
     write_fixture(object_path, object, object_size);
     free(object);
 
-    static const char *output_path = "/tmp/nature-ld-gotpcrelx-output";
+    static const char *output_path = "/tmp/nax-ld-gotpcrelx-output";
     unlink(output_path);
     diagnostic_capture_t capture = {0};
     ld_options_t options;
@@ -635,11 +635,11 @@ static void test_amd64_rex_gotpcrelx_far_target_falls_back_to_got(void) {
     size_t object_size;
     uint8_t *object =
             make_amd64_rex_gotpcrelx_object(true, &object_size);
-    char object_path[] = "/tmp/nature-ld-gotpcrelx-far-object-XXXXXX";
+    char object_path[] = "/tmp/nax-ld-gotpcrelx-far-object-XXXXXX";
     write_fixture(object_path, object, object_size);
     free(object);
 
-    static const char *output_path = "/tmp/nature-ld-gotpcrelx-far-output";
+    static const char *output_path = "/tmp/nax-ld-gotpcrelx-far-output";
     unlink(output_path);
     diagnostic_capture_t capture = {0};
     ld_options_t options;

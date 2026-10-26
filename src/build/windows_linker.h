@@ -1,5 +1,5 @@
-#ifndef NATURE_BUILD_WINDOWS_LINKER_H
-#define NATURE_BUILD_WINDOWS_LINKER_H
+#ifndef NAX_BUILD_WINDOWS_LINKER_H
+#define NAX_BUILD_WINDOWS_LINKER_H
 
 #include <stdbool.h>
 #include <stddef.h>

@@ -430,19 +430,19 @@ static const uint8_t *find_output_symbol(const uint8_t *image,
 static void test_ifunc_link(ld_arch_t arch, bool pie) {
     size_t object_size;
     uint8_t *object = make_ifunc_link_object(arch, 0, &object_size);
-    char object_path[] = "/tmp/nature-ld-ifunc-link-XXXXXX";
+    char object_path[] = "/tmp/nax-ld-ifunc-link-XXXXXX";
     write_fixture(object_path, object, object_size);
     free(object);
     const char *output_path;
     if (arch == LD_ARCH_AMD64) {
-        output_path = pie ? "/tmp/nature-ld-ifunc-pie-x86"
-                          : "/tmp/nature-ld-ifunc-link-x86";
+        output_path = pie ? "/tmp/nax-ld-ifunc-pie-x86"
+                          : "/tmp/nax-ld-ifunc-link-x86";
     } else if (arch == LD_ARCH_ARM64) {
-        output_path = pie ? "/tmp/nature-ld-ifunc-pie-arm"
-                          : "/tmp/nature-ld-ifunc-link-arm";
+        output_path = pie ? "/tmp/nax-ld-ifunc-pie-arm"
+                          : "/tmp/nax-ld-ifunc-link-arm";
     } else {
-        output_path = pie ? "/tmp/nature-ld-ifunc-pie-riscv"
-                          : "/tmp/nature-ld-ifunc-link-riscv";
+        output_path = pie ? "/tmp/nax-ld-ifunc-pie-riscv"
+                          : "/tmp/nax-ld-ifunc-link-riscv";
     }
     unlink(output_path);
     diagnostic_capture_t capture = {0};
@@ -643,7 +643,7 @@ static void test_ifunc_negative_signed_addend(ld_arch_t arch) {
     size_t object_size;
     uint8_t *object = make_ifunc_link_object(
             arch, input_addend, &object_size);
-    char object_path[] = "/tmp/nature-ld-ifunc-negative-XXXXXX";
+    char object_path[] = "/tmp/nax-ld-ifunc-negative-XXXXXX";
     write_fixture(object_path, object, object_size);
     free(object);
 

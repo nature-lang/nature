@@ -20,7 +20,7 @@ const (
 //	Use:   "--version",
 //	Short: "Print the version number of Hugo",
 //	Run: func(cmd *cobra.Command, args []string) {
-//		fmt.Printf("nature package %v\n", Version)
+//		fmt.Printf("nax package %v\n", Version)
 //	},
 //}
 

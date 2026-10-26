@@ -42,7 +42,7 @@ fn main():void! {
 }
 
 --- output.txt
-nature-test/main.n:6:51: array length must be greater than 0
+nax-test/main.n:6:51: array length must be greater than 0
 
 === test_vec_init
 --- main.n

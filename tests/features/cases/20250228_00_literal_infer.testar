@@ -49,7 +49,7 @@ fn main() {
    u16 c2 = (24 + (2 * c)) - 1
 }
 --- output.txt
-nature-test/main.n:3:24: type inconsistency, expect=u16, actual=int(i64)
+nax-test/main.n:3:24: type inconsistency, expect=u16, actual=int(i64)
 
 === test_compiler_range_failed
 --- main.n
@@ -58,7 +58,7 @@ fn main() {
    i8 c2 = (245 + (2 * c as i8)) - 1
 }
 --- output.txt
-nature-test/main.n:3:15: literal '245' out of range for type 'i8'
+nax-test/main.n:3:15: literal '245' out of range for type 'i8'
 
 === test_empty_vec_casting
 --- main.n
@@ -66,7 +66,7 @@ fn main() {
     var list = [] as [u8]
 }
 --- output.txt
-nature-test/main.n:2:16: vec element type not confirm
+nax-test/main.n:2:16: vec element type not confirm
 
 === test_vec_casting
 --- main.n
@@ -74,7 +74,7 @@ fn main() {
     var list = [12, 14] as [u8]
 }
 --- output.txt
-nature-test/main.n:2:22: cannot casting to '[u8]'
+nax-test/main.n:2:22: cannot casting to '[u8]'
 
 
 === test_empty_data_new

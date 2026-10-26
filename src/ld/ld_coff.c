@@ -664,7 +664,7 @@ int ld_coff_resolve_archives(ld_coff_context_t *ctx) {
                     /* COFF weak externals are added with overrideLazy=false.
                        An earlier lazy symbol is therefore forced, while a
                        lazy archive registered after the weak alias is
-                       ignored.  Nature parses archives up front, so recover
+                       ignored.  Nax parses archives up front, so recover
                        LLD's incremental input semantics using stable object
                        input order at extraction time. */
                     if (global->fallback_object &&

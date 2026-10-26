@@ -9,7 +9,7 @@
 
 void test_ld_macho_input(void) {
     static const uint8_t truncated_macho[] = {0xcf, 0xfa, 0xed, 0xfe};
-    char macho_path[] = "/tmp/nature-ld-macho-XXXXXX";
+    char macho_path[] = "/tmp/nax-ld-macho-XXXXXX";
     test_ld_write_fixture(macho_path, truncated_macho, sizeof(truncated_macho));
     test_ld_expect_invalid_input(macho_path, LD_INVALID_INPUT, "truncated");
     unlink(macho_path);
@@ -40,7 +40,7 @@ void test_ld_macho_input(void) {
     over_aligned_section.align = 21U;
     memcpy(aligned_object + sizeof(aligned_header) + sizeof(aligned_segment),
            &over_aligned_section, sizeof(over_aligned_section));
-    char aligned_object_path[] = "/tmp/nature-ld-align-XXXXXX";
+    char aligned_object_path[] = "/tmp/nax-ld-align-XXXXXX";
     test_ld_write_fixture(aligned_object_path, aligned_object, aligned_object_size);
     free(aligned_object);
     test_ld_expect_invalid_input(aligned_object_path, LD_UNSUPPORTED,
@@ -52,7 +52,7 @@ void test_ld_macho_input(void) {
     memcpy(malformed_archive, "!<arch>\n", 8);
     memcpy(malformed_archive + 8 + 48, "abc       ", 10);
     memcpy(malformed_archive + 8 + 58, "`\n", 2);
-    char archive_path[] = "/tmp/nature-ld-archive-XXXXXX";
+    char archive_path[] = "/tmp/nax-ld-archive-XXXXXX";
     test_ld_write_fixture(archive_path, malformed_archive, sizeof(malformed_archive));
     test_ld_expect_invalid_input(archive_path, LD_INVALID_INPUT, "member size");
     unlink(archive_path);
@@ -64,7 +64,7 @@ void test_ld_macho_input(void) {
     missing_archive_padding[8 + 48] = '1';
     memcpy(missing_archive_padding + 8 + 58, "`\n", 2);
     missing_archive_padding[8 + 60] = 0;
-    char missing_padding_path[] = "/tmp/nature-ld-archive-padding-XXXXXX";
+    char missing_padding_path[] = "/tmp/nax-ld-archive-padding-XXXXXX";
     test_ld_write_fixture(missing_padding_path, missing_archive_padding, sizeof(missing_archive_padding));
     test_ld_expect_invalid_input(missing_padding_path, LD_INVALID_INPUT, "alignment padding");
     unlink(missing_padding_path);
@@ -86,7 +86,7 @@ void test_ld_macho_input(void) {
     memcpy(long_archive + 8 + 58, "`\n", 2);
     memcpy(long_archive + 8 + 60, long_member, long_member_size);
     memcpy(long_archive + 8 + 60 + long_member_size, truncated_macho, sizeof(truncated_macho));
-    char long_archive_path[] = "/tmp/nature-ld-long-archive-XXXXXX";
+    char long_archive_path[] = "/tmp/nax-ld-long-archive-XXXXXX";
     test_ld_write_fixture(long_archive_path, long_archive, 8 + 60 + long_payload_size);
     test_ld_expect_invalid_input(long_archive_path, LD_INVALID_INPUT, long_member);
     unlink(long_archive_path);
@@ -121,7 +121,7 @@ void test_ld_macho_input(void) {
             0x00,
             0x00,
     };
-    char fat_path[] = "/tmp/nature-ld-fat-XXXXXX";
+    char fat_path[] = "/tmp/nax-ld-fat-XXXXXX";
     test_ld_write_fixture(fat_path, wrong_arch_fat, sizeof(wrong_arch_fat));
     test_ld_expect_invalid_input(fat_path, LD_UNSUPPORTED, "no arm64 slice");
     unlink(fat_path);

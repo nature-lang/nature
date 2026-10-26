@@ -1,4 +1,4 @@
-# import [fs](https://github.com/nature-lang/nature/tree/master/std/fs/fs.n)
+# import [fs](https://github.com/naxlang/nax/tree/master/std/fs/fs.n)
 
 File system operations for reading, writing, and managing files.
 

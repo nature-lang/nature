@@ -1,5 +1,5 @@
-#ifndef NATURE_LD_ELF_RELOC_H
-#define NATURE_LD_ELF_RELOC_H
+#ifndef NAX_LD_ELF_RELOC_H
+#define NAX_LD_ELF_RELOC_H
 
 #include "ld_elf_internal.h"
 

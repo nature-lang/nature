@@ -44,7 +44,7 @@ static reg_t *amd64_windows_sse_arg_reg(uint8_t slot, type_kind kind) {
  * represented as an integer of the same width; every other aggregate is passed
  * by reference to caller-owned storage.
  *
- * Nature does not expose native SIMD vector types yet.  When those are added,
+ * Nax does not expose native SIMD vector types yet.  When those are added,
  * __m128/HVA classification must be handled before the generic aggregate rule.
  */
 static int64_t amd64_windows_type_classify(type_t t, amd64_class_t *lo, amd64_class_t *hi) {
@@ -181,7 +181,7 @@ static linked_t *amd64_windows_lower_params(closure_t *c, slice_t *param_vars) {
         if (count == 0) {
             // Large aggregates and arrays arrive as a pointer to the caller's
             // by-value copy.  Keeping that pointer in the formal matches
-            // Nature's STORAGE_KIND_IND representation.
+            // Nax's STORAGE_KIND_IND representation.
             lir_operand_t *src;
             if (in_register) {
                 src = operand_new(LIR_OPERAND_REG,
@@ -196,7 +196,7 @@ static linked_t *amd64_windows_lower_params(closure_t *c, slice_t *param_vars) {
 
         if (is_abi_struct_like(param_type)) {
             // A 1/2/4/8-byte aggregate is carried in a GPR (or an 8-byte
-            // stack slot) but remains addressable in Nature, so materialize
+            // stack slot) but remains addressable in Nax, so materialize
             // it into local storage on entry.
             type_kind word_kind = amd64_windows_uint_kind(param_type.storage_size);
             linked_push(result, lir_stack_alloc(c, param_type, dst_param));
@@ -944,7 +944,7 @@ int64_t amd64_type_classify(type_t t, amd64_class_t *lo, amd64_class_t *hi, uint
         return 0;
     }
 
-    // 在 nature 实现中，栈总是通过栈传递并进行完整的值传递
+    // 在 nax 实现中，栈总是通过栈传递并进行完整的值传递
     // 而 c 语言中，arr 本身是在 abi 中未定义的数据类型，所以 arr 需要作为 ptr 进行传递
     if (t.kind == TYPE_ARR) {
         return 0;

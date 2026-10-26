@@ -1,5 +1,5 @@
 {
-	"name": "nature-language-client",
+	"name": "nax-language-client",
 	"description": "VSCode part of a language server",
 	"license": "MIT",
 	"version": "0.0.1",

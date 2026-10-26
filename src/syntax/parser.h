@@ -1,5 +1,5 @@
-#ifndef NATURE_SRC_SYNTAX_PARSER_H_
-#define NATURE_SRC_SYNTAX_PARSER_H_
+#ifndef NAX_SRC_SYNTAX_PARSER_H_
+#define NAX_SRC_SYNTAX_PARSER_H_
 
 #include <stdlib.h>
 
@@ -129,4 +129,4 @@ static parser_rule *find_rule(token_type_t token_type);
 
 static ast_stmt_t *parser_if_stmt(module_t *m);
 
-#endif // NATURE_SRC_SYNTAX_PARSER_H_
+#endif // NAX_SRC_SYNTAX_PARSER_H_

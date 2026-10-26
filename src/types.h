@@ -1,5 +1,5 @@
-#ifndef NATURE_TYPES_H
-#define NATURE_TYPES_H
+#ifndef NAX_TYPES_H
+#define NAX_TYPES_H
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -744,4 +744,4 @@ bool type_compare_no_ident(type_t dst, type_t src);
 
 type_t reduction_type(module_t *m, type_t t);
 
-#endif // NATURE_TYPES_H
+#endif // NAX_TYPES_H

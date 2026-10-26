@@ -10,7 +10,7 @@
  * are C translations of Object.skipShdr, Atom.debugTombstoneValue, and the
  * x86_64/aarch64/riscv resolveRelocNonAlloc functions in Zig commit
  * 738d2be9d6b6ef3ff3559130c05159ef53336224. Zig is distributed under the MIT
- * license; see ZIG-LICENSE.txt. Nature adds checked bounds/range validation and
+ * license; see ZIG-LICENSE.txt. Nax adds checked bounds/range validation and
  * stages every write so malformed input cannot partially modify the output.
  */
 

@@ -2,7 +2,7 @@
 //! analyzable at all and every fn declared in it has to carry `is_x`. Without both, the cross
 //! mode call diagnostic ported from `src/semantic/infer.c` can never fire.
 //!
-//! These cases deliberately use no builtin, so they do not depend on NATURE_ROOT pointing at
+//! These cases deliberately use no builtin, so they do not depend on NAX_ROOT pointing at
 //! this tree rather than an installed one.
 
 use nls::module_index::package_unit_reset;

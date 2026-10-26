@@ -1,8 +1,8 @@
-#ifndef NATURE_COFF_FORMAT_H
-#define NATURE_COFF_FORMAT_H
+#ifndef NAX_COFF_FORMAT_H
+#define NAX_COFF_FORMAT_H
 
 /*
- * PE/COFF wire constants used by Nature's Windows AMD64 object reader and
+ * PE/COFF wire constants used by Nax's Windows AMD64 object reader and
  * linker.  This file is intentionally independent of the Windows SDK.
  *
  * Source: llvm-project/llvm/include/llvm/BinaryFormat/COFF.h

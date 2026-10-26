@@ -1,5 +1,5 @@
-#ifndef NATURE_RISCV64_OPCODE_H
-#define NATURE_RISCV64_OPCODE_H
+#ifndef NAX_RISCV64_OPCODE_H
+#define NAX_RISCV64_OPCODE_H
 
 #include "asm.h"
 
@@ -276,4 +276,4 @@ static inline int to_rvc_reg(int reg) { return reg - 8; }
 
 uint8_t *riscv64_asm_inst_encoding(riscv64_asm_inst_t *inst, closure_t *c);
 
-#endif //NATURE_OPCODE_H
+#endif //NAX_OPCODE_H

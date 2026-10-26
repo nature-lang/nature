@@ -1,5 +1,5 @@
-#ifndef NATURE_SRC_LIB_ERROR_H_
-#define NATURE_SRC_LIB_ERROR_H_
+#ifndef NAX_SRC_LIB_ERROR_H_
+#define NAX_SRC_LIB_ERROR_H_
 
 #define ERROR_STR_COUNT 1000
 
@@ -18,4 +18,4 @@ void error_type_not_match(int line);
 
 void error_printf(int line, char *format, ...);
 
-#endif //NATURE_SRC_LIB_ERROR_H_
+#endif //NAX_SRC_LIB_ERROR_H_

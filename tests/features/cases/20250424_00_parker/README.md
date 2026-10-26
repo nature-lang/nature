@@ -97,15 +97,15 @@ Tested environments: ubuntu:22 / ubuntu:20
 
 ## 🛠️ Make build
 
-The source code is developed in the [nature](https://github.com/nature-lang/nature) programming language. The nature compiler version needs to be >= 0.4.0. After installation, execute `make amd64 && make install` in the source code directory to install to the /usr/local/parker directory.
+The source code is developed in the [nax](https://github.com/naxlang/nax) programming language. The nax compiler version needs to be >= 0.4.0. After installation, execute `make amd64 && make install` in the source code directory to install to the /usr/local/parker directory.
 
-> Nature currently primarily supports amd64 builds. Executables built by nature have a smaller size and higher efficiency. For other architectures, the main repository provides a golang version.
+> Nax currently primarily supports amd64 builds. Executables built by nax have a smaller size and higher efficiency. For other architectures, the main repository provides a golang version.
 
 ## 🎉 Thanks
 
-[nature](https://github.com/nature-lang/nature) is a modern system-level programming language and compiler. It works hand in hand with C for high-performance and efficient development.
+[nax](https://github.com/naxlang/nax) is a modern system-level programming language and compiler. It works hand in hand with C for high-performance and efficient development.
 
-The community-available version of nature is about to be released. Early experiences and feedback are welcome. You're also invited to contribute to the standard library; all contributions will be merged into the main repository.
+The community-available version of nax is about to be released. Early experiences and feedback are welcome. You're also invited to contribute to the standard library; all contributions will be merged into the main repository.
 
 ## 🪶 License
 

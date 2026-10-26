@@ -43,7 +43,7 @@ pub fn position_to_char_offset(position: Position, rope: &Rope) -> Option<usize>
 
 // ─── Identifier extraction ──────────────────────────────────────────────────────
 
-/// Returns `true` if `c` can appear in a Nature identifier.
+/// Returns `true` if `c` can appear in a Nax identifier.
 pub fn is_ident_char(c: char) -> bool {
     c.is_alphanumeric() || c == '_'
 }

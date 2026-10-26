@@ -263,7 +263,7 @@ static ast_generics_param_t *expr_generics_param(module_t *m, ast_expr_t *expr) 
 }
 
 /**
- * nature 目前没有 bool-like 约束，因此泛型参数不能直接作为 bool 值使用。
+ * nax 目前没有 bool-like 约束，因此泛型参数不能直接作为 bool 值使用。
  * 该检查用于 if/for 条件、!、&&、|| 等需要 bool 的上下文。
  */
 static void generics_check_bool_operand(module_t *m, ast_expr_t *expr) {

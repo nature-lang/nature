@@ -1,5 +1,5 @@
-#ifndef NATURE_SRC_LOWER_LOWER_H_
-#define NATURE_SRC_LOWER_LOWER_H_
+#ifndef NAX_SRC_LOWER_LOWER_H_
+#define NAX_SRC_LOWER_LOWER_H_
 
 static inline void lower_imm_symbol(closure_t *c, lir_operand_t *imm_operand, linked_t *list, linked_t *symbol_operations) {
     lir_imm_t *imm = imm_operand->value;
@@ -95,4 +95,4 @@ static inline void lower_imm_symbol(closure_t *c, lir_operand_t *imm_operand, li
     imm_operand->value = temp_operand->value;
 }
 
-#endif //NATURE_SRC_LOWER_LOWER_H_
+#endif //NAX_SRC_LOWER_LOWER_H_

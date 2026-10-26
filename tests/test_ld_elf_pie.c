@@ -805,7 +805,7 @@ static void test_pie_mode_and_backend_metadata(void) {
     uint8_t *object = test_pie_make_relocation_object(
             LD_ELF_EM_X86_64, LD_ELF_R_X86_64_64, false, 0U,
             &object_size);
-    char object_path[] = "/tmp/nature-ld-pie-object-XXXXXX";
+    char object_path[] = "/tmp/nax-ld-pie-object-XXXXXX";
     write_fixture(object_path, object, object_size);
     free(object);
 
@@ -1004,7 +1004,7 @@ static void test_pie_arch_relative_final_outputs(void) {
         uint8_t *object = test_pie_make_relocation_object(
                 cases[i].machine, cases[i].input_type, false, 0U,
                 &object_size);
-        char object_path[] = "/tmp/nature-ld-pie-arch-object-XXXXXX";
+        char object_path[] = "/tmp/nax-ld-pie-arch-object-XXXXXX";
         write_fixture(object_path, object, object_size);
         free(object);
 
@@ -1077,7 +1077,7 @@ static void test_pie_narrow_absolute_failure_is_atomic(void) {
     uint8_t *object = test_pie_make_relocation_object(
             LD_ELF_EM_X86_64, LD_ELF_R_X86_64_32, false, 0U,
             &object_size);
-    char object_path[] = "/tmp/nature-ld-pie-narrow-XXXXXX";
+    char object_path[] = "/tmp/nax-ld-pie-narrow-XXXXXX";
     write_fixture(object_path, object, object_size);
     free(object);
 
@@ -1094,7 +1094,7 @@ static void test_pie_narrow_absolute_failure_is_atomic(void) {
             0x45U,
             0xa5U,
     };
-    char output_path[] = "/tmp/nature-ld-pie-atomic-XXXXXX";
+    char output_path[] = "/tmp/nax-ld-pie-atomic-XXXXXX";
     write_fixture(output_path, sentinel, sizeof(sentinel));
 
     diagnostic_capture_t capture = {0};
@@ -1119,7 +1119,7 @@ static void test_pie_gottpoff_sets_static_tls_flag(void) {
     size_t object_size;
     uint8_t *object =
             test_pie_make_x86_64_gottpoff_object(&object_size);
-    char object_path[] = "/tmp/nature-ld-pie-gottpoff-XXXXXX";
+    char object_path[] = "/tmp/nax-ld-pie-gottpoff-XXXXXX";
     write_fixture(object_path, object, object_size);
     free(object);
 
@@ -1187,7 +1187,7 @@ static void test_pie_pc32_absolute_failure_is_atomic(void) {
     uint8_t *object = test_pie_make_relocation_object(
             LD_ELF_EM_X86_64, LD_ELF_R_X86_64_PC32, true, 0U,
             &object_size);
-    char object_path[] = "/tmp/nature-ld-pie-pc32-abs-XXXXXX";
+    char object_path[] = "/tmp/nax-ld-pie-pc32-abs-XXXXXX";
     write_fixture(object_path, object, object_size);
     free(object);
 
@@ -1217,7 +1217,7 @@ static void test_pie_pc32_absolute_failure_is_atomic(void) {
             0x49U,
             0x45U,
     };
-    char output_path[] = "/tmp/nature-ld-pie-pc32-atomic-XXXXXX";
+    char output_path[] = "/tmp/nax-ld-pie-pc32-atomic-XXXXXX";
     write_fixture(output_path, sentinel, sizeof(sentinel));
 
     capture = (diagnostic_capture_t) {0};
@@ -1274,7 +1274,7 @@ static void test_pie_pc_relative_weak_undefined_is_absolute_zero(void) {
         test_pie_mutate_target_and_addend(
                 object, object_size, LD_ELF_STB_WEAK, LD_ELF_SHN_UNDEF,
                 0U, 0);
-        char object_path[] = "/tmp/nature-ld-pie-weak-pc-XXXXXX";
+        char object_path[] = "/tmp/nax-ld-pie-weak-pc-XXXXXX";
         write_fixture(object_path, object, object_size);
         free(object);
 
@@ -1287,7 +1287,7 @@ static void test_pie_pc_relative_weak_undefined_is_absolute_zero(void) {
                                   cases[i].arch, &capture) == LD_OK);
         assert(capture.count == 0U);
 
-        char pie_output[] = "/tmp/nature-ld-pie-weak-pc-out-XXXXXX";
+        char pie_output[] = "/tmp/nax-ld-pie-weak-pc-out-XXXXXX";
         write_fixture(pie_output, sentinel, sizeof(sentinel));
         capture = (diagnostic_capture_t) {0};
         assert(test_pie_link_arch(object_path, pie_output, true,
@@ -1335,7 +1335,7 @@ static void test_pie_relative_accepts_negative_signed_addend(void) {
         test_pie_mutate_target_and_addend(
                 object, object_size, LD_ELF_STB_GLOBAL, TEST_PIE_DATA,
                 16U, input_addend);
-        char object_path[] = "/tmp/nature-ld-pie-negative-XXXXXX";
+        char object_path[] = "/tmp/nax-ld-pie-negative-XXXXXX";
         write_fixture(object_path, object, object_size);
         free(object);
 
@@ -1413,11 +1413,11 @@ static void test_pie_relative_signed_addend_overflow_is_atomic(void) {
         test_pie_mutate_target_and_addend(
                 object, object_size, LD_ELF_STB_GLOBAL, TEST_PIE_DATA,
                 16U, INT64_MAX);
-        char object_path[] = "/tmp/nature-ld-pie-addend-overflow-XXXXXX";
+        char object_path[] = "/tmp/nax-ld-pie-addend-overflow-XXXXXX";
         write_fixture(object_path, object, object_size);
         free(object);
 
-        char output_path[] = "/tmp/nature-ld-pie-addend-atomic-XXXXXX";
+        char output_path[] = "/tmp/nax-ld-pie-addend-atomic-XXXXXX";
         write_fixture(output_path, sentinel, sizeof(sentinel));
         diagnostic_capture_t capture = {0};
         assert(test_pie_link_arch(object_path, output_path, true,
@@ -1447,7 +1447,7 @@ static void test_pie_expect_zig_unhandled_failure(
     uint8_t *object = test_pie_make_relocation_object(
             machine, relocation_type, target_absolute, relocation_word,
             &object_size);
-    char object_path[] = "/tmp/nature-ld-pie-zig-policy-XXXXXX";
+    char object_path[] = "/tmp/nax-ld-pie-zig-policy-XXXXXX";
     write_fixture(object_path, object, object_size);
     free(object);
 
@@ -1467,7 +1467,7 @@ static void test_pie_expect_zig_unhandled_failure(
             0x43U,
             0x59U,
     };
-    char output_path[] = "/tmp/nature-ld-pie-zig-atomic-XXXXXX";
+    char output_path[] = "/tmp/nax-ld-pie-zig-atomic-XXXXXX";
     write_fixture(output_path, sentinel, sizeof(sentinel));
 
     diagnostic_capture_t capture = {0};
@@ -1597,7 +1597,7 @@ static void test_pie_accepts_riscv_lo12(void) {
         uint8_t *object = test_pie_make_relocation_object(
                 LD_ELF_EM_RISCV, cases[i].type, false,
                 cases[i].instruction, &object_size);
-        char object_path[] = "/tmp/nature-ld-pie-riscv-lo12-XXXXXX";
+        char object_path[] = "/tmp/nax-ld-pie-riscv-lo12-XXXXXX";
         write_fixture(object_path, object, object_size);
         free(object);
 

@@ -821,7 +821,7 @@ bool ld_elf_relocation_supported_in_static_pie(ld_arch_t arch,
      * This is the exact allocated-relocation scanReloc switch from Zig
      * 738d2be9d6b6ef3ff3559130c05159ef53336224.  R_*_NONE is skipped by
      * Zig's common Atom scanner before architecture dispatch, so it is also
-     * accepted here.  Nature's ET_EXEC backend intentionally handles a wider
+     * accepted here.  Nax's ET_EXEC backend intentionally handles a wider
      * set and must not leak those extensions into the Zig-compatible PIE
      * policy.
      */
@@ -3389,14 +3389,14 @@ static int ld_elf_reloc_apply_riscv64(
         uint32_t low_rs1 = (low >> 15U) & 0x1fU;
         bool jalr = (low & 0x707fU) == 0x0067U &&
                     low_rs1 == auipc_rd;
-        bool nature_address = relocation->type == LD_R_RISCV_CALL &&
+        bool nax_address = relocation->type == LD_R_RISCV_CALL &&
                               (low & 0x707fU) == 0x0013U &&
                               low_rd == auipc_rd && low_rs1 == auipc_rd;
-        if (!jalr && !nature_address) {
+        if (!jalr && !nax_address) {
             return ld_elf_reloc_fail(
                     ctx, object, section, relocation, arch,
                     values->symbol_name,
-                    "expected an AUIPC followed by JALR, or Nature's "
+                    "expected an AUIPC followed by JALR, or Nax's "
                     "AUIPC+ADDI address sequence, found second instruction "
                     "0x%08x",
                     low);

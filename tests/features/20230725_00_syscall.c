@@ -11,7 +11,7 @@ static void test_basic() {
             "open asserts/open.txt successful\n"
             "actual read len: 20\n"
             "buf as string: hello world\n"
-            "nature i\n";
+            "nax is t\n";
 
     assert_string_equal(raw, str);
 }

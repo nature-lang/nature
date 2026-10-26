@@ -1,5 +1,5 @@
-#ifndef NATURE_RUNTIME_RUNTIME_H
-#define NATURE_RUNTIME_RUNTIME_H
+#ifndef NAX_RUNTIME_RUNTIME_H
+#define NAX_RUNTIME_RUNTIME_H
 
 #include "utils/helper.h"
 #include "runtime/uv_compat.h"
@@ -170,7 +170,7 @@ static inline bool user_main_is_fn(void) {
 typedef void (*void_fn_t)();
 typedef void (*env_fn_t)(void *envs);
 
-// errable<T,errset_t>, which a nature fn returns and so does a C fn bound as T!: the tag, then the value
+// errable<T,errset_t>, which a nax fn returns and so does a C fn bound as T!: the tag, then the value
 // or, when it failed, the errset. n_errable_t holds a value of up to 8 bytes, n_errable_vec_t a vec or a
 // string.
 typedef struct {
@@ -392,7 +392,7 @@ struct linkco_t {
     bool success; // chan recv/send 是否成功
 };
 
-// 必须和 nature code 保持一致
+// 必须和 nax code 保持一致
 typedef struct n_future_t {
     int64_t size;
     void *result;
@@ -570,4 +570,4 @@ void processor_set_status(n_processor_t *p, p_status_t status);
 
 void *rti_gc_malloc(uint64_t size, rtype_t *rtype);
 
-#endif // NATURE_BASIC_H
+#endif // NAX_BASIC_H

@@ -1,8 +1,8 @@
 /*
- * Windows AMD64 TLS layout test for Nature's COFF adapter and PE linker.
+ * Windows AMD64 TLS layout test for Nax's COFF adapter and PE linker.
  *
  * The fixture is encoded through coff_encode_amd64_module_ex(), defines the
- * referenced variable in .tls$NAT, and is then linked against Nature's bundled
+ * referenced variable in .tls$NAT, and is then linked against Nax's bundled
  * MinGW-w64 sysroot without invoking an external linker. The test validates
  * the resulting PE directories and relocations. On a native Windows test host
  * it also executes the image to validate loader TLS behavior.
@@ -25,8 +25,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#ifndef NATURE_SOURCE_DIR
-#error "NATURE_SOURCE_DIR must name the Nature source tree"
+#ifndef NAX_SOURCE_DIR
+#error "NAX_SOURCE_DIR must name the Nax source tree"
 #endif
 
 typedef struct {
@@ -549,7 +549,7 @@ static void make_tls_main_object(const char *path) {
                 RBX_SAVE_OFFSET);
 
     asm_global_symbol_t unwind_plan = {
-            .name = "__nature_unwind_plan$tls_load",
+            .name = "__nax_unwind_plan$tls_load",
             .size = sizeof(plan),
             .value = plan,
     };
@@ -971,9 +971,9 @@ int main(void) {
     };
     char *directory = temp_dir();
     assert(directory);
-    char *object_path = path_join(directory, "nature-coff-amd64-tls.obj");
-    char *image_path = path_join(directory, "nature-coff-amd64-tls.exe");
-    char *map_path = path_join(directory, "nature-coff-amd64-tls.map");
+    char *object_path = path_join(directory, "nax-coff-amd64-tls.obj");
+    char *image_path = path_join(directory, "nax-coff-amd64-tls.exe");
+    char *map_path = path_join(directory, "nax-coff-amd64-tls.map");
     assert(object_path && image_path && map_path);
     make_tls_main_object(object_path);
     names[1] = object_path;
@@ -986,11 +986,11 @@ int main(void) {
             inputs[i] = (char *) object_path;
             continue;
         }
-        size_t length = strlen(NATURE_SOURCE_DIR) + strlen(names[i]) + 23U;
+        size_t length = strlen(NAX_SOURCE_DIR) + strlen(names[i]) + 23U;
         inputs[i] = malloc(length);
         assert(inputs[i]);
         int written = snprintf(inputs[i], length, "%s/lib/windows_amd64/%s",
-                               NATURE_SOURCE_DIR, names[i]);
+                               NAX_SOURCE_DIR, names[i]);
         assert(written > 0 && (size_t) written < length);
     }
 

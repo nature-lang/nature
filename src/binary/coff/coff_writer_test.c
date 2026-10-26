@@ -1,5 +1,5 @@
 /*
- * Byte-level tests for Nature's portable AMD64 COFF object writer.
+ * Byte-level tests for Nax's portable AMD64 COFF object writer.
  *
  * Wire expectations are derived from LLVM's WinCOFFObjectWriter and COFF
  * definitions.
@@ -234,7 +234,7 @@ static bool coff_test_write_linkable_object(void) {
                             text, 10U, exit_index, LD_COFF_REL_AMD64_REL32,
                             0) == COFF_WRITER_OK);
     COFF_TEST_CHECK(coff_object_write_file(
-                            object, "/tmp/nature-coff-writer-entry.obj") ==
+                            object, "/tmp/nax-coff-writer-entry.obj") ==
                     COFF_WRITER_OK);
     coff_object_destroy(object);
     return true;
@@ -376,12 +376,12 @@ static bool coff_test_full_object(void) {
                             LD_COFF_STORAGE_CLASS_EXTERNAL,
                             &entry_index) == COFF_WRITER_OK);
     COFF_TEST_CHECK(coff_object_add_defined_symbol(
-                            object, "nature.really_long_function_name", text,
+                            object, "nax.really_long_function_name", text,
                             0U, COFF_SYMBOL_TYPE_FUNCTION,
                             LD_COFF_STORAGE_CLASS_EXTERNAL,
                             &long_function_index) == COFF_WRITER_OK);
     COFF_TEST_CHECK(coff_object_add_defined_symbol(
-                            object, "nature.really_long_global_data", data,
+                            object, "nax.really_long_global_data", data,
                             8U, 0U, LD_COFF_STORAGE_CLASS_EXTERNAL,
                             &long_data_index) == COFF_WRITER_OK);
     COFF_TEST_CHECK(coff_object_add_defined_symbol(
@@ -538,7 +538,7 @@ static bool coff_test_full_object(void) {
     COFF_TEST_CHECK(coff_test_find_symbol(&image, ".file", &file_symbol));
     COFF_TEST_CHECK(file_symbol.raw_index == 0U && file_symbol.aux_count == 2U);
     COFF_TEST_CHECK(coff_test_find_symbol(
-            &image, "nature.really_long_function_name",
+            &image, "nax.really_long_function_name",
             &long_function_symbol));
     COFF_TEST_CHECK(coff_test_u32(first + long_function_symbol.file_offset) ==
                     0U);
@@ -581,9 +581,9 @@ static bool coff_test_full_object(void) {
     COFF_TEST_CHECK(associative_aux[14] == LD_COFF_COMDAT_ASSOCIATIVE);
 
     COFF_TEST_CHECK(coff_object_write_file(
-                            object, "/tmp/nature-coff-writer-test.obj") ==
+                            object, "/tmp/nax-coff-writer-test.obj") ==
                     COFF_WRITER_OK);
-    FILE *written = fopen("/tmp/nature-coff-writer-test.obj", "rb");
+    FILE *written = fopen("/tmp/nax-coff-writer-test.obj", "rb");
     COFF_TEST_CHECK(written != NULL);
     COFF_TEST_CHECK(fseek(written, 0L, SEEK_END) == 0);
     COFF_TEST_CHECK(ftell(written) == (long) first_size);

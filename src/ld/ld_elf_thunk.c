@@ -7,7 +7,7 @@
 /*
  * The grouping scale and ADRP/ADD/BR sequence follow Zig commit
  * 738d2be9d6b6ef3ff3559130c05159ef53336224, Elf.createThunks and
- * Elf/Thunk.zig. Nature keeps the relocation addend in the deduplication key
+ * Elf/Thunk.zig. Nax keeps the relocation addend in the deduplication key
  * and makes the thunk itself target S + A; the referenced Zig revision
  * assumes the usual zero-addend CALL26/JUMP26 form.
  */

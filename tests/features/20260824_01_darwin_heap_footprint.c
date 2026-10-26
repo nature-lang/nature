@@ -56,7 +56,7 @@ int main(void) {
 
     int status = 0;
     waitpid(child, &status, 0);
-    assertf(ready, "Nature heap footprint fixture exited before reporting readiness");
+    assertf(ready, "Nax heap footprint fixture exited before reporting readiness");
 
 #ifdef __DARWIN
     // The string churn also triggers the independent GC worker resource leak

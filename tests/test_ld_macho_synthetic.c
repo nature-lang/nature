@@ -441,10 +441,10 @@ static void test_codesigned_linkedit_layout(void) {
             .n_type = LD_N_SECT | LD_N_EXT,
             .n_sect = 1U,
     };
-    char object_path[] = "/tmp/nature-ld-codesign-object-XXXXXX";
+    char object_path[] = "/tmp/nax-ld-codesign-object-XXXXXX";
     test_make_macho_object(object_path, &section, 1U, &symbol, 1U,
                            strings, sizeof(strings));
-    char output_path[] = "/tmp/nature-ld-codesign-output-XXXXXX";
+    char output_path[] = "/tmp/nax-ld-codesign-output-XXXXXX";
     int output_fd = mkstemp(output_path);
     assert(output_fd >= 0);
     assert(close(output_fd) == 0);
@@ -545,7 +545,7 @@ static void test_local_got_and_indirect_offsets(void) {
             {.n_strx = 7U, .n_type = LD_N_SECT, .n_sect = 2U},
             {.n_strx = 19U, .n_type = LD_N_UNDF | LD_N_EXT},
     };
-    char object_path[] = "/tmp/nature-ld-synthetic-got-XXXXXX";
+    char object_path[] = "/tmp/nax-ld-synthetic-got-XXXXXX";
     test_make_macho_object(object_path, sections, 2U, symbols, 3U, strings,
                            sizeof(strings));
 
@@ -558,9 +558,9 @@ static void test_local_got_and_indirect_offsets(void) {
             "  - targets: [ arm64-macos ]\n"
             "    symbols: [ _imported ]\n"
             "...\n";
-    char tbd_path[] = "/tmp/nature-ld-synthetic-tbd-XXXXXX";
+    char tbd_path[] = "/tmp/nax-ld-synthetic-tbd-XXXXXX";
     test_ld_write_fixture(tbd_path, tbd, sizeof(tbd) - 1U);
-    char output_path[] = "/tmp/nature-ld-synthetic-output-XXXXXX";
+    char output_path[] = "/tmp/nax-ld-synthetic-output-XXXXXX";
     int output_fd = mkstemp(output_path);
     assert(output_fd >= 0);
     assert(close(output_fd) == 0);
@@ -646,7 +646,7 @@ static void test_weak_dylib_provider_direct_and_got_fixups(void) {
              .n_sect = 1U},
             {.n_strx = 7U, .n_type = LD_N_UNDF | LD_N_EXT},
     };
-    char object_path[] = "/tmp/nature-ld-weak-provider-object-XXXXXX";
+    char object_path[] = "/tmp/nax-ld-weak-provider-object-XXXXXX";
     test_make_macho_object(object_path, sections, 2U, symbols, 2U,
                            strings, sizeof(strings));
 
@@ -659,9 +659,9 @@ static void test_weak_dylib_provider_direct_and_got_fixups(void) {
             "  - targets: [ arm64-macos ]\n"
             "    weak-symbols: [ _weak_data ]\n"
             "...\n";
-    char tbd_path[] = "/tmp/nature-ld-weak-provider-tbd-XXXXXX";
+    char tbd_path[] = "/tmp/nax-ld-weak-provider-tbd-XXXXXX";
     test_ld_write_fixture(tbd_path, tbd, sizeof(tbd) - 1U);
-    char output_path[] = "/tmp/nature-ld-weak-provider-output-XXXXXX";
+    char output_path[] = "/tmp/nax-ld-weak-provider-output-XXXXXX";
     int output_fd = mkstemp(output_path);
     assert(output_fd >= 0);
     assert(close(output_fd) == 0);
@@ -748,10 +748,10 @@ static void test_local_global_and_weak_tlv(void) {
              .n_desc = LD_N_WEAK_DEF,
              .n_value = 48U},
     };
-    char object_path[] = "/tmp/nature-ld-synthetic-tlv-XXXXXX";
+    char object_path[] = "/tmp/nax-ld-synthetic-tlv-XXXXXX";
     test_make_macho_object(object_path, sections, 2U, symbols, 4U, strings,
                            sizeof(strings));
-    char output_path[] = "/tmp/nature-ld-synthetic-tlv-output-XXXXXX";
+    char output_path[] = "/tmp/nax-ld-synthetic-tlv-output-XXXXXX";
     int output_fd = mkstemp(output_path);
     assert(output_fd >= 0);
     assert(close(output_fd) == 0);
@@ -839,11 +839,11 @@ static void test_illegal_tlv_reference(void) {
              .n_sect = 1U},
             {.n_strx = 7U, .n_type = LD_N_SECT, .n_sect = 2U},
     };
-    char object_path[] = "/tmp/nature-ld-synthetic-illegal-tlv-XXXXXX";
+    char object_path[] = "/tmp/nax-ld-synthetic-illegal-tlv-XXXXXX";
     test_make_macho_object(object_path, sections, 2U, symbols, 2U, strings,
                            sizeof(strings));
     char output_path[] =
-            "/tmp/nature-ld-synthetic-illegal-tlv-output-XXXXXX";
+            "/tmp/nax-ld-synthetic-illegal-tlv-output-XXXXXX";
     int output_fd = mkstemp(output_path);
     assert(output_fd >= 0);
     assert(close(output_fd) == 0);
@@ -888,7 +888,7 @@ static void test_imported_tlv_pointer(void) {
              .n_sect = 1U},
             {.n_strx = 7U, .n_type = LD_N_UNDF | LD_N_EXT},
     };
-    char object_path[] = "/tmp/nature-ld-synthetic-import-tlv-XXXXXX";
+    char object_path[] = "/tmp/nax-ld-synthetic-import-tlv-XXXXXX";
     test_make_macho_object(object_path, &section, 1U, symbols, 2U, strings,
                            sizeof(strings));
 
@@ -901,10 +901,10 @@ static void test_imported_tlv_pointer(void) {
             "  - targets: [ arm64-macos ]\n"
             "    thread-local-symbols: [ _import_tls ]\n"
             "...\n";
-    char tbd_path[] = "/tmp/nature-ld-synthetic-import-tlv-tbd-XXXXXX";
+    char tbd_path[] = "/tmp/nax-ld-synthetic-import-tlv-tbd-XXXXXX";
     test_ld_write_fixture(tbd_path, tbd, sizeof(tbd) - 1U);
     char output_path[] =
-            "/tmp/nature-ld-synthetic-import-tlv-output-XXXXXX";
+            "/tmp/nax-ld-synthetic-import-tlv-output-XXXXXX";
     int output_fd = mkstemp(output_path);
     assert(output_fd >= 0);
     assert(close(output_fd) == 0);
@@ -929,10 +929,10 @@ static void test_imported_tlv_pointer(void) {
     unlink(output_path);
 
     char weak_dylib_path[] =
-            "/tmp/nature-ld-synthetic-weak-tlv-dylib-XXXXXX";
+            "/tmp/nax-ld-synthetic-weak-tlv-dylib-XXXXXX";
     test_make_weak_tlv_dylib(weak_dylib_path);
     char weak_output_path[] =
-            "/tmp/nature-ld-synthetic-weak-tlv-output-XXXXXX";
+            "/tmp/nax-ld-synthetic-weak-tlv-output-XXXXXX";
     int weak_output_fd = mkstemp(weak_output_path);
     assert(weak_output_fd >= 0);
     assert(close(weak_output_fd) == 0);

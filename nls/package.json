@@ -1,15 +1,15 @@
 {
-  "name": "nature-language",
-  "displayName": "Nature Language",
-  "description": "Language support for the Nature programming language",
+  "name": "nax-language",
+  "displayName": "Nax Language",
+  "description": "Language support for the Nax programming language",
   "license": "MIT",
   "version": "0.2.0",
   "categories": [],
   "publisher": "weiwenhao",
   "keywords": [
-    "nature-language",
-    "nature",
-    "nature-lsp"
+    "nax-language",
+    "nax",
+    "nax-lsp"
   ],
   "repository": {
     "url": "https://github.com/nature-lang/nls"
@@ -32,8 +32,8 @@
         ],
         "configuration": "./syntaxes/language-configuration.json",
         "icon": {
-          "dark": "./assets/nature-lang-icon-alternative-1.svg",
-          "light": "./assets/nature-lang-icon-alternative-1.svg"
+          "dark": "./assets/nax-lang-icon-alternative-1.svg",
+          "light": "./assets/nax-lang-icon-alternative-1.svg"
         }
       },
       {

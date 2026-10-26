@@ -4,7 +4,7 @@ project(runtime C)
 
 include(../cmake/cross.cmake)
 
-# release 命令, 在 nature 跟目录下执行
+# release 命令, 在 nax 跟目录下执行
 # rm -rf build-runtime &&
 # cmake -B build-runtime -S runtime -DCMAKE_TOOLCHAIN_FILE=$(pwd)/cmake/linux-amd64-toolchain.cmake -DCMAKE_VERBOSE_MAKEFILE=ON -DCMAKE_BUILD_TYPE=Release &&
 # cmake --build build-runtime --target runtime

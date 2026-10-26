@@ -1,5 +1,5 @@
-#ifndef NATURE_LD_TAPI_H
-#define NATURE_LD_TAPI_H
+#ifndef NAX_LD_TAPI_H
+#define NAX_LD_TAPI_H
 
 #include "ld.h"
 

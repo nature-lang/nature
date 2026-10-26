@@ -1,5 +1,5 @@
-#ifndef NATURE_RUNTIME_NUTILS_TCP_H_
-#define NATURE_RUNTIME_NUTILS_TCP_H_
+#ifndef NAX_RUNTIME_NUTILS_TCP_H_
+#define NAX_RUNTIME_NUTILS_TCP_H_
 
 #include "runtime/processor.h"
 #include "runtime/uv_compat.h"
@@ -591,4 +591,4 @@ void rt_uv_tcp_conn_close(n_tcp_conn_t *n_conn) {
     global_waiting_send(uv_async_conn_close, conn, 0, 0);
 }
 
-#endif //NATURE_RUNTIME_NUTILS_TCP_H_
+#endif //NAX_RUNTIME_NUTILS_TCP_H_

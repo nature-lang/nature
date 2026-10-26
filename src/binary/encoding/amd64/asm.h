@@ -1,5 +1,5 @@
-#ifndef NATURE_SRC_OPCODE_AMD64_ASM_H_
-#define NATURE_SRC_OPCODE_AMD64_ASM_H_
+#ifndef NAX_SRC_OPCODE_AMD64_ASM_H_
+#define NAX_SRC_OPCODE_AMD64_ASM_H_
 
 #include "src/types.h"
 #include "utils/helper.h"
@@ -289,4 +289,4 @@ static inline amd64_asm_operand_t *asm_match_int_operand(int64_t n) {
 }
 
 
-#endif //NATURE_SRC_ASSEMBLER_X86_64_ASM_H_
+#endif //NAX_SRC_ASSEMBLER_X86_64_ASM_H_

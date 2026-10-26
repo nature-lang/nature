@@ -4,8 +4,8 @@
 #include <stdio.h>
 #include <string.h>
 
-#ifndef NATURE_SOURCE_DIR
-#error "NATURE_SOURCE_DIR must name the Nature source tree"
+#ifndef NAX_SOURCE_DIR
+#error "NAX_SOURCE_DIR must name the Nax source tree"
 #endif
 
 typedef struct {
@@ -113,7 +113,7 @@ static void check_runtime_aco_unwind(const ld_coff_context_t *context) {
 static void check_input(const char *name) {
     char path[4096];
     int length = snprintf(path, sizeof(path), "%s/lib/windows_amd64/%s",
-                          NATURE_SOURCE_DIR, name);
+                          NAX_SOURCE_DIR, name);
     assert(length > 0 && (size_t) length < sizeof(path));
 
     diagnostic_capture_t capture = {{0}};

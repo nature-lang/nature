@@ -10,7 +10,7 @@ static void test_basic() {
                         "163264128\n"
                         "hello world\n"
                         "9false64\n"
-                        "helloworldnaturehaha\n"
+                        "helloworldnaxhaha\n"
                         "16\n");
 }
 

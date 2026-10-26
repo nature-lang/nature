@@ -1,5 +1,5 @@
-#ifndef NATURE_MACH_H
-#define NATURE_MACH_H
+#ifndef NAX_MACH_H
+#define NAX_MACH_H
 
 #include "src/build/config.h"
 #include "src/types.h"
@@ -646,4 +646,4 @@ static inline mach_context_t *mach_context_new(char *output) {
     return ctx;
 }
 
-#endif //NATURE_MACH_H
+#endif //NAX_MACH_H

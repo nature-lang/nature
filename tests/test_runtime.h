@@ -1,5 +1,5 @@
-#ifndef NATURE_TEST_RUNTIME_H
-#define NATURE_TEST_RUNTIME_H
+#ifndef NAX_TEST_RUNTIME_H
+#define NAX_TEST_RUNTIME_H
 
 #include "runtime/memory.h"
 #include "runtime/nutils/fn.h"
@@ -22,4 +22,4 @@ rtype_t rt_rtype_data;
 
 uint8_t main_is_fn;
 
-#endif //NATURE_TEST_RUNTIME_H
+#endif //NAX_TEST_RUNTIME_H

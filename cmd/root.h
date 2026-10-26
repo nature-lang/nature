@@ -1,5 +1,5 @@
-#ifndef NATURE_ROOT_H
-#define NATURE_ROOT_H
+#ifndef NAX_ROOT_H
+#define NAX_ROOT_H
 
 #include "root.h"
 #include "src/build/build.h"
@@ -127,11 +127,11 @@ void cmd_entry(int argc, char **argv) {
     const char *build_file = argv[optind];
 
     if (!ends_with(build_file, ".n") && !ends_with(build_file, ".x")) {
-        assertf(false, "must specify the compile target with suffix n or x, example: nature build main.n");
+        assertf(false, "must specify the compile target with suffix n or x, example: nax build main.n");
         return;
     }
 
     build(build_file, is_archive);
 }
 
-#endif //NATURE_ROOT_H
+#endif //NAX_ROOT_H

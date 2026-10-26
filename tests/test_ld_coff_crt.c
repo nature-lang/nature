@@ -9,8 +9,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#ifndef NATURE_SOURCE_DIR
-#error "NATURE_SOURCE_DIR must name the Nature source tree"
+#ifndef NAX_SOURCE_DIR
+#error "NAX_SOURCE_DIR must name the Nax source tree"
 #endif
 
 typedef struct {
@@ -25,7 +25,7 @@ static void diagnostic(void *context, ld_diag_level_t level,
 }
 
 static void make_main_object(const char *path) {
-    coff_object_t *object = coff_object_create("nature-crt-smoke.c");
+    coff_object_t *object = coff_object_create("nax-crt-smoke.c");
     assert(object);
     coff_section_t *text = NULL;
     assert(coff_object_add_section(
@@ -247,7 +247,7 @@ int main(void) {
     const size_t count = sizeof(names) / sizeof(*names);
     char **inputs = calloc(count, sizeof(*inputs));
     assert(inputs);
-    char main_object[] = "/tmp/nature-ld-coff-crt-main.obj";
+    char main_object[] = "/tmp/nax-ld-coff-crt-main.obj";
     make_main_object(main_object);
     names[1] = main_object;
     for (size_t i = 0; i < count; i++) {
@@ -255,11 +255,11 @@ int main(void) {
             inputs[i] = main_object;
             continue;
         }
-        size_t length = strlen(NATURE_SOURCE_DIR) + strlen(names[i]) + 23U;
+        size_t length = strlen(NAX_SOURCE_DIR) + strlen(names[i]) + 23U;
         inputs[i] = malloc(length);
         assert(inputs[i]);
         int written = snprintf(inputs[i], length, "%s/lib/windows_amd64/%s",
-                               NATURE_SOURCE_DIR, names[i]);
+                               NAX_SOURCE_DIR, names[i]);
         assert(written > 0 && (size_t) written < length);
     }
 
@@ -267,7 +267,7 @@ int main(void) {
     ld_options_t options = {0};
     options.os = LD_OS_WINDOWS;
     options.arch = LD_ARCH_AMD64;
-    options.output_path = "/tmp/nature-ld-coff-crt.exe";
+    options.output_path = "/tmp/nax-ld-coff-crt.exe";
     options.entry_symbol = "mainCRTStartup";
     options.pie = true;
     options.inputs.items = inputs;

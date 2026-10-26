@@ -1,4 +1,4 @@
-# import [io](https://github.com/nature-lang/nature/tree/master/std/io/io.n)
+# import [io](https://github.com/naxlang/nax/tree/master/std/io/io.n)
 
 Input/output interfaces and buffer implementation for reading and writing data.
 
@@ -140,7 +140,7 @@ fn buffer.read_all():[u8]!
 
 Read all remaining data from the buffer.
 
-# import [io.buf](https://github.com/nature-lang/nature/tree/master/std/io/buf.n)
+# import [io.buf](https://github.com/naxlang/nax/tree/master/std/io/buf.n)
 
 Buffered I/O operations for efficient reading and writing.
 

@@ -1,8 +1,8 @@
-#ifndef NATURE_LOWER_AMD64_H
-#define NATURE_LOWER_AMD64_H
+#ifndef NAX_LOWER_AMD64_H
+#define NAX_LOWER_AMD64_H
 
 #include "src/lir.h"
 
 void amd64_lower(closure_t *c);
 
-#endif //NATURE_AMD64_H
+#endif //NAX_AMD64_H

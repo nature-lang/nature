@@ -245,7 +245,7 @@ NO_OPTIMIZE static void coroutine_wrapper() {
 
     assert((addr_t) co->fn > 0);
 
-    // 调用到用户函数, a nature fn returns errable<void,errset_t>
+    // 调用到用户函数, a nax fn returns errable<void,errset_t>
     n_errable_t result = {0};
     if (co->flag & FLAG(CO_FLAG_RTFN)) {
         if (co->flag & FLAG(CO_FLAG_DIRECT)) {

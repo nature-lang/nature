@@ -46,7 +46,7 @@ fn main() {
 }
 
 --- output.txt
-nature-test/main.n:12:5: cannot infer generics param 'U'
+nax-test/main.n:12:5: cannot infer generics param 'U'
 
 === test_method_failed
 --- main.n
@@ -65,7 +65,7 @@ fn main() {
 }
 
 --- output.txt
-nature-test/main.n:5:18: generics param 'T' redeclared
+nax-test/main.n:5:18: generics param 'T' redeclared
 
 === test_method_infer_failed
 --- main.n
@@ -84,7 +84,7 @@ fn main() {
 }
 
 --- output.txt
-nature-test/main.n:12:5: cannot infer generics param 'U'
+nax-test/main.n:12:5: cannot infer generics param 'U'
 
 === test_method_gen
 --- main.n

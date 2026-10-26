@@ -43,7 +43,7 @@ type timespec_t = struct {
     i64 sec
     i64 nsec
 }
-// Keep the common Nature stat surface independent from the UCRT wire layout.
+// Keep the common Nax stat surface independent from the UCRT wire layout.
 pub type stat_t = struct {
     u64 dev
     u64 ino

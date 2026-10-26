@@ -119,9 +119,9 @@ static void test_init_fini_sections_are_collected_separately(void) {
     uint8_t *last = make_init_fini_object(
             init_tail, 0U, fini_tail, false, &last_size);
 
-    char first_path[] = "/tmp/nature-ld-init-head-XXXXXX";
-    char main_path[] = "/tmp/nature-ld-init-main-XXXXXX";
-    char last_path[] = "/tmp/nature-ld-init-tail-XXXXXX";
+    char first_path[] = "/tmp/nax-ld-init-head-XXXXXX";
+    char main_path[] = "/tmp/nax-ld-init-main-XXXXXX";
+    char last_path[] = "/tmp/nax-ld-init-tail-XXXXXX";
     write_fixture(first_path, first, first_size);
     write_fixture(main_path, main, main_size);
     write_fixture(last_path, last, last_size);
@@ -129,7 +129,7 @@ static void test_init_fini_sections_are_collected_separately(void) {
     free(main);
     free(last);
 
-    static const char *output_path = "/tmp/nature-ld-init-fini-output";
+    static const char *output_path = "/tmp/nax-ld-init-fini-output";
     const char *inputs[] = {first_path, main_path, last_path};
     diagnostic_capture_t capture = {0};
     assert(link_test_elf_inputs(output_path, inputs, 3U, &capture) == LD_OK);
@@ -258,14 +258,14 @@ static void test_output_alignment_uses_maximum_input_alignment(void) {
                                                 &low_size);
     uint8_t *high = make_rodata_alignment_object(16U, 0x30U, false,
                                                  &high_size);
-    char low_path[] = "/tmp/nature-ld-align-low-XXXXXX";
-    char high_path[] = "/tmp/nature-ld-align-high-XXXXXX";
+    char low_path[] = "/tmp/nax-ld-align-low-XXXXXX";
+    char high_path[] = "/tmp/nax-ld-align-high-XXXXXX";
     write_fixture(low_path, low, low_size);
     write_fixture(high_path, high, high_size);
     free(low);
     free(high);
 
-    static const char *output_path = "/tmp/nature-ld-align-output";
+    static const char *output_path = "/tmp/nax-ld-align-output";
     const char *inputs[] = {low_path, high_path};
     diagnostic_capture_t capture = {0};
     assert(link_test_elf_inputs(output_path, inputs, 2U, &capture) == LD_OK);
@@ -452,14 +452,14 @@ static void test_merge_strings_are_deduplicated(void) {
             make_merge_string_object("first", true, &first_size);
     uint8_t *second =
             make_merge_string_object("second", false, &second_size);
-    char first_path[] = "/tmp/nature-ld-merge-first-XXXXXX";
-    char second_path[] = "/tmp/nature-ld-merge-second-XXXXXX";
+    char first_path[] = "/tmp/nax-ld-merge-first-XXXXXX";
+    char second_path[] = "/tmp/nax-ld-merge-second-XXXXXX";
     write_fixture(first_path, first, first_size);
     write_fixture(second_path, second, second_size);
     free(first);
     free(second);
 
-    static const char *output_path = "/tmp/nature-ld-merge-output";
+    static const char *output_path = "/tmp/nax-ld-merge-output";
     const char *inputs[] = {first_path, second_path};
     diagnostic_capture_t capture = {0};
     assert(link_test_elf_inputs(output_path, inputs, 2U, &capture) == LD_OK);

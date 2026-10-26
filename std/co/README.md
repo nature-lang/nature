@@ -1,4 +1,4 @@
-# import [co](https://github.com/nature-lang/nature/tree/master/std/co/co.n)
+# import [co](https://github.com/naxlang/nax/tree/master/std/co/co.n)
 
 Coroutine library for concurrent programming and cooperative multitasking.
 
@@ -34,7 +34,7 @@ fn arg():anyptr
 
 Get argument passed to current coroutine.
 
-# import [co.mutex](https://github.com/nature-lang/nature/tree/master/std/co/mutex.n)
+# import [co.mutex](https://github.com/naxlang/nax/tree/master/std/co/mutex.n)
 
 Mutex implementation for coroutine synchronization.
 

@@ -26,9 +26,9 @@ typedef struct {
 _Static_assert(sizeof(time_t) == sizeof(int64_t),
                "windows_amd64 runtime requires 64-bit time_t");
 _Static_assert(offsetof(rt_windows_tm_t, tm_gmtoff) == 40,
-               "Nature tm UTC offset must follow nine UCRT integer fields");
+               "Nax tm UTC offset must follow nine UCRT integer fields");
 _Static_assert(offsetof(rt_windows_tm_t, tm_zone) == 48,
-               "Nature tm zone pointer layout changed");
+               "Nax tm zone pointer layout changed");
 
 static _Thread_local rt_windows_tm_t rt_windows_gmtime_result;
 static _Thread_local rt_windows_tm_t rt_windows_localtime_result;

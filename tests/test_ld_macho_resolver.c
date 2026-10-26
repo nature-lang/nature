@@ -361,8 +361,8 @@ static test_resolver_fixture_t test_resolver_make_definition_fixture(
 }
 
 static void test_entry_symbol_from_archive(void) {
-    char archive_path[] = "/tmp/nature-ld-resolver-entry-archive-XXXXXX";
-    char output_path[] = "/tmp/nature-ld-resolver-output-XXXXXX";
+    char archive_path[] = "/tmp/nax-ld-resolver-entry-archive-XXXXXX";
+    char output_path[] = "/tmp/nax-ld-resolver-output-XXXXXX";
     test_resolver_write_archive(
             archive_path, "entry.o",
             test_resolver_make_definition_fixture("_main"));
@@ -400,10 +400,10 @@ static void test_resolver_make_common(char path[], const char *name,
 }
 
 static void test_weak_object_vs_strong_dylib(void) {
-    char main_path[] = "/tmp/nature-ld-resolver-main-XXXXXX";
-    char weak_path[] = "/tmp/nature-ld-resolver-weak-XXXXXX";
-    char dylib_path[] = "/tmp/nature-ld-resolver-strong-tbd-XXXXXX";
-    char output_path[] = "/tmp/nature-ld-resolver-output-XXXXXX";
+    char main_path[] = "/tmp/nax-ld-resolver-main-XXXXXX";
+    char weak_path[] = "/tmp/nax-ld-resolver-weak-XXXXXX";
+    char dylib_path[] = "/tmp/nax-ld-resolver-strong-tbd-XXXXXX";
+    char output_path[] = "/tmp/nax-ld-resolver-output-XXXXXX";
     test_resolver_make_main(main_path, "_pick");
     test_resolver_make_definition(weak_path, "_pick", true);
     test_resolver_write_dylib(dylib_path,
@@ -428,10 +428,10 @@ static void test_weak_object_vs_strong_dylib(void) {
 }
 
 static void test_common_vs_strong_dylib(void) {
-    char main_path[] = "/tmp/nature-ld-resolver-main-XXXXXX";
-    char common_path[] = "/tmp/nature-ld-resolver-common-XXXXXX";
-    char dylib_path[] = "/tmp/nature-ld-resolver-common-tbd-XXXXXX";
-    char output_path[] = "/tmp/nature-ld-resolver-output-XXXXXX";
+    char main_path[] = "/tmp/nax-ld-resolver-main-XXXXXX";
+    char common_path[] = "/tmp/nax-ld-resolver-common-XXXXXX";
+    char dylib_path[] = "/tmp/nax-ld-resolver-common-tbd-XXXXXX";
+    char output_path[] = "/tmp/nax-ld-resolver-output-XXXXXX";
     test_resolver_make_main(main_path, "_pick");
     test_resolver_make_common(common_path, "_pick", 64U, 6U, false);
     test_resolver_write_dylib(dylib_path,
@@ -453,10 +453,10 @@ static void test_common_vs_strong_dylib(void) {
 }
 
 static void test_archive_vs_dylib_input_order(bool archive_first) {
-    char main_path[] = "/tmp/nature-ld-resolver-main-XXXXXX";
-    char archive_path[] = "/tmp/nature-ld-resolver-archive-XXXXXX";
-    char dylib_path[] = "/tmp/nature-ld-resolver-archive-tbd-XXXXXX";
-    char output_path[] = "/tmp/nature-ld-resolver-output-XXXXXX";
+    char main_path[] = "/tmp/nax-ld-resolver-main-XXXXXX";
+    char archive_path[] = "/tmp/nax-ld-resolver-archive-XXXXXX";
+    char dylib_path[] = "/tmp/nax-ld-resolver-archive-tbd-XXXXXX";
+    char output_path[] = "/tmp/nax-ld-resolver-output-XXXXXX";
     test_resolver_make_main(main_path, "_pick");
     test_resolver_write_archive(
             archive_path, "winner.o",
@@ -491,10 +491,10 @@ static void test_archive_vs_dylib_input_order(bool archive_first) {
 
 static void test_two_dylib_providers_case(bool first_weak, bool second_weak,
                                           uint32_t expected_ordinal) {
-    char main_path[] = "/tmp/nature-ld-resolver-main-XXXXXX";
-    char first_path[] = "/tmp/nature-ld-resolver-first-tbd-XXXXXX";
-    char second_path[] = "/tmp/nature-ld-resolver-second-tbd-XXXXXX";
-    char output_path[] = "/tmp/nature-ld-resolver-output-XXXXXX";
+    char main_path[] = "/tmp/nax-ld-resolver-main-XXXXXX";
+    char first_path[] = "/tmp/nax-ld-resolver-first-tbd-XXXXXX";
+    char second_path[] = "/tmp/nax-ld-resolver-second-tbd-XXXXXX";
+    char output_path[] = "/tmp/nax-ld-resolver-output-XXXXXX";
     test_resolver_make_main(main_path, "_pick");
     test_resolver_write_dylib(first_path,
                               "/usr/lib/libResolverFirst.dylib", "_pick",
@@ -536,9 +536,9 @@ static void test_duplicate_direct_strong(void) {
              .n_type = LD_N_SECT | LD_N_EXT,
              .n_sect = 1U},
     };
-    char first_path[] = "/tmp/nature-ld-resolver-duplicate-a-XXXXXX";
-    char second_path[] = "/tmp/nature-ld-resolver-duplicate-b-XXXXXX";
-    char output_path[] = "/tmp/nature-ld-resolver-output-XXXXXX";
+    char first_path[] = "/tmp/nax-ld-resolver-duplicate-a-XXXXXX";
+    char second_path[] = "/tmp/nax-ld-resolver-duplicate-b-XXXXXX";
+    char output_path[] = "/tmp/nax-ld-resolver-output-XXXXXX";
     test_resolver_write_object(
             first_path,
             test_resolver_make_text_object(
@@ -577,9 +577,9 @@ static void test_common_max_size_and_alignment(void) {
              .n_desc = 2U << 8U,
              .n_value = 32U},
     };
-    char first_path[] = "/tmp/nature-ld-resolver-common-a-XXXXXX";
-    char second_path[] = "/tmp/nature-ld-resolver-common-b-XXXXXX";
-    char output_path[] = "/tmp/nature-ld-resolver-output-XXXXXX";
+    char first_path[] = "/tmp/nax-ld-resolver-common-a-XXXXXX";
+    char second_path[] = "/tmp/nax-ld-resolver-common-b-XXXXXX";
+    char output_path[] = "/tmp/nax-ld-resolver-output-XXXXXX";
     test_resolver_write_object(
             first_path,
             test_resolver_make_text_object(
@@ -608,9 +608,9 @@ static void test_common_max_size_and_alignment(void) {
 }
 
 static void test_objc_category_archive_extraction_requires_option(void) {
-    char main_path[] = "/tmp/nature-ld-resolver-main-XXXXXX";
-    char archive_path[] = "/tmp/nature-ld-resolver-objc-archive-XXXXXX";
-    char output_path[] = "/tmp/nature-ld-resolver-output-XXXXXX";
+    char main_path[] = "/tmp/nax-ld-resolver-main-XXXXXX";
+    char archive_path[] = "/tmp/nax-ld-resolver-objc-archive-XXXXXX";
+    char output_path[] = "/tmp/nax-ld-resolver-output-XXXXXX";
     test_resolver_make_main(main_path, NULL);
 
     static const uint64_t category_pointer = 0U;
@@ -651,9 +651,9 @@ static void test_objc_category_archive_extraction_requires_option(void) {
 }
 
 static void test_weak_common_is_materialized_as_strong(void) {
-    char main_path[] = "/tmp/nature-ld-resolver-main-XXXXXX";
-    char common_path[] = "/tmp/nature-ld-resolver-weak-common-XXXXXX";
-    char output_path[] = "/tmp/nature-ld-resolver-output-XXXXXX";
+    char main_path[] = "/tmp/nax-ld-resolver-main-XXXXXX";
+    char common_path[] = "/tmp/nax-ld-resolver-weak-common-XXXXXX";
+    char output_path[] = "/tmp/nax-ld-resolver-output-XXXXXX";
     test_resolver_make_main(main_path, NULL);
     test_resolver_make_common(common_path, "_weak_common", 16U, 4U, true);
     test_resolver_output_path(output_path);
@@ -674,9 +674,9 @@ static void test_weak_common_is_materialized_as_strong(void) {
 }
 
 static void test_zero_sized_section_keeps_symbol(void) {
-    char main_path[] = "/tmp/nature-ld-resolver-main-XXXXXX";
-    char empty_path[] = "/tmp/nature-ld-resolver-empty-XXXXXX";
-    char output_path[] = "/tmp/nature-ld-resolver-output-XXXXXX";
+    char main_path[] = "/tmp/nax-ld-resolver-main-XXXXXX";
+    char empty_path[] = "/tmp/nax-ld-resolver-empty-XXXXXX";
+    char output_path[] = "/tmp/nax-ld-resolver-output-XXXXXX";
     test_resolver_make_main(main_path, NULL);
 
     static const char strings[] = "\0_empty_symbol\0";
@@ -708,8 +708,8 @@ static void test_zero_sized_section_keeps_symbol(void) {
 }
 
 static void test_load_commands_can_span_multiple_pages(void) {
-    char main_path[] = "/tmp/nature-ld-resolver-main-XXXXXX";
-    char output_path[] = "/tmp/nature-ld-resolver-output-XXXXXX";
+    char main_path[] = "/tmp/nax-ld-resolver-main-XXXXXX";
+    char output_path[] = "/tmp/nax-ld-resolver-output-XXXXXX";
     test_resolver_make_main(main_path, NULL);
     test_resolver_output_path(output_path);
 
@@ -721,7 +721,7 @@ static void test_load_commands_can_span_multiple_pages(void) {
     for (size_t i = 0; i < 400U; i++) {
         char rpath[96];
         int length = snprintf(rpath, sizeof(rpath),
-                              "@loader_path/nature-header-page-%03zu", i);
+                              "@loader_path/nax-header-page-%03zu", i);
         assert(length > 0 && (size_t) length < sizeof(rpath));
         assert(ld_add_rpath(&options, rpath) == LD_OK);
     }
@@ -764,7 +764,7 @@ static void test_resolver_write_named_archive(
 }
 
 static void test_ordered_library_and_direct_dylib_inputs(void) {
-    char directory[] = "/tmp/nature-ld-resolver-order-XXXXXX";
+    char directory[] = "/tmp/nax-ld-resolver-order-XXXXXX";
     assert(mkdtemp(directory) != NULL);
     char archive_path[512];
     int length = snprintf(archive_path, sizeof(archive_path),
@@ -774,9 +774,9 @@ static void test_ordered_library_and_direct_dylib_inputs(void) {
             archive_path, "winner.o",
             test_resolver_make_definition_fixture("_pick"));
 
-    char main_path[] = "/tmp/nature-ld-resolver-main-XXXXXX";
-    char dylib_path[] = "/tmp/nature-ld-resolver-order-tbd-XXXXXX";
-    char output_path[] = "/tmp/nature-ld-resolver-output-XXXXXX";
+    char main_path[] = "/tmp/nax-ld-resolver-main-XXXXXX";
+    char dylib_path[] = "/tmp/nax-ld-resolver-order-tbd-XXXXXX";
+    char output_path[] = "/tmp/nax-ld-resolver-output-XXXXXX";
     test_resolver_make_main(main_path, "_pick");
     test_resolver_write_dylib(dylib_path,
                               "/usr/lib/libResolverOrder.dylib", "_pick",
@@ -882,7 +882,7 @@ static void test_resolver_expect_dylib_commands(
 }
 
 static void test_dylib_load_commands_follow_input_order(void) {
-    char root[] = "/tmp/nature-ld-resolver-framework-XXXXXX";
+    char root[] = "/tmp/nax-ld-resolver-framework-XXXXXX";
     assert(mkdtemp(root) != NULL);
     char framework_dir[512];
     char framework_path[512];
@@ -894,9 +894,9 @@ static void test_dylib_load_commands_follow_input_order(void) {
                       "%s/ResolverAfter.tbd", framework_dir);
     assert(length > 0 && (size_t) length < sizeof(framework_path));
 
-    char main_path[] = "/tmp/nature-ld-resolver-main-XXXXXX";
-    char dylib_path[] = "/tmp/nature-ld-resolver-before-tbd-XXXXXX";
-    char output_path[] = "/tmp/nature-ld-resolver-output-XXXXXX";
+    char main_path[] = "/tmp/nax-ld-resolver-main-XXXXXX";
+    char dylib_path[] = "/tmp/nax-ld-resolver-before-tbd-XXXXXX";
+    char output_path[] = "/tmp/nax-ld-resolver-output-XXXXXX";
     static const char direct_install_name[] =
             "/usr/lib/libResolverBefore.dylib";
     static const char framework_install_name[] =
@@ -950,9 +950,9 @@ static void test_dylib_load_commands_follow_input_order(void) {
 }
 
 static void test_weak_library_emits_weak_load_and_reference(void) {
-    char main_path[] = "/tmp/nature-ld-resolver-main-XXXXXX";
-    char dylib_path[] = "/tmp/nature-ld-resolver-weak-load-tbd-XXXXXX";
-    char output_path[] = "/tmp/nature-ld-resolver-output-XXXXXX";
+    char main_path[] = "/tmp/nax-ld-resolver-main-XXXXXX";
+    char dylib_path[] = "/tmp/nax-ld-resolver-weak-load-tbd-XXXXXX";
+    char output_path[] = "/tmp/nax-ld-resolver-output-XXXXXX";
     static const char install_name[] = "/usr/lib/libResolverOptional.dylib";
     test_resolver_make_main(main_path, "_optional");
     test_resolver_write_dylib(dylib_path, install_name, "_optional", false);

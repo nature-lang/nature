@@ -224,12 +224,12 @@ static uint64_t debug_merge_output_symbol_value(
 static void debug_merge_test_x86_formulae_and_ifunc(void) {
     size_t object_size;
     uint8_t *object = debug_merge_make_x86_object(&object_size);
-    char object_path[] = "/tmp/nature-ld-debug-merge-x86-XXXXXX";
+    char object_path[] = "/tmp/nax-ld-debug-merge-x86-XXXXXX";
     write_fixture(object_path, object, object_size);
     free(object);
 
     static const char *output_path =
-            "/tmp/nature-ld-debug-merge-x86-output";
+            "/tmp/nax-ld-debug-merge-x86-output";
     const char *inputs[] = {object_path};
     diagnostic_capture_t capture = {0};
     assert(link_test_elf_inputs_configured(
@@ -515,15 +515,15 @@ static void debug_merge_test_comdat_tombstones(void) {
             debug_merge_make_aarch64_comdat_winner(&winner_size);
     uint8_t *loser = debug_merge_make_aarch64_comdat_loser(&loser_size);
     char winner_path[] =
-            "/tmp/nature-ld-debug-comdat-winner-XXXXXX";
-    char loser_path[] = "/tmp/nature-ld-debug-comdat-loser-XXXXXX";
+            "/tmp/nax-ld-debug-comdat-winner-XXXXXX";
+    char loser_path[] = "/tmp/nax-ld-debug-comdat-loser-XXXXXX";
     write_fixture(winner_path, winner, winner_size);
     write_fixture(loser_path, loser, loser_size);
     free(winner);
     free(loser);
 
     static const char *output_path =
-            "/tmp/nature-ld-debug-comdat-output";
+            "/tmp/nax-ld-debug-comdat-output";
     const char *inputs[] = {winner_path, loser_path};
     diagnostic_capture_t capture = {0};
     int status = link_test_elf_inputs_configured(
@@ -764,14 +764,14 @@ static void debug_merge_test_riscv_sub_uleb(void) {
     size_t relocator_size;
     uint8_t *owner = debug_merge_make_riscv_owner(&owner_size);
     uint8_t *relocator = debug_merge_make_riscv_relocator(&relocator_size);
-    char owner_path[] = "/tmp/nature-ld-debug-merge-rv-owner-XXXXXX";
-    char relocator_path[] = "/tmp/nature-ld-debug-merge-rv-rel-XXXXXX";
+    char owner_path[] = "/tmp/nax-ld-debug-merge-rv-owner-XXXXXX";
+    char relocator_path[] = "/tmp/nax-ld-debug-merge-rv-rel-XXXXXX";
     write_fixture(owner_path, owner, owner_size);
     write_fixture(relocator_path, relocator, relocator_size);
     free(owner);
     free(relocator);
     static const char *output_path =
-            "/tmp/nature-ld-debug-merge-rv-output";
+            "/tmp/nax-ld-debug-merge-rv-output";
     const char *inputs[] = {owner_path, relocator_path};
     diagnostic_capture_t capture = {0};
     assert(link_test_elf_inputs_configured(

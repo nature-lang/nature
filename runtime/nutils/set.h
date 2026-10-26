@@ -1,5 +1,5 @@
-#ifndef NATURE_SET_H
-#define NATURE_SET_H
+#ifndef NAX_SET_H
+#define NAX_SET_H
 
 #include "array.h"
 #include "hash.h"
@@ -19,4 +19,4 @@ bool rt_set_contains(n_set_t *m, void *key_ref);
 
 void rt_set_delete(n_set_t *m, void *key_ref);
 
-#endif // NATURE_SET_H
+#endif // NAX_SET_H

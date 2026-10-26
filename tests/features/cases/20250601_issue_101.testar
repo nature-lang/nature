@@ -28,7 +28,7 @@ fn main():void! {
 }
 
 --- output.txt
-nature-test/main.n:25:13: type 'bool' not impl 'main.custom_i' interface
+nax-test/main.n:25:13: type 'bool' not impl 'main.custom_i' interface
 
 
 === test_deny_duck_interface
@@ -61,7 +61,7 @@ fn main():void! {
 }
 
 --- output.txt
-nature-test/main.n:25:13: type 'bool' not impl 'main.custom_i' interface
+nax-test/main.n:25:13: type 'bool' not impl 'main.custom_i' interface
 
 
 === test_my_bool_interface
@@ -95,7 +95,7 @@ fn main():void! {
     // println(b.show_value())  // triggers bus error
 }
 --- output.txt
-nature-test/main.n:8:11: type inconsistency, expect=bool, actual=main.my_bool(bool)
+nax-test/main.n:8:11: type inconsistency, expect=bool, actual=main.my_bool(bool)
 
 === test_union_type_method_self
 --- main.n
@@ -130,4 +130,4 @@ fn main():void! {
 }
 
 --- output.txt
-nature-test/main.n:20:15: type 'main.custom_t<main.my_bool>(union)' not impl 'show_value' fn
+nax-test/main.n:20:15: type 'main.custom_t<main.my_bool>(union)' not impl 'show_value' fn

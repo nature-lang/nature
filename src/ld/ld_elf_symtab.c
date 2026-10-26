@@ -10,7 +10,7 @@
  * The local-before-global ordering, section-symbol convention, sh_info
  * boundary, and linked string-table model follow Elf.updateSymtabSize and
  * Elf.writeSymtab from Zig commit
- * 738d2be9d6b6ef3ff3559130c05159ef53336224. Nature encodes the ELF64 wire
+ * 738d2be9d6b6ef3ff3559130c05159ef53336224. Nax encodes the ELF64 wire
  * bytes explicitly so the module also works on a non-Linux or big-endian
  * host. Zig is MIT licensed; see ZIG-LICENSE.txt.
  */

@@ -1,5 +1,5 @@
-#ifndef NATURE_LD_ELF_PROPERTY_H
-#define NATURE_LD_ELF_PROPERTY_H
+#ifndef NAX_LD_ELF_PROPERTY_H
+#define NAX_LD_ELF_PROPERTY_H
 
 #include "ld.h"
 

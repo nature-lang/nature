@@ -1128,7 +1128,7 @@ static void amd64_windows_plan_entry(amd64_windows_unwind_plan_action_t *entry,
 /**
  * Publish an abstract unwind plan as a compiler-private COFF data symbol.
  * The Windows object writer consumes symbols named
- * `__nature_unwind_plan$<function>` and emits the corresponding associative
+ * `__nax_unwind_plan$<function>` and emits the corresponding associative
  * .xdata/.pdata records instead of copying the plan into ordinary .data.
  *
  * Wire format (little endian), version 1:

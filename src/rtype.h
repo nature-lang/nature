@@ -1,5 +1,5 @@
-#ifndef NATURE_SRC_RTYPE_H_
-#define NATURE_SRC_RTYPE_H_
+#ifndef NAX_SRC_RTYPE_H_
+#define NAX_SRC_RTYPE_H_
 
 #include <inttypes.h>
 
@@ -968,4 +968,4 @@ static inline void ct_register_rtype(type_t t) {
     }
 }
 
-#endif //NATURE_SRC_RTYPE_H_
+#endif //NAX_SRC_RTYPE_H_

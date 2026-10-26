@@ -138,21 +138,21 @@ impl Backend {
     ) {
         debug!("configuration changed: {:?}", params.settings);
 
-        let nature_section = params
+        let nax_section = params
             .settings
             .as_object()
-            .and_then(|o| o.get("nature"))
+            .and_then(|o| o.get("nax"))
             .cloned()
             .unwrap_or(params.settings);
 
-        self.apply_config(&nature_section);
+        self.apply_config(&nax_section);
 
         // Also pull fresh config from the client.
         if let Ok(response) = self
             .client
             .configuration(vec![ConfigurationItem {
                 scope_uri: None,
-                section: Some("nature".into()),
+                section: Some("nax".into()),
             }])
             .await
         {
@@ -178,7 +178,7 @@ impl Backend {
 
                 if let Some(project) = self.get_file_project(file_path) {
                     if let Ok(mut ws_index) = project.workspace_index.lock() {
-                        ws_index.scan_workspace(&project.root, &project.nature_root);
+                        ws_index.scan_workspace(&project.root, &project.nax_root);
                         debug!("workspace re-indexed after source file change: {}", file_path);
                     }
                 }

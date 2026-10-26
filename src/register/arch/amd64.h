@@ -1,5 +1,5 @@
-#ifndef NATURE_REGISTER_AMD64_H
-#define NATURE_REGISTER_AMD64_H
+#ifndef NAX_REGISTER_AMD64_H
+#define NAX_REGISTER_AMD64_H
 
 #include "src/types.h"
 
@@ -167,4 +167,4 @@ extern reg_t *zmm15;
 
 void amd64_reg_init();
 
-#endif //NATURE_AMD64_H
+#endif //NAX_AMD64_H

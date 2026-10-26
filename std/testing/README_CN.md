@@ -1,4 +1,4 @@
-# import [testing](https://github.com/nature-lang/nature/blob/master/std/testing/testing.n)
+# import [testing](https://github.com/naxlang/nax/blob/master/std/testing/testing.n)
 
 测试辅助函数
 

@@ -9,7 +9,7 @@ fn main() {
 }
 
 --- output.txt
-nature-test/main.n:1:4: cannot use 'mod' without package.toml
+nax-test/main.n:1:4: cannot use 'mod' without package.toml
 
 === test_single_file_build_still_works
 --- main.n

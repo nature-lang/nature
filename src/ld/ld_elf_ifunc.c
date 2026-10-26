@@ -10,7 +10,7 @@
  * relocation.encode(.irel) from Zig commit
  * 738d2be9d6b6ef3ff3559130c05159ef53336224. That revision leaves the
  * RISC-V PltGotSection encoder as a TODO, so the RISC-V64 sequence follows
- * the psABI and GNU ld 2.42 output. Nature validates every operand before
+ * the psABI and GNU ld 2.42 output. Nax validates every operand before
  * copying the temporary encoding to the caller's output buffer.
  */
 

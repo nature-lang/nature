@@ -20,7 +20,7 @@ n_string_t vec_to_string(n_vec_t *vec) {
 }
 
 // Like Go's runtime.rawstring, this allocates the final backing storage so a
-// trusted runtime caller can fill it directly. Nature reserves one extra byte
+// trusted runtime caller can fill it directly. Nax reserves one extra byte
 // because every string must also be NUL-terminated for the C ABI.
 n_string_t rti_string_alloc(int64_t length) {
     assert(length >= 0 && length < INT64_MAX);

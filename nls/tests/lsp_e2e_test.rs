@@ -47,9 +47,9 @@ struct Client {
 impl Client {
     // Starts nls on the std of this checkout and initializes it with root as the workspace folder.
     fn start(root: &Path) -> Client {
-        let nature_root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+        let nax_root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
         let mut child = Command::new(env!("CARGO_BIN_EXE_nls"))
-            .env("NATURE_ROOT", nature_root)
+            .env("NAX_ROOT", nax_root)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::null())
@@ -158,7 +158,7 @@ impl Client {
     fn open(&mut self, uri: &str, text: &str) {
         self.notify(
             "textDocument/didOpen",
-            json!({"textDocument": {"uri": uri, "languageId": "nature", "version": 1, "text": text}}),
+            json!({"textDocument": {"uri": uri, "languageId": "nax", "version": 1, "text": text}}),
         );
     }
 }

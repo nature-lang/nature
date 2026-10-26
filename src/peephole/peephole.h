@@ -1,5 +1,5 @@
-#ifndef NATURE_SRC_PEEPHOLE_PEEPHOLE_H_
-#define NATURE_SRC_PEEPHOLE_PEEPHOLE_H_
+#ifndef NAX_SRC_PEEPHOLE_PEEPHOLE_H_
+#define NAX_SRC_PEEPHOLE_PEEPHOLE_H_
 
 #include "src/lir.h"
 
@@ -91,4 +91,4 @@ static inline bool peephole_can_remove_var(basic_block_t *block, lir_var_t *var)
     return use_count <= 1;
 }
 
-#endif //NATURE_SRC_PEEPHOLE_PEEPHOLE_H_
+#endif //NAX_SRC_PEEPHOLE_PEEPHOLE_H_

@@ -9,7 +9,7 @@ fn main():void! {
 }
 
 --- output.txt
-nature-test/main.n:6:13: type inconsistency, expect=main.my_int(i64), actual=int(i64)
+nax-test/main.n:6:13: type inconsistency, expect=main.my_int(i64), actual=int(i64)
 
 === test_struct_def
 --- main.n
@@ -23,7 +23,7 @@ fn main():void! {
 }
 
 --- output.txt
-nature-test/main.n:7:17: type inconsistency, expect=main.woman_t(struct), actual=main.person_t(struct)
+nax-test/main.n:7:17: type inconsistency, expect=main.woman_t(struct), actual=main.person_t(struct)
 
 === test_struct_def2
 --- main.n
@@ -42,7 +42,7 @@ fn main():void! {
 }
 
 --- output.txt
-nature-test/main.n:12:18: type inconsistency, expect=main.person_t(struct), actual=main.woman_t(struct)
+nax-test/main.n:12:18: type inconsistency, expect=main.person_t(struct), actual=main.woman_t(struct)
 
 === test_literal_failed
 --- main.n
@@ -66,7 +66,7 @@ fn main():void! {
 }
 
 --- output.txt
-nature-test/main.n:17:44: type inconsistency, expect=int(i64), actual=main.int_literal(i64)
+nax-test/main.n:17:44: type inconsistency, expect=int(i64), actual=main.int_literal(i64)
 
 === test_literal_failed2
 --- main.n
@@ -96,7 +96,7 @@ fn main():void! {
 }
 
 --- output.txt
-nature-test/main.n:23:31: type inconsistency, expect=[u16], actual=[u32]
+nax-test/main.n:23:31: type inconsistency, expect=[u16], actual=[u32]
 
 === test_literal_failed3
 --- main.n
@@ -127,7 +127,7 @@ fn main():void! {
 }
 
 --- output.txt
-nature-test/main.n:24:31: type inconsistency, expect=[u16], actual=[main.u16_literal(u16)]
+nax-test/main.n:24:31: type inconsistency, expect=[u16], actual=[main.u16_literal(u16)]
 
 === test_literal
 --- main.n

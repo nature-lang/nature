@@ -414,7 +414,7 @@ static void test_duplicate_short_import_across_dlls(const char *directory) {
 }
 
 int main(void) {
-    char directory[] = "/tmp/nature-ld-coff-import-directories-XXXXXX";
+    char directory[] = "/tmp/nax-ld-coff-import-directories-XXXXXX";
     assert(mkdtemp(directory));
     test_pure_short(directory);
     test_ordinal_short_import(directory);

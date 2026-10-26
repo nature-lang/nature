@@ -26,7 +26,7 @@
  * The phase ordering follows Elf.flushInner, Object.resolveSymbols, and
  * LinkerDefined.allocateSymbols from Zig commit
  * 738d2be9d6b6ef3ff3559130c05159ef53336224. This is a standalone C
- * implementation for Nature's batch linker; it deliberately omits Zig's
+ * implementation for Nax's batch linker; it deliberately omits Zig's
  * incremental compilation and ZigObject layers.
  */
 
@@ -5141,7 +5141,7 @@ static int ld_elf_finalize_x86_gotpcrelx(ld_elf_backend_t *backend) {
                     /*
                      * Zig 738d2be9 reserves a GOT entry while scanning every
                      * GOTPCRELX relocation, so failed instruction relaxation
-                     * naturally retains the indirect form.  Nature normally
+                     * naturally retains the indirect form.  Nax normally
                      * suppresses that entry, but restores it here after final
                      * layout proves S + A - P cannot fit signed 32 bits.
                      */

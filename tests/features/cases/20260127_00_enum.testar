@@ -18,7 +18,7 @@ fn main() {
 }
 
 --- output.txt
-nature-test/main.n:14:21: type inconsistency, expect=main.color2(enum:i64), actual=main.color(enum:i64)
+nax-test/main.n:14:21: type inconsistency, expect=main.color2(enum:i64), actual=main.color(enum:i64)
 
 === test_basic
 --- main.n
@@ -63,7 +63,7 @@ fn main() {
 }
 
 --- output.txt
-nature-test/main.n:15:18: type inconsistency, expect=main.color(enum:i64), actual=i64
+nax-test/main.n:15:18: type inconsistency, expect=main.color(enum:i64), actual=i64
 
 === test_cmp
 --- main.n
@@ -100,7 +100,7 @@ fn main() {
 }
 
 --- output.txt
-nature-test/main.n:1:28: enum only supports integer types
+nax-test/main.n:1:28: enum only supports integer types
 
 === test_custom_enum
 --- main.n
@@ -234,4 +234,4 @@ fn main() {
 }
 
 --- output.txt
-nature-test/main.n:10:28: match expression lacks a default case '_' and enum value lacks, for example 'BLUE'
+nax-test/main.n:10:28: match expression lacks a default case '_' and enum value lacks, for example 'BLUE'

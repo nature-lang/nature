@@ -1,5 +1,5 @@
-#ifndef NATURE_LD_COFF_READER_H
-#define NATURE_LD_COFF_READER_H
+#ifndef NAX_LD_COFF_READER_H
+#define NAX_LD_COFF_READER_H
 
 #include <stdbool.h>
 #include <stddef.h>

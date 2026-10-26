@@ -1,5 +1,5 @@
-#ifndef NATURE_SRC_OPCODE_AMD64_OPCODE_H_
-#define NATURE_SRC_OPCODE_AMD64_OPCODE_H_
+#ifndef NAX_SRC_OPCODE_AMD64_OPCODE_H_
+#define NAX_SRC_OPCODE_AMD64_OPCODE_H_
 
 #include <stdlib.h>
 #include <stdint.h>
@@ -264,4 +264,4 @@ amd64_opcode_inst_t *amd64_asm_inst_encoding(amd64_asm_inst_t inst, uint8_t *dat
 
 void amd64_opcode_init();
 
-#endif //NATURE_SRC_ASSEMBLER_X86_64_OPCODE_H_
+#endif //NAX_SRC_ASSEMBLER_X86_64_OPCODE_H_

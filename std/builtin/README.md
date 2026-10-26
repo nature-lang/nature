@@ -1,4 +1,4 @@
-# [builtin](https://github.com/nature-lang/nature/blob/master/std/builtin/builtin.n)
+# [builtin](https://github.com/naxlang/nax/blob/master/std/builtin/builtin.n)
 
 The builtin contains global functions and types that don't need to be imported.
 
@@ -52,7 +52,7 @@ errdef TYPE_ASSERT_FAILED 'type assert failed'
 
 An index or slice out of range, a missing map key and a failed `as` panic. A catch right after such an expression gets the panic as one of these errsets instead, in `.x` and `.n`:
 
-```nature
+```nax
 var a = list[5] catch e {
     // e == INDEX_OUT_OF_RANGE
     -1
@@ -61,7 +61,7 @@ var a = list[5] catch e {
 
 Only the expression the catch follows is covered: in `list[list[5]] catch e { ... }` the inner index still panics. A panic inside a called function, `panic()` and `assert()` always end the program.
 
-# [chan](https://github.com/nature-lang/nature/blob/master/std/builtin/chan.n)
+# [chan](https://github.com/naxlang/nax/blob/master/std/builtin/chan.n)
 
 ## fn chan<T>.new
 
@@ -147,7 +147,7 @@ fn chan<T>.is_successful(self):bool
 
 Check if the last operation was successful.
 
-# [coroutine](https://github.com/nature-lang/nature/blob/master/std/builtin/coroutine.n)
+# [coroutine](https://github.com/naxlang/nax/blob/master/std/builtin/coroutine.n)
 
 ## type future_t
 
@@ -194,7 +194,7 @@ fn co_return<T>(ptr<T> result)
 
 Return a result from a coroutine.
 
-# [error](https://github.com/nature-lang/nature/blob/master/std/builtin/error.n)
+# [error](https://github.com/naxlang/nax/blob/master/std/builtin/error.n)
 
 ## type errable
 
@@ -209,7 +209,7 @@ A function that returns `errable<T,E>` is errable, in `.x` and `.n`: `return` gi
 
 An error propagates only into a function that fails with the same type. A call that fails with another type has to be caught and converted, which the compiler checks:
 
-```nature
+```nax
 // in .x
 errdef BAD
 
@@ -231,7 +231,7 @@ A catch after a call of a function that returns `errable<T,E>` handles only that
 
 ## errdef
 
-```nature
+```nax
 // in the io module
 errdef TIMEOUT 'request timed out'
 errdef CLOSED
@@ -269,7 +269,7 @@ stack backtrace:
 		at main.n:9:9
 ```
 
-# [map](https://github.com/nature-lang/nature/blob/master/std/builtin/map.n)
+# [map](https://github.com/naxlang/nax/blob/master/std/builtin/map.n)
 
 ## fn map<T,U>.new
 
@@ -305,7 +305,7 @@ fn map<T,U>.contains(self, T key):bool
 
 Check if the map contains the given key.
 
-# [set](https://github.com/nature-lang/nature/blob/master/std/builtin/set.n)
+# [set](https://github.com/naxlang/nax/blob/master/std/builtin/set.n)
 
 ## fn set<T>.new
 
@@ -341,7 +341,7 @@ fn set<T>.del(self, T key)
 
 Remove an element from the set.
 
-# [string](https://github.com/nature-lang/nature/blob/master/std/builtin/string.n)
+# [string](https://github.com/naxlang/nax/blob/master/std/builtin/string.n)
 
 ## type string
 
@@ -369,7 +369,7 @@ fn string.char(self):u8
 
 Get the first character of the string.
 
-# [vec](https://github.com/nature-lang/nature/blob/master/std/builtin/vec.n)
+# [vec](https://github.com/naxlang/nax/blob/master/std/builtin/vec.n)
 
 ## fn vec<T>.new
 

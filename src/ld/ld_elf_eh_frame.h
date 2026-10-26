@@ -1,5 +1,5 @@
-#ifndef NATURE_LD_ELF_EH_FRAME_H
-#define NATURE_LD_ELF_EH_FRAME_H
+#ifndef NAX_LD_ELF_EH_FRAME_H
+#define NAX_LD_ELF_EH_FRAME_H
 
 #include <stddef.h>
 #include <stdint.h>

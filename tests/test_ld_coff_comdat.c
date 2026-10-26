@@ -559,7 +559,7 @@ static void test_newest(const char *directory) {
 }
 
 int main(void) {
-    char directory[] = "/tmp/nature-coff-comdat-XXXXXX";
+    char directory[] = "/tmp/nax-coff-comdat-XXXXXX";
     assert(mkdtemp(directory));
     test_noduplicates(directory);
     test_any(directory);

@@ -51,8 +51,8 @@ static void assert_entry_error(char *entry, char *output_name, char *expect) {
 }
 
 int main(void) {
-    char *nature_root = getenv("NATURE_ROOT");
-    assert_true(nature_root != NULL);
+    char *nax_root = getenv("NAX_ROOT");
+    assert_true(nax_root != NULL);
 
     // pub 导出的 fn/const/var/type/impl 方法跨 module 访问成功
     assert_entry_output("main.n", "acl_ok", "3\n100\n7\n2\n");

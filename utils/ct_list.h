@@ -1,5 +1,5 @@
-#ifndef NATURE_UTILS_CT_LIST_H
-#define NATURE_UTILS_CT_LIST_H
+#ifndef NAX_UTILS_CT_LIST_H
+#define NAX_UTILS_CT_LIST_H
 
 #include <stdlib.h>
 #include <stdint.h>
@@ -38,4 +38,4 @@ void *ct_list_value(list_t *l, uint64_t index);
 
 void ct_list_free(list_t *l);
 
-#endif //NATURE_LIST_H
+#endif //NAX_LIST_H

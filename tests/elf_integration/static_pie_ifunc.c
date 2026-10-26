@@ -2,7 +2,7 @@ static int selected_impl(void) {
     return 17;
 }
 
-#if defined(NATURE_STATIC_PIE_PLAIN_SELECTED)
+#if defined(NAX_STATIC_PIE_PLAIN_SELECTED)
 __attribute__((visibility("hidden"))) int selected(void) {
     return selected_impl();
 }

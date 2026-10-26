@@ -1,5 +1,5 @@
-#ifndef NATURE_CMD_TEST_H
-#define NATURE_CMD_TEST_H
+#ifndef NAX_CMD_TEST_H
+#define NAX_CMD_TEST_H
 
 #include "src/build/build.h"
 #include "src/build/config.h"
@@ -37,7 +37,7 @@ void cmd_test_entry(int argc, char **argv) {
     const char *build_file = argv[optind];
 
     if (!build_file || !ends_with(build_file, ".n")) {
-        assertf(false, "must specify the compile target with suffix n, example: nature test main.n");
+        assertf(false, "must specify the compile target with suffix n, example: nax test main.n");
         return;
     }
 
@@ -47,4 +47,4 @@ void cmd_test_entry(int argc, char **argv) {
     exec_imm(NULL, BUILD_OUTPUT, args);
 }
 
-#endif //NATURE_CMD_TEST_H
+#endif //NAX_CMD_TEST_H

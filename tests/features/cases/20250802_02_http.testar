@@ -273,8 +273,8 @@ fn main() {
     for int i = 0; i < 100; i += 1 {
         go fn():void! {
             var parts = client.multipart_t_new()
-                 .text('username', 'nature user')
-                 .text('message', 'hello from nature!')
+                 .text('username', 'nax user')
+                 .text('message', 'hello from nax!')
                  .file('testfile', 'test.txt', content)
 
             var resp = client.new().multipart(parts).post('http://127.0.0.1:8080/upload').send()

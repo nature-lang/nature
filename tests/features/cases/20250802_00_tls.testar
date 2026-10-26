@@ -6,7 +6,7 @@ fn main() {
     var conn = tls.connect('34.160.111.145:443')
     var http_request = 'GET /ip HTTP/1.1\r\n' +
                        'Host: ifconfig.me\r\n' +
-                       'User-Agent: nature-client/1.0' +
+                       'User-Agent: nax-client/1.0' +
                        'Accept: application/json\r\n' +
                        'Connection: close\r\n' +
                        '\r\n'

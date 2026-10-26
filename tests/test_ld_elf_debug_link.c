@@ -505,12 +505,12 @@ static void test_debug_link_default_strip_skips_relocations(void) {
     size_t object_size;
     uint8_t *object =
             test_debug_link_make_stripped_relocation_object(&object_size);
-    char object_path[] = "/tmp/nature-ld-debug-strip-reloc-XXXXXX";
+    char object_path[] = "/tmp/nax-ld-debug-strip-reloc-XXXXXX";
     write_fixture(object_path, object, object_size);
     free(object);
 
     static const char *output_path =
-            "/tmp/nature-ld-debug-strip-reloc-output";
+            "/tmp/nax-ld-debug-strip-reloc-output";
     const char *inputs[] = {object_path};
     diagnostic_capture_t capture = {0};
     assert(link_test_elf_inputs(output_path, inputs, 1U, &capture) == LD_OK);
@@ -529,12 +529,12 @@ static void test_debug_link_dwarf_decompresses_and_lays_out(void) {
     size_t object_size;
     uint8_t *object =
             test_debug_link_make_stripped_relocation_object(&object_size);
-    char object_path[] = "/tmp/nature-ld-debug-dwarf-XXXXXX";
+    char object_path[] = "/tmp/nax-ld-debug-dwarf-XXXXXX";
     write_fixture(object_path, object, object_size);
     free(object);
 
     static const char *output_path =
-            "/tmp/nature-ld-debug-dwarf-output";
+            "/tmp/nax-ld-debug-dwarf-output";
     const char *inputs[] = {object_path};
     diagnostic_capture_t capture = {0};
     assert(link_test_elf_inputs_configured(
@@ -579,14 +579,14 @@ static void test_debug_link_merges_same_name_with_max_alignment(void) {
     uint8_t *second = test_debug_link_make_named_section_object(
             ".debug_info", LD_ELF_SHT_PROGBITS, 0U, 16U,
             UINT32_C(0x88776655), false, &second_size);
-    char first_path[] = "/tmp/nature-ld-debug-align-first-XXXXXX";
-    char second_path[] = "/tmp/nature-ld-debug-align-second-XXXXXX";
+    char first_path[] = "/tmp/nax-ld-debug-align-first-XXXXXX";
+    char second_path[] = "/tmp/nax-ld-debug-align-second-XXXXXX";
     write_fixture(first_path, first, first_size);
     write_fixture(second_path, second, second_size);
     free(first);
     free(second);
 
-    static const char *output_path = "/tmp/nature-ld-debug-align-output";
+    static const char *output_path = "/tmp/nax-ld-debug-align-output";
     const char *inputs[] = {first_path, second_path};
     diagnostic_capture_t capture = {0};
     assert(link_test_elf_inputs_configured(
@@ -649,8 +649,8 @@ static void test_debug_link_none_relocation_on_empty_section(void) {
                 test_debug_link_make_empty_none_relocation_object(
                         cases[i].machine, cases[i].none_type,
                         &object_size);
-        char object_path[] = "/tmp/nature-ld-debug-none-XXXXXX";
-        char output_path[] = "/tmp/nature-ld-debug-none-out-XXXXXX";
+        char object_path[] = "/tmp/nax-ld-debug-none-XXXXXX";
+        char output_path[] = "/tmp/nax-ld-debug-none-out-XXXXXX";
         write_fixture(object_path, object, object_size);
         write_fixture(output_path, sentinel, sizeof(sentinel));
         free(object);
@@ -735,8 +735,8 @@ static void test_debug_link_invalid_chdr_is_atomic(void) {
         else
             test_elf_write_u32(object + (size_t) debug_offset + 4U, 1U);
 
-        char object_path[] = "/tmp/nature-ld-debug-chdr-XXXXXX";
-        char output_path[] = "/tmp/nature-ld-debug-chdr-out-XXXXXX";
+        char object_path[] = "/tmp/nax-ld-debug-chdr-XXXXXX";
+        char output_path[] = "/tmp/nax-ld-debug-chdr-out-XXXXXX";
         write_fixture(object_path, object, object_size);
         write_fixture(output_path, sentinel, sizeof(sentinel));
         free(object);
@@ -804,8 +804,8 @@ static void test_debug_link_skips_filtered_compressed_sections(void) {
             memcpy(debug_name, ".note.skip", sizeof(".note.skip"));
         }
 
-        char object_path[] = "/tmp/nature-ld-debug-skip-XXXXXX";
-        char output_path[] = "/tmp/nature-ld-debug-skip-out-XXXXXX";
+        char object_path[] = "/tmp/nax-ld-debug-skip-XXXXXX";
+        char output_path[] = "/tmp/nax-ld-debug-skip-out-XXXXXX";
         write_fixture(object_path, object, object_size);
         write_fixture(output_path, sentinel, sizeof(sentinel));
         free(object);
@@ -839,12 +839,12 @@ static void test_debug_link_unnamed_compressed_section_is_rejected(void) {
     size_t object_size;
     uint8_t *object =
             test_debug_link_make_unnamed_compressed_object(&object_size);
-    char object_path[] = "/tmp/nature-ld-debug-unnamed-XXXXXX";
+    char object_path[] = "/tmp/nax-ld-debug-unnamed-XXXXXX";
     write_fixture(object_path, object, object_size);
     free(object);
 
     static const char *output_path =
-            "/tmp/nature-ld-debug-unnamed-output";
+            "/tmp/nax-ld-debug-unnamed-output";
     unlink(output_path);
     const char *inputs[] = {object_path};
     diagnostic_capture_t capture = {0};
@@ -876,10 +876,10 @@ static void test_debug_link_output_section_keys_do_not_collide(void) {
             LD_ELF_SHF_ALLOC | LD_ELF_SHF_WRITE, 4U, 0U, false,
             &nobits_size);
 
-    char alloc_path[] = "/tmp/nature-ld-debug-key-alloc-XXXXXX";
-    char nonalloc_path[] = "/tmp/nature-ld-debug-key-nonalloc-XXXXXX";
-    char progbits_path[] = "/tmp/nature-ld-debug-key-progbits-XXXXXX";
-    char nobits_path[] = "/tmp/nature-ld-debug-key-nobits-XXXXXX";
+    char alloc_path[] = "/tmp/nax-ld-debug-key-alloc-XXXXXX";
+    char nonalloc_path[] = "/tmp/nax-ld-debug-key-nonalloc-XXXXXX";
+    char progbits_path[] = "/tmp/nax-ld-debug-key-progbits-XXXXXX";
+    char nobits_path[] = "/tmp/nax-ld-debug-key-nobits-XXXXXX";
     write_fixture(alloc_path, alloc, alloc_size);
     write_fixture(nonalloc_path, nonalloc, nonalloc_size);
     write_fixture(progbits_path, progbits, progbits_size);
@@ -889,7 +889,7 @@ static void test_debug_link_output_section_keys_do_not_collide(void) {
     free(progbits);
     free(nobits);
 
-    static const char *output_path = "/tmp/nature-ld-debug-key-output";
+    static const char *output_path = "/tmp/nax-ld-debug-key-output";
     const char *inputs[] = {
             alloc_path,
             nonalloc_path,

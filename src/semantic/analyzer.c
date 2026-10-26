@@ -51,10 +51,10 @@ char *analyzer_force_unique_ident(module_t *m) {
 }
 
 static void analyzer_import_std(module_t *m, char *package, ast_import_t *import) {
-    // /usr/local/nature/std
-    ANALYZER_ASSERTF(NATURE_ROOT, "NATURE_ROOT not found");
+    // /usr/local/nax/std
+    ANALYZER_ASSERTF(NAX_ROOT, "NAX_ROOT not found");
 
-    char *package_dir = path_join(NATURE_ROOT, "std");
+    char *package_dir = path_join(NAX_ROOT, "std");
     package_dir = path_join(package_dir, package);
 
     char *package_conf_path = path_join(package_dir, PACKAGE_TOML);

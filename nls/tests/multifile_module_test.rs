@@ -57,7 +57,7 @@ async fn cross_part_declarations_are_shared() {
     package_unit_reset();
     let root = temp_project("cross_part");
 
-    // avoid builtins (println and friends) so the test does not depend on NATURE_ROOT
+    // avoid builtins (println and friends) so the test does not depend on NAX_ROOT
     write(&root, "package.toml", "name = \"app\"\nversion = \"1.0.0\"\ntype = \"bin\"\n");
     write(&root, "codec/encode.n", "mod codec\n\npub fn encode(int v):int {\n    return v * scale()\n}\n");
     write(&root, "codec/codec.n", "mod codec\n\nfn scale():int {\n    return 2\n}\n");

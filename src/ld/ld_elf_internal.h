@@ -1,5 +1,5 @@
-#ifndef NATURE_LD_ELF_INTERNAL_H
-#define NATURE_LD_ELF_INTERNAL_H
+#ifndef NAX_LD_ELF_INTERNAL_H
+#define NAX_LD_ELF_INTERNAL_H
 
 #include "elf_format.h"
 #include "ld.h"

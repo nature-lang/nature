@@ -7,7 +7,7 @@
 /*
  * Zig 738d2be9 applies SET_ULEB128 and SUB_ULEB128 independently and in input
  * order.  In particular, neither relocation requires the other to exist.
- * Nature adds checked field decoding and stages each write so malformed input
+ * Nax adds checked field decoding and stages each write so malformed input
  * leaves it unchanged. Like Zig's overwriteUleb, values are truncated to the
  * existing field width; this is required because a SET/SUB sequence commonly
  * stores an intermediate absolute address before the shared high bits cancel.

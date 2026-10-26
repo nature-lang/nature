@@ -1,5 +1,5 @@
-#ifndef NATURE_SRC_REGISTER_REGISTER_H_
-#define NATURE_SRC_REGISTER_REGISTER_H_
+#ifndef NAX_SRC_REGISTER_REGISTER_H_
+#define NAX_SRC_REGISTER_REGISTER_H_
 
 #include "arch/amd64.h"
 #include "arch/arm64.h"
@@ -63,4 +63,4 @@ reg_t *reg_new(char *name, uint8_t index, lir_flag_t alloc_type, uint8_t size, u
 
 lir_flag_t type_kind_trans_alloc(type_kind kind);
 
-#endif //NATURE_SRC_REGISTER_REGISTER_H_
+#endif //NAX_SRC_REGISTER_REGISTER_H_

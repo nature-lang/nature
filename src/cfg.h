@@ -1,5 +1,5 @@
-#ifndef NATURE_SRC_CFG_H_
-#define NATURE_SRC_CFG_H_
+#ifndef NAX_SRC_CFG_H_
+#define NAX_SRC_CFG_H_
 
 #include "lir.h"
 
@@ -10,4 +10,4 @@
  */
 void cfg(closure_t *c);
 
-#endif //NATURE_SRC_CFG_H_
+#endif //NAX_SRC_CFG_H_

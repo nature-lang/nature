@@ -51,7 +51,7 @@ fn main() {
     u64 c = 2
     f64 d = 1.5
     bool e = true
-    string s = 'nature'
+    string s = 'nax'
     var inferred = 42
     println(a, b, c, d, e, s, inferred)
 

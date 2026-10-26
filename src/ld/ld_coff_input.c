@@ -1175,7 +1175,7 @@ static int ld_coff_handle_directive(ld_coff_context_t *ctx, char *token,
     } else if (key_length == 15U &&
                strncasecmp(token, "EXCLUDE-SYMBOLS", 15U) == 0) {
         /* Clang emits this MinGW directive for hidden definitions. It only
-           controls automatic DLL exports, which do not exist for Nature's
+           controls automatic DLL exports, which do not exist for Nax's
            executable-only first phase, but accepting it is required to
            consume the controlled static libuv sysroot. */
         if (!unquoted || !*unquoted)

@@ -9,7 +9,7 @@
 /*
  * Zig 738d2be9 recognizes SHT_REL while scanning Object sections, but its
  * preadRelocsAlloc function still divides the section by Elf64_Rela and reads
- * every entry as a 24-byte explicit-addend record.  Nature keeps the useful
+ * every entry as a 24-byte explicit-addend record.  Nax keeps the useful
  * unified-Rela internal model while decoding the standard 16-byte Elf64_Rel
  * wire record and recovering A from the relocation field here.
  */
@@ -672,11 +672,11 @@ static int ld_elf_rel_decode_riscv(
             uint32_t low_rd = (low >> 7U) & 0x1fU;
             uint32_t low_rs1 = (low >> 15U) & 0x1fU;
             bool jalr = (low & 0x707fU) == 0x0067U && low_rs1 == rd;
-            bool nature_address =
+            bool nax_address =
                     relocation->type == LD_ELF_R_RISCV_CALL &&
                     (low & 0x707fU) == 0x0013U && low_rd == rd &&
                     low_rs1 == rd;
-            if (!jalr && !nature_address) {
+            if (!jalr && !nax_address) {
                 return ld_elf_rel_fail(
                         ctx, LD_INVALID_INPUT, object, target, relocation,
                         "expected AUIPC followed by JALR or ADDI, found "

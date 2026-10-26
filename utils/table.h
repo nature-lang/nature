@@ -1,5 +1,5 @@
-#ifndef NATURE_SRC_LIB_TABLE_H_
-#define NATURE_SRC_LIB_TABLE_H_
+#ifndef NAX_SRC_LIB_TABLE_H_
+#define NAX_SRC_LIB_TABLE_H_
 
 #include "helper.h"
 
@@ -43,4 +43,4 @@ table_entry *table_find_entry(table_entry *entries, int capacity, string key);
 
 void table_adjust(table_t *t, int capacity);
 
-#endif //NATURE_SRC_LIB_TABLE_H_
+#endif //NAX_SRC_LIB_TABLE_H_

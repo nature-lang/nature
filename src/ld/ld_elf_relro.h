@@ -1,5 +1,5 @@
-#ifndef NATURE_LD_ELF_RELRO_H
-#define NATURE_LD_ELF_RELRO_H
+#ifndef NAX_LD_ELF_RELRO_H
+#define NAX_LD_ELF_RELRO_H
 
 #include <stdbool.h>
 #include <stdint.h>

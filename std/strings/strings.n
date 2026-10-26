@@ -15,7 +15,7 @@ fn copy_bytes(anyptr dst, int dst_offset, anyptr src, int src_offset, int length
     libc.memmove(dst + dst_offset as anyptr, src + src_offset as anyptr, length as u64)
 }
 
-// 基于 c 字符串创建一个 nature 字符串
+// 基于 c 字符串创建一个 nax 字符串
 pub fn from(anyptr p):string! {
     return runtime.string_new(p)
 }

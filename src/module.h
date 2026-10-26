@@ -1,5 +1,5 @@
-#ifndef NATURE_MODULE_H
-#define NATURE_MODULE_H
+#ifndef NAX_MODULE_H
+#define NAX_MODULE_H
 
 #include <inttypes.h>
 
@@ -85,4 +85,4 @@ static inline char *module_unique_ident(ast_import_t *import) {
     return ident;
 }
 
-#endif//NATURE_MODULE_H
+#endif//NAX_MODULE_H

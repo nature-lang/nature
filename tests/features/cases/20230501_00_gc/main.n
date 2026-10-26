@@ -37,7 +37,7 @@ fn main() {
     var gc_in2 = fn():[string] {
         u8 a = 12 // 栈干扰
         u16 b = 24
-        [string] list = ['hello', 'world', 'nature', 'haha']
+        [string] list = ['hello', 'world', 'nax', 'haha']
         runtime.gc()
 
         return list

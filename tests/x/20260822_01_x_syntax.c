@@ -2,7 +2,7 @@
 
 static void test_basic() {
     char *raw = exec_output();
-    char *expect = "17 1 2 1.500000 true nature 42\n"
+    char *expect = "17 1 2 1.500000 true nax 42\n"
                    "22 12 34 3 2\n"
                    "true true true\n"
                    "1 21 20 68 4 -17 -18\n"

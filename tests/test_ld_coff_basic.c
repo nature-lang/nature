@@ -700,7 +700,7 @@ static void test_minimal_import_and_determinism(const char *directory) {
     uint8_t *second_map_bytes = read_all(second_map, &second_map_size);
     assert(first_map_size == second_map_size &&
            memcmp(first_map_bytes, second_map_bytes, first_map_size) == 0);
-    assert(strstr((const char *) first_map_bytes, "Nature COFF/PE map v1"));
+    assert(strstr((const char *) first_map_bytes, "Nax COFF/PE map v1"));
     assert(strstr((const char *) first_map_bytes, ".text    entry"));
     assert(strstr((const char *) first_map_bytes, ".text    ExitProcess"));
     assert(strstr((const char *) first_map_bytes, "entry entry.obj"));
@@ -1190,7 +1190,7 @@ static void test_relocation_diagnostics(const char *directory) {
 }
 
 int main(void) {
-    char directory[] = "/tmp/nature-ld-coff-XXXXXX";
+    char directory[] = "/tmp/nax-ld-coff-XXXXXX";
     assert(mkdtemp(directory));
     test_atomic_output_replace(directory);
     test_minimal_import_and_determinism(directory);

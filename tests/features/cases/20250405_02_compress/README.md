@@ -1,4 +1,4 @@
-##  [nature lang](https://github.com/nature-lang/nature)  compress package 
+##  [nax lang](https://github.com/naxlang/nax)  compress package 
 
 ### Example
 

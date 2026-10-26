@@ -5,8 +5,8 @@ portable ELF linker. It complements the byte-level `test_ld` CTest with real
 compiler-produced objects and external format/execution checks.
 
 The default runner mounts the source tree read-only and uses two existing
-arm64-hosted tools images: `nature-riscv-tools:20260713` for AArch64 and
-`nature-riscv-clang-probe:20260713` for x86_64/RISC-V64 Clang fixtures. The
+arm64-hosted tools images: `nax-riscv-tools:20260713` for AArch64 and
+`nax-riscv-clang-probe:20260713` for x86_64/RISC-V64 Clang fixtures. The
 second image also contains the RISC-V GCC/binutils and QEMU tools used by the
 Debug and execution checks:
 
@@ -17,15 +17,15 @@ tests/elf_integration/run_docker.sh
 Override the image without editing the script:
 
 ```sh
-NATURE_ELF_INTEGRATION_IMAGE=my-arm-riscv-tools:tag \
-NATURE_ELF_AMD64_IMAGE=my-clang-tools:tag \
+NAX_ELF_INTEGRATION_IMAGE=my-arm-riscv-tools:tag \
+NAX_ELF_AMD64_IMAGE=my-clang-tools:tag \
     tests/elf_integration/run_docker.sh
 ```
 
 The suite builds all generated files under a container-local `mktemp`
 directory. System linkers are used only to compile relocatable fixtures and
 locate static CRT/runtime archives. Every tested executable is linked by the
-Nature `ld_link()` C API.
+Nax `ld_link()` C API.
 
 Coverage includes:
 

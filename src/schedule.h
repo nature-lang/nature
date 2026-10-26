@@ -1,5 +1,5 @@
-#ifndef NATURE_SRC_SCHEDULE_H_
-#define NATURE_SRC_SCHEDULE_H_
+#ifndef NAX_SRC_SCHEDULE_H_
+#define NAX_SRC_SCHEDULE_H_
 
 #include "src/lir.h"
 #include "src/types.h"
@@ -81,4 +81,4 @@ bool schedule_is_mem_read(lir_op_t *op);
  */
 bool schedule_is_mem_write(lir_op_t *op);
 
-#endif // NATURE_SRC_SCHEDULE_H_
+#endif // NAX_SRC_SCHEDULE_H_

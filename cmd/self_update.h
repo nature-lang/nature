@@ -1,5 +1,5 @@
-#ifndef NATURE_CMD_SELF_UPDATE_H
-#define NATURE_CMD_SELF_UPDATE_H
+#ifndef NAX_CMD_SELF_UPDATE_H
+#define NAX_CMD_SELF_UPDATE_H
 
 #include "config/config.h"
 #include "src/build/config.h"
@@ -24,7 +24,7 @@ static inline void trim_line_endings(char *text) {
 
 static inline char *fetch_latest_release_tag() {
     char *workdir = get_workdir();
-    char *command = "curl -fsSL https://api.github.com/repos/nature-lang/nature/releases/latest | grep '\"tag_name\"' | head -n1 | sed -E 's/.*\"([^\"]+)\".*/\\1/'";
+    char *command = "curl -fsSL https://api.github.com/repos/naxlang/nax/releases/latest | grep '\"tag_name\"' | head -n1 | sed -E 's/.*\"([^\"]+)\".*/\\1/'";
     return command_output(workdir, command);
 }
 
@@ -52,7 +52,7 @@ static inline char *host_arch_string() {
 
 static inline char *fetch_latest_release_asset_url(char *os, char *arch) {
     char *workdir = get_workdir();
-    char *command = dsprintf("curl -fsSL https://api.github.com/repos/nature-lang/nature/releases/latest | grep 'browser_download_url' | grep -i '%s-%s.*tar.gz' | head -n1 | cut -d '\"' -f 4", os, arch);
+    char *command = dsprintf("curl -fsSL https://api.github.com/repos/naxlang/nax/releases/latest | grep 'browser_download_url' | grep -i '%s-%s.*tar.gz' | head -n1 | cut -d '\"' -f 4", os, arch);
     char *url = command_output(workdir, command);
     free(command);
     return url;
@@ -63,7 +63,7 @@ static inline bool can_write_to_path(char *path) {
 }
 
 static inline char *detect_install_root() {
-    return nature_root_from_running_executable();
+    return nax_root_from_running_executable();
 }
 
 static inline bool prompt_confirm_update() {
@@ -98,11 +98,11 @@ static inline int apply_self_update(char *install_root, char *asset_url, bool au
             "set -e; "
             "UPDATE_TMP_DIR=$(mktemp -d); "
             "trap 'rm -rf \"$UPDATE_TMP_DIR\"' EXIT; "
-            "ASSET=\"$UPDATE_TMP_DIR/nature-update.tar.gz\"; "
+            "ASSET=\"$UPDATE_TMP_DIR/nax-update.tar.gz\"; "
             "curl -fL '%s' -o \"$ASSET\"; "
             "mkdir -p \"$UPDATE_TMP_DIR/extracted\"; "
             "tar -xzf \"$ASSET\" -C \"$UPDATE_TMP_DIR/extracted\"; "
-            "if [ ! -x \"$UPDATE_TMP_DIR/extracted/%s/bin/nature\" ]; then "
+            "if [ ! -x \"$UPDATE_TMP_DIR/extracted/%s/bin/nax\" ]; then "
             "  echo 'invalid release asset layout'; exit 1; "
             "fi; "
             "%smkdir -p '%s'; "
@@ -138,7 +138,7 @@ static inline int apply_self_update(char *install_root, char *asset_url, bool au
 }
 
 static inline void print_self_update_usage() {
-    printf("Usage: nature self-update [--check] [--yes] [--force]\n");
+    printf("Usage: nax self-update [--check] [--yes] [--force]\n");
 }
 
 void cmd_self_update_entry(int argc, char **argv) {
@@ -192,14 +192,14 @@ void cmd_self_update_entry(int argc, char **argv) {
     printf("Latest version:  %s\n", latest_tag);
     bool up_to_date = str_equal(BUILD_VERSION, latest_tag);
     if (up_to_date && !force_update) {
-        printf("Nature is up to date.\n");
+        printf("Nax is up to date.\n");
         free(latest_tag);
         return;
     }
 
     if (check_only) {
         if (up_to_date) {
-            printf("Nature is up to date.\n");
+            printf("Nax is up to date.\n");
         } else {
             printf("Update available.\n");
         }
@@ -236,7 +236,7 @@ void cmd_self_update_entry(int argc, char **argv) {
 
     char *install_root = detect_install_root();
     if (!install_root) {
-        printf("Failed to determine install root from the running Nature executable.\n");
+        printf("Failed to determine install root from the running Nax executable.\n");
         free(latest_tag);
         free(asset_url);
         return;
@@ -254,4 +254,4 @@ void cmd_self_update_entry(int argc, char **argv) {
     }
 }
 
-#endif //NATURE_CMD_SELF_UPDATE_H
+#endif //NAX_CMD_SELF_UPDATE_H

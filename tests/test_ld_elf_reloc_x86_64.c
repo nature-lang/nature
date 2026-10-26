@@ -22,11 +22,11 @@
 static void test_elf_amd64_weak_dynamic_link(void) {
     size_t object_size;
     uint8_t *object = make_test_elf_weak_dynamic_object(&object_size);
-    char object_path[] = "/tmp/nature-ld-weak-dynamic-XXXXXX";
+    char object_path[] = "/tmp/nax-ld-weak-dynamic-XXXXXX";
     write_fixture(object_path, object, object_size);
     free(object);
 
-    static const char *output_path = "/tmp/nature-ld-weak-dynamic-output";
+    static const char *output_path = "/tmp/nax-ld-weak-dynamic-output";
     unlink(output_path);
     diagnostic_capture_t capture = {0};
     ld_options_t options;

@@ -55,7 +55,7 @@ static void test_elf_riscv_relocations(void) {
     assert(test_elf_read_u32(place) == 0x00001097U);
     assert(test_elf_read_u32(place + 4U) == 0x234080e7U);
 
-    /* Nature uses the same relocation for its AUIPC+ADDI address materializer. */
+    /* Nax uses the same relocation for its AUIPC+ADDI address materializer. */
     values.symbol_address = 0x2235U;
     test_elf_write_u32(place, 0x00000f97U);
     test_elf_write_u32(place + 4U, 0x000f8f93U);

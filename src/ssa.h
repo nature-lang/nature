@@ -1,5 +1,5 @@
-#ifndef NATURE_SRC_SSA_H_
-#define NATURE_SRC_SSA_H_
+#ifndef NAX_SRC_SSA_H_
+#define NAX_SRC_SSA_H_
 
 #include "utils/table.h"
 #include "lir.h"
@@ -70,4 +70,4 @@ void live_add(table_t *t, slice_t *lives, lir_var_t *var);
 
 void live_remove(table_t *t, slice_t *lives, lir_var_t *var);
 
-#endif //NATURE_SRC_SSA_H_
+#endif //NAX_SRC_SSA_H_

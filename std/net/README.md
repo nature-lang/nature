@@ -1,4 +1,4 @@
-# import [net.dns](https://github.com/nature-lang/nature/blob/master/std/net/dns.n)
+# import [net.dns](https://github.com/naxlang/nax/blob/master/std/net/dns.n)
 
 DNS resolution utilities for hostname lookup
 
@@ -18,7 +18,7 @@ fn lookup(string host):[string]!
 
 Resolve hostname to IP addresses and return as string array
 
-# import [net.tcp](https://github.com/nature-lang/nature/blob/master/std/net/tcp.n)
+# import [net.tcp](https://github.com/naxlang/nax/blob/master/std/net/tcp.n)
 
 TCP networking for server and client connections
 
@@ -137,7 +137,7 @@ fn conn_t.close()
 
 Close the TCP connection
 
-# import [net.tls](https://github.com/nature-lang/nature/blob/master/std/net/tls.n)
+# import [net.tls](https://github.com/naxlang/nax/blob/master/std/net/tls.n)
 
 TLS/SSL secure networking for encrypted connections
 
@@ -200,7 +200,7 @@ fn conn_t.close()
 
 Close the TLS connection
 
-# import [net.udp](https://github.com/nature-lang/nature/blob/master/std/net/udp.n)
+# import [net.udp](https://github.com/naxlang/nax/blob/master/std/net/udp.n)
 
 UDP networking for connectionless packet communication
 
@@ -336,7 +336,7 @@ fn conn_t.close()
 
 Close the UDP connection
 
-# import [net.url](https://github.com/nature-lang/nature/blob/master/std/net/url.n)
+# import [net.url](https://github.com/naxlang/nax/blob/master/std/net/url.n)
 
 URL parsing and manipulation utilities
 
@@ -477,7 +477,7 @@ fn query_t.get(string key):string
 
 Get first value for specified query parameter key
 
-# import [net.utils](https://github.com/nature-lang/nature/blob/master/std/net/utils.n)
+# import [net.utils](https://github.com/naxlang/nax/blob/master/std/net/utils.n)
 
 Network utility functions for common operations
 
@@ -489,7 +489,7 @@ fn split_host(string host):(string, int)!
 
 Split host string into IP address and port number
 
-# import [net.types](https://github.com/nature-lang/nature/blob/master/std/net/types.n)
+# import [net.types](https://github.com/naxlang/nax/blob/master/std/net/types.n)
 
 Network type definitions and interfaces
 

@@ -12,7 +12,7 @@ pub fn build(b: *std.Build) !void {
     // const os = target.result.os.tag;
     // const arch = target.result.cpu.arch;
     const exe = b.addExecutable(.{
-        .name = "nature",
+        .name = "nax",
         .root_module = b.createModule(.{
             .target = target,
             .optimize = optimize,
@@ -44,20 +44,20 @@ pub fn build(b: *std.Build) !void {
 
     setCMacros(exe, target);
 
-    const nature_utils = try findCFiles(b.allocator, "utils");
+    const nax_utils = try findCFiles(b.allocator, "utils");
     defer {
-        for (nature_utils.items) |path| b.allocator.free(path);
+        for (nax_utils.items) |path| b.allocator.free(path);
     }
-    exe.root_module.addCSourceFiles(.{ .files = nature_utils.items, .flags = &.{"-std=gnu11"} });
+    exe.root_module.addCSourceFiles(.{ .files = nax_utils.items, .flags = &.{"-std=gnu11"} });
 
-    const nature_main = &.{"main.c"};
-    const nature_src = try findCFiles(b.allocator, "src");
+    const nax_main = &.{"main.c"};
+    const nax_src = try findCFiles(b.allocator, "src");
     defer {
-        for (nature_src.items) |path| b.allocator.free(path);
+        for (nax_src.items) |path| b.allocator.free(path);
     }
 
-    exe.root_module.addCSourceFiles(.{ .files = nature_main, .flags = &.{"-std=gnu11"} });
-    exe.root_module.addCSourceFiles(.{ .files = nature_src.items, .flags = &.{} });
+    exe.root_module.addCSourceFiles(.{ .files = nax_main, .flags = &.{"-std=gnu11"} });
+    exe.root_module.addCSourceFiles(.{ .files = nax_src.items, .flags = &.{} });
 
     b.installArtifact(exe);
 
@@ -88,7 +88,7 @@ pub fn build(b: *std.Build) !void {
     });
 
     lib.root_module.addCSourceFiles(.{
-        .files = nature_utils.items,
+        .files = nax_utils.items,
         .flags = &.{},
     });
 

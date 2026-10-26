@@ -330,7 +330,7 @@ static int test_elf_link_riscv_uleb_fixture(
     size_t fixture_size;
     uint8_t *fixture = test_elf_make_riscv_uleb_fixture(
             mode, &fixture_size);
-    char input_path[] = "/tmp/nature-ld-riscv-uleb-input-XXXXXX";
+    char input_path[] = "/tmp/nax-ld-riscv-uleb-input-XXXXXX";
     write_fixture(input_path, fixture, fixture_size);
     free(fixture);
     unlink(output_path);
@@ -353,7 +353,7 @@ static int test_elf_link_riscv_uleb_fixture(
 }
 
 static void test_elf_riscv_uleb_full_link(void) {
-    char output_path[] = "/tmp/nature-ld-riscv-uleb-output-XXXXXX";
+    char output_path[] = "/tmp/nax-ld-riscv-uleb-output-XXXXXX";
     int output_fd = mkstemp(output_path);
     assert(output_fd >= 0 && close(output_fd) == 0);
     unlink(output_path);
